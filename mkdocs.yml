@@ -1,0 +1,17 @@
+site_name: TERN EP Data Pipeline
+
+theme:
+  name: "material"
+  
+plugins:
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [code]  # actually not needed, default
+  
+nav:
+  - Main docs: index.md
+  - Network architecture: network_architecture.md
+  - Data visualisation: visualisation.md
+  - Code:
+    - data_merging: reference.md

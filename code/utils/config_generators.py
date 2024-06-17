@@ -16,8 +16,8 @@ import pathlib
 import yaml
 from configobj import ConfigObj
 
-import file_io as io
-from paths_manager import Paths
+import data_handling.file_io as io
+from utils.configs_manager import PathsManager
 from sparql_site_details import site_details
 
 GLOBAL_ATTRS = [
@@ -50,243 +50,434 @@ GENERIC_GLOBAL_ATTRS = {
 
 ALIAS_DICT = {'elevation': 'altitude'}
 
-PathsManager = Paths()
+DEVICES = ['modem', 'logger', 'camera']
+
+paths_mngr = PathsManager()
 Details = site_details()
 
 ###############################################################################
 ### BEGIN MULTI-SITE CONFIGURATION GENERATOR SECTION ###
 ###############################################################################
 
-class ConfigsGenerator():
-    """Class to read and interrogate hardware configuration from excel file,
-    and write operational configuration files - mostly used if config input
-    data changes!
-    """
+# class HardwareConfigsGenerator():
+#     """Class to read and interrogate hardware configuration from excel file,
+#     and write operational configuration files - mostly used if config input
+#     data changes!
+#     """
 
-    def __init__(self):
+#     def __init__(self):
 
-        self.modem_table = _read_excel_fields(sheet_name='Modems')
-        self.modem_fields = self.modem_table.columns.tolist()
-        self.sites = self.modem_table.index.tolist()
-        self.logger_table = (
-            pd.read_excel(
-                io=PathsManager.get_local_resource_path(
-                    resource='xl_connections_manager'
-                    ),
-                sheet_name='Loggers',
-                dtype={
-                    field: 'Int64' for field in
-                    ['serial_num', 'tcp_port', 'pakbus_addr']
-                    }
-                )
-            .set_index(keys='Site')
-            .sort_index()
-            )
-        self.logger_table.tables = (
-            self.logger_table.tables
-            .fillna('')
-            .apply(lambda x: x.split(','))
-            )
-        self.logger_fields = self.logger_table.columns.tolist()
+#         self.modem_table = _read_excel_fields(sheet_name='Modems')
+#         self.modem_fields = self.modem_table.columns.tolist()
+#         self.sites = self.modem_table.index.tolist()
+#         self.logger_table = (
+#             pd.read_excel(
+#                 io=paths_mngr.get_local_stream_path(
+#                     resource='network', stream='xl_connections_manager'
+#                     ),
+#                 sheet_name='Loggers',
+#                 dtype={
+#                     field: 'Int64' for field in
+#                     ['serial_num', 'tcp_port', 'pakbus_addr']
+#                     }
+#                 )
+#             .set_index(keys='Site')
+#             .sort_index()
+#             )
+#         self.logger_table.tables = (
+#             self.logger_table.tables
+#             .fillna('')
+#             .apply(lambda x: x.split(','))
+#             )
+#         self.logger_fields = self.logger_table.columns.tolist()
 
-    def get_site_logger_list(self, site: str) -> list:
+#     def get_site_logger_list(self, site: str) -> list:
+#         """
+#         Get list of loggers for a given site.
+
+#         Args:
+#             site: name of site.
+
+#         Returns:
+#             List of loggers.
+
+#         """
+
+#         return self.logger_table.loc[[site], 'logger'].tolist()
+
+#     def get_site_logger_details(
+#             self, site: str, logger: str=None, field: str=None
+#             ) -> pd.DataFrame | pd.Series | str:
+#         """
+#         Get details of loggers for a given site.
+
+#         Args:
+#             site: the site.
+#             logger: logger name for which to return details. Defaults to None.
+#             field: field to return. Defaults to None.
+
+#         Returns:
+#             Logger details. If optional kwargs are not specified, returns a
+#             string. If logger is specified, return a series.
+#             If field is specified, return a str.
+
+#         """
+
+#         sub_df = self.logger_table.loc[[site]].set_index(keys='logger')
+#         if not logger is None:
+#             sub_df = sub_df.loc[logger]
+#         if not field is None:
+#             sub_df = sub_df[[field]]
+#         if not field:
+#             return sub_df
+#         return sub_df[field]
+
+#     def get_site_modem_details(
+#             self, site: str, field: str=None
+#             ) -> pd.Series | str:
+#         """
+#         Get details of modem for a given site.
+
+#         Args:
+#             site: name of site.
+#             field: field to return. Defaults to None.
+
+#         Returns:
+#             Details of modem.
+
+#         """
+
+#         if field is None:
+#             return self.modem_table.loc[site]
+#         return self.modem_table.loc[site, field]
+
+#     def get_routable_sites(self) -> list:
+#         """
+#         Get list of sites that (should) have working ovpn connections.
+
+#         Returns:
+#             The sites.
+
+#         """
+
+#         return (
+#             self.modem_table[self.modem_table.routable!=0]
+#             .index
+#             .unique()
+#             .tolist()
+#             )
+
+#     #--------------------------------------------------------------------------
+#     def build_configs_dict(self, site: str) -> dict:
+#         """
+#         Build configuration dictionary.
+
+#         Args:
+#             site: name of site.
+
+#         Returns:
+#             The dictionary.
+
+#         """
+
+#         return {
+#             'modem': self.get_site_modem_details(site=site).to_dict(),
+#             'loggers': {
+#                 logger:
+#                     self.get_site_logger_details(
+#                         site=site, logger=logger
+#                          ).to_dict()
+#                 for logger in self.get_site_logger_list(site=site)
+#                 }
+#             }
+#     #--------------------------------------------------------------------------
+
+#     #--------------------------------------------------------------------------
+#     def dump_config_to_file(self, site: str, write_fmt='yaml'):
+#         """
+
+
+#         Args:
+#             site (str): DESCRIPTION.
+#             out_fmt (TYPE, optional): DESCRIPTION. Defaults to 'yml'.
+
+#         Raises:
+#             NotImplementedError: DESCRIPTION.
+
+#         Returns:
+#             None.
+
+#         """
+
+#         fmt_dict = {'yaml': 'yml', 'json': 'json'}
+#         out_file = (
+#             PathsManager.get_local_resource_path(
+#                 resource='config_files', subdirs=['Hardware']
+#                 ) /
+#             f'{site}_hardware.{fmt_dict[write_fmt]}'
+#             )
+#         rslt = self.build_configs_dict(site=site)
+#         with open(file=out_file, mode='w', encoding='utf-8') as f:
+#             if write_fmt == 'yaml':
+#                 yaml.dump(data=rslt, stream=f, sort_keys=False)
+#             elif write_fmt == 'json':
+#                 json.dump(rslt, f, indent=4)
+#             else:
+#                 raise NotImplementedError('Unrecognised format!')
+#     #--------------------------------------------------------------------------
+
+#     #--------------------------------------------------------------------------
+#     def table_to_file_map(
+#             self, site: str, logger:str, raise_if_no_file: bool=True,
+#             paths_as_str: bool=False
+#             ) -> dict:
+#         """
+#         Tie table names to local file locations.
+
+#         Args:
+#             site: name of site.
+#             logger: logger: logger name for which to provide mapping.
+#             raise_if_no_file: raise exception if the file does not exist. Defaults to True.
+#             paths_as_str: output paths as strings (instead of pathlib). Defaults to False.
+
+#         Raises:
+#             FileNotFoundError: DESCRIPTION.
+
+#         Returns:
+#             Dictionary mapping table (key) to absolute file path (value).
+
+#         """
+
+#         details = self.get_site_logger_details(site=site, logger=logger)
+#         dir_path = PathsManager.get_local_data_path(
+#             site=site, data_stream='flux_slow'
+#             )
+#         rslt = {
+#             table: dir_path / f'{site}_{logger}_{table}.dat'
+#             for table in details['tables'].split(',')
+#             }
+#         if raise_if_no_file:
+#             for key, val in rslt.items():
+#                 if not val.exists():
+#                     raise FileNotFoundError(
+#                         f'No file named {val} exists for table {key}!'
+#                         )
+#         if paths_as_str:
+#             return {key: str(value) for key, value in rslt.items()}
+#         return rslt
+#     #--------------------------------------------------------------------------
+
+# #------------------------------------------------------------------------------
+
+# #------------------------------------------------------------------------------
+# def _read_excel_fields(sheet_name, dtype={}):
+
+#     return (
+#         pd.read_excel(
+#             io=paths_mngr.get_local_stream_path(
+#                 resource='network', stream='xl_connections_manager'
+#                 ),
+#             sheet_name=sheet_name,
+#             dtype=dtype
+#             )
+#         .set_index(keys='Site')
+#         .sort_index()
+#         )
+# #------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+class SiteConfigsGenerator():
+    """Get configurations from site-based configs spreadsheet (and optionally
+    write to yml file)"""
+
+    #--------------------------------------------------------------------------
+    def __init__(self, site: str):
         """
-        Get list of loggers for a given site.
+        Set the site attribute and read the xl configuration file.
 
         Args:
             site: name of site.
-
-        Returns:
-            List of loggers.
-
-        """
-
-        return self.logger_table.loc[[site], 'logger'].tolist()
-
-    def get_site_logger_details(
-            self, site: str, logger: str=None, field: str=None
-            ) -> pd.DataFrame | pd.Series | str:
-        """
-        Get details of loggers for a given site.
-
-        Args:
-            site: the site.
-            logger: logger name for which to return details. Defaults to None.
-            field: field to return. Defaults to None.
-
-        Returns:
-            Logger details. If optional kwargs are not specified, returns a
-            string. If logger is specified, return a series.
-            If field is specified, return a str.
-
-        """
-
-        sub_df = self.logger_table.loc[[site]].set_index(keys='logger')
-        if not logger is None:
-            sub_df = sub_df.loc[logger]
-        if not field is None:
-            sub_df = sub_df[[field]]
-        if not field:
-            return sub_df
-        return sub_df[field]
-
-    def get_site_modem_details(
-            self, site: str, field: str=None
-            ) -> pd.Series | str:
-        """
-        Get details of modem for a given site.
-
-        Args:
-            site: name of site.
-            field: field to return. Defaults to None.
-
-        Returns:
-            Details of modem.
-
-        """
-
-        if field is None:
-            return self.modem_table.loc[site]
-        return self.modem_table.loc[site, field]
-
-    def get_routable_sites(self) -> list:
-        """
-        Get list of sites that (should) have working ovpn connections.
-
-        Returns:
-            The sites.
-
-        """
-
-        return (
-            self.modem_table[self.modem_table.routable!=0]
-            .index
-            .unique()
-            .tolist()
-            )
-
-    #--------------------------------------------------------------------------
-    def build_configs_dict(self, site: str) -> dict:
-        """
-        Build configuration dictionary.
-
-        Args:
-            site: name of site.
-
-        Returns:
-            The dictionary.
-
-        """
-
-        return {
-            'modem': self.get_site_modem_details(site=site).to_dict(),
-            'loggers': {
-                logger:
-                    self.get_site_logger_details(
-                        site=site, logger=logger
-                         ).to_dict()
-                for logger in self.get_site_logger_list(site=site)
-                }
-            }
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def dump_config_to_file(self, site: str, write_fmt='yaml'):
-        """
-
-
-        Args:
-            site (str): DESCRIPTION.
-            out_fmt (TYPE, optional): DESCRIPTION. Defaults to 'yml'.
-
-        Raises:
-            NotImplementedError: DESCRIPTION.
 
         Returns:
             None.
 
         """
 
-        fmt_dict = {'yaml': 'yml', 'json': 'json'}
-        out_file = (
-            PathsManager.get_local_resource_path(
-                resource='config_files', subdirs=['Hardware']
-                ) /
-            f'{site}_hardware.{fmt_dict[write_fmt]}'
+        self.site=site
+        self._xl = pd.ExcelFile(
+            paths_mngr.get_local_stream_path(
+                resource='configs',
+                stream='site_xl',
+                file_name=f'{self.site}.xlsx',
+                check_exists=True
+                )
             )
-        rslt = self.build_configs_dict(site=site)
-        with open(file=out_file, mode='w', encoding='utf-8') as f:
-            if write_fmt == 'yaml':
-                yaml.dump(data=rslt, stream=f, sort_keys=False)
-            elif write_fmt == 'json':
-                json.dump(rslt, f, indent=4)
-            else:
-                raise NotImplementedError('Unrecognised format!')
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def table_to_file_map(
-            self, site: str, logger:str, raise_if_no_file: bool=True,
-            paths_as_str: bool=False
-            ) -> dict:
+    def get_sheet_names(self) -> list:
         """
-        Tie table names to local file locations.
-
-        Args:
-            site: name of site.
-            logger: logger: logger name for which to provide mapping.
-            raise_if_no_file: raise exception if the file does not exist. Defaults to True.
-            paths_as_str: output paths as strings (instead of pathlib). Defaults to False.
-
-        Raises:
-            FileNotFoundError: DESCRIPTION.
+        Get the names of the sheets in the xl workbook.
 
         Returns:
-            Dictionary mapping table (key) to absolute file path (value).
+            list of sheet names.
+
+        """
+        return self._xl.sheet_names
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_all_hardware_configs(self) -> dict:
+        """
+        Get the configuration information for modem, logger and camera.
+
+        Returns:
+            the info.
 
         """
 
-        details = self.get_site_logger_details(site=site, logger=logger)
-        dir_path = PathsManager.get_local_data_path(
-            site=site, data_stream='flux_slow'
-            )
-        rslt = {
-            table: dir_path / f'{site}_{logger}_{table}.dat'
-            for table in details['tables'].split(',')
+        return {
+            which: self.get_hardware_configs(which=which)
+            for which in DEVICES
             }
-        if raise_if_no_file:
-            for key, val in rslt.items():
-                if not val.exists():
-                    raise FileNotFoundError(
-                        f'No file named {val} exists for table {key}!'
-                        )
-        if paths_as_str:
-            return {key: str(value) for key, value in rslt.items()}
-        return rslt
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_hardware_configs(
+            self, device: str=None, write: bool=False
+            ) -> dict:
+        """
+        Get the configuration information for a specific device (modem, logger
+        or camera).
+
+        Args:
+            which (optional): device for which to grab info. Defaults to None.
+            write (optional): write to disk. Defaults to False.
+
+        Returns:
+            the info.
+
+        """
+
+        if device is None:
+            rslt = {
+                this_device: self._get_configs(sheet_name=this_device)
+                for this_device in DEVICES
+                }
+            device = 'hardware'
+        else:
+            rslt = self._get_configs(sheet_name=device)
+        if not write:
+            return rslt
+        self._write_to_yml(
+            rslt=rslt,
+            subdir=['Hardware'],
+            file_name_elem=device
+            )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _get_configs(self, sheet_name: str) -> dict:
+        """
+        Get the device dataframe from the xl parser object.
+
+        Args:
+            device: device type name (see DEVICES).
+
+        Returns:
+            configurations.
+
+        """
+
+        return (
+            self._xl.parse(sheet_name)
+            .set_index('name')
+            .pipe(self._listify_tables)
+            .fillna('')
+            .squeeze()
+            .T
+            .to_dict()
+            )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _listify_tables(
+            self, data: pd.core.frame.DataFrame
+            ) -> pd.core.frame.DataFrame:
+        """
+        Convert comma-separated table string to list.
+
+        Args:
+            data: the data containing the comma-separated table string.
+
+        Returns:
+            data: the data containing the table list.
+
+        """
+        try:
+            data['tables'] = data['tables'].apply(lambda x: x.split(','))
+            return data
+        except KeyError:
+            return data
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_variable_configs(self, which: str, write: bool=False) -> dict:
+        """
+        Get the variable configuration information.
+
+        Args:
+            which: the variable type (`L1` or `Vis`).
+            write (optional): write to disk. Defaults to False.
+
+        Returns:
+            the info.
+
+        """
+
+        sheet_name = f'{which}_variables'
+        rslt = (
+            self._xl.parse(sheet_name=sheet_name)
+            .set_index('variable')
+            .fillna('')
+            .T
+            .to_dict()
+            )
+        if not write:
+            return rslt
+        self._write_to_yml(
+            rslt=rslt,
+            subdir=['Variables'],
+            file_name_elem=which
+            )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _write_to_yml(self, rslt: dict, subdir: list, file_name_elem: str):
+        """
+        Write the passed dictionary to yml.
+
+        Args:
+            rslt: the data to write.
+            subdir: the subdirectory to append to the base directory.
+            file_name_elem: the string element to insert into the file name.
+
+        Returns:
+            None.
+
+        """
+
+        out_path=paths_mngr.get_local_resource_path(
+            resource='configs', subdirs=subdir,
+            file_name=f'{self.site}_{file_name_elem}.yml'
+            )
+        with open(file=out_path, mode='w', encoding='utf-8') as f:
+            yaml.dump(data=rslt, stream=f, sort_keys=False)
     #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def _read_excel_fields(sheet_name, dtype={}):
-
-    return (
-        pd.read_excel(
-            io=PathsManager.get_local_resource_path(
-                resource='xl_connections_manager'
-                ),
-            sheet_name=sheet_name,
-            dtype=dtype
-            )
-        .set_index(keys='Site')
-        .sort_index()
-        )
-#------------------------------------------------------------------------------
-
-###############################################################################
-### END MULTI-SITE CONFIGURATION GENERATOR SECTION ###
-###############################################################################
-
 class PFPL1CntlToXl():
     """Class to convert L1 control files to excel workbooks (one sheet contains
     the global fields, one sheet contains the variable fields). The 'Variables'
@@ -295,12 +486,14 @@ class PFPL1CntlToXl():
     variable.
     """
 
+    #--------------------------------------------------------------------------
     def __init__(self, filename):
 
         self.config=ConfigObj(filename)
         self.site = self.config['Global']['site_name']
+    #--------------------------------------------------------------------------
 
-
+    #--------------------------------------------------------------------------
     def get_variable_table(self) -> pd.DataFrame:
         """
         Grab all the variable attributes from the L1 control file.
@@ -327,7 +520,9 @@ class PFPL1CntlToXl():
             .set_index(key for key in self.config['Variables'].keys())
             .rename({'sheet': 'table'}, axis=1)
             )
+    #--------------------------------------------------------------------------
 
+    #--------------------------------------------------------------------------
     def get_globals_series(self):
         """
         Grab all the global attributes from the L1 control file.
@@ -343,7 +538,9 @@ class PFPL1CntlToXl():
                 [''.join(x) for x in self.config['Global'].values()]
                 ))
             )
+    #--------------------------------------------------------------------------
 
+    #--------------------------------------------------------------------------
     def write_variables_to_excel(self, xl_write_path: pathlib.Path | str):
         """
         Generate an excel file containing the global and variable configs.
@@ -361,34 +558,37 @@ class PFPL1CntlToXl():
         with pd.ExcelWriter(path=xl_write_path) as writer:
             globals_series.to_excel(writer, sheet_name='Global_attrs')
             vars_df.to_excel(writer, sheet_name='Variable_attrs')
+    #--------------------------------------------------------------------------
 
-def pfp_std_names_to_yaml():
-    """
-    Write yml configuration file of pfp naming conventions.
+#------------------------------------------------------------------------------
 
-    Returns:
-        None.
+# def pfp_std_names_to_yaml():
+#     """
+#     Write yml configuration file of pfp naming conventions.
 
-    """
+#     Returns:
+#         None.
 
-    io_path = PathsManager.get_local_resource_path(
-        resource='config_files', subdirs=['Globals']
-        )
-    data = (
-        io.read_excel(
-            file=io_path / 'std_names.xlsx',
-            sheet_name='names'
-            )
-        .fillna('')
-        .apply(lambda x: x.str.strip())
-        .set_index(keys='pfp_name')
-        .T
-        .to_dict()
-        )
-    with open(file=io_path / 'std_names.yml', mode='w', encoding='utf-8') as f:
-        yaml.dump(data=data, stream=f, sort_keys=False)
+#     """
 
-def PFPL1XlToYaml(site: str):
+#     io_path = paths_mngr.get_local_resource_path(
+#         resource='configs', subdirs=['Globals']
+#         )
+#     data = (
+#         io.read_excel(
+#             file=io_path / 'std_names.xlsx',
+#             sheet_name='names'
+#             )
+#         .fillna('')
+#         .apply(lambda x: x.str.strip())
+#         .set_index(keys='pfp_name')
+#         .T
+#         .to_dict()
+#         )
+#     with open(file=io_path / 'std_names.yml', mode='w', encoding='utf-8') as f:
+#         yaml.dump(data=data, stream=f, sort_keys=False)
+
+def PFPL1XlToYml(site: str):
     """
     Read the excel file containing the variable configurations and generate
     a yaml file.
@@ -420,28 +620,28 @@ def PFPL1XlToYaml(site: str):
             ) as f:
         yaml.dump(data=df.T.to_dict(), stream=f, sort_keys=False)
 
-def get_L1_site_global_attrs(site: str) -> dict:
-    """
+# def get_L1_site_global_attrs(site: str) -> dict:
+#     """
 
 
-    Args:
-        site (TYPE): DESCRIPTION.
+#     Args:
+#         site (TYPE): DESCRIPTION.
 
-    Returns:
-        TYPE: DESCRIPTION.
+#     Returns:
+#         TYPE: DESCRIPTION.
 
-    """
+#     """
 
-    subset = [
-        'fluxnet_id', 'latitude', 'longitude', 'elevation', 'time_step',
-        'time_zone'
-        ]
-    return (
-        Details.get_single_site_details(site=site)
-        [subset]
-        .rename(ALIAS_DICT)
-        .to_dict()
-        )
+#     subset = [
+#         'fluxnet_id', 'latitude', 'longitude', 'elevation', 'time_step',
+#         'time_zone'
+#         ]
+#     return (
+#         Details.get_single_site_details(site=site)
+#         [subset]
+#         .rename(ALIAS_DICT)
+#         .to_dict()
+#         )
 
 def write_L1_generic_global_attrs():
     """
@@ -465,8 +665,8 @@ def _get_generic_globals_file() -> str | pathlib.Path:
     """
 
     return (
-        PathsManager.get_local_resource_path(
-            resource='config_files', subdirs=['Globals']
+        paths_mngr.get_local_resource_path(
+            resource='configs', subdirs=['Globals']
             ) /
         'generic_global_attrs.yml'
         )

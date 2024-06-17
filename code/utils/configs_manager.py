@@ -117,7 +117,7 @@ class PathsManager():
 
         """
 
-        no_args = ['location', 'resource', 'stream', 'subdirs', 'file_name']
+        no_args = ['location', 'resource', 'stream']
         self._kill_kwargs(kwargs=kwargs, kill_list=no_args)
         return self.get_path(
             location='local', resource=resource, **kwargs

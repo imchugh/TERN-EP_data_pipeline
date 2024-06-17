@@ -287,7 +287,7 @@ class PFPNameParser():
     #--------------------------------------------------------------------------
     def __init__(self):
         """
-        Load the naming info from the std_names yaml, and create the lookup
+        Load the naming info from the std_names yml, and create the lookup
         tables and reference objects.
 
         Returns:
@@ -580,12 +580,12 @@ def map_logger_tables_to_files(
     data_path = paths.get_local_stream_path(
         site=site, resource='data', stream='flux_slow'
         )
-    logger_list = list(hardware_configs['loggers'].keys())
+    logger_list = list(hardware_configs['logger'].keys())
     if not logger is None:
         logger_list = [logger]
     rslt_list = []
     for this_logger in logger_list:
-        for this_table in hardware_configs['loggers'][this_logger]['tables']:
+        for this_table in hardware_configs['logger'][this_logger]['tables']:
             rslt_list.append(
                 {
                     'logger': this_logger,

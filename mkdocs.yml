@@ -15,3 +15,4 @@ nav:
   - Data visualisation: visualisation.md
   - Code:
     - data_merging: reference.md
+    - metadata_handling: metadata.md

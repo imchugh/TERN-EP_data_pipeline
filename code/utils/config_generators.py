@@ -469,7 +469,7 @@ class SiteConfigsGenerator():
 
         out_path=paths_mngr.get_local_resource_path(
             resource='configs', subdirs=subdir,
-            file_name=f'{self.site}_{file_name_elem}.yml'
+            file_name=f'{self.site}_{file_name_elem}_variables.yml'
             )
         with open(file=out_path, mode='w', encoding='utf-8') as f:
             yaml.dump(data=rslt, stream=f, sort_keys=False)

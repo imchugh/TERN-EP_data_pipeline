@@ -4,18 +4,14 @@ Created on Mon Aug  1 16:43:45 2022
 
 @author: jcutern-imchugh
 
-Contains classes and functions to find correct input / output paths for site
-and system resources, in both local and remote locations. Note that the source
-for the requisite metadata is a Windows initialisation file containing the
-paths to various resources (applications, metadata spreadsheets etc) and data
-streams. Main classes are:
-    Paths. Returns pathlib.Path objects for various local and remote resourcers
-    and data streams.
-    GenericPaths. Convenience class that simply lists local resources and
-    applications as pandas series, which can be accessed using dot notation.
-    SitePaths. Convenience class that simply lists resources and applications
-    as pandas series, which can be accessed using dot notation. In contrast to
-    GenericPaths, it contains site-specific information.
+Contains classes and functions to access various requisite network
+configurations. Main classes are:
+    - PathsManager. Returns paths for various local and remote resources and
+    streams. Note that the source for the requisite path metadata is a yml file
+    that is hard-coded in this module.
+    - SiteConfigsManager. Returns configuration information contained in
+    various site-based yml configuration files, locations of which are defined
+    in the paths yml files.
 """
 
 import pathlib
@@ -31,7 +27,6 @@ REMOTE_ALIAS_DICT = {
     'AliceSpringsMulga': 'AliceMulga', 'Longreach': 'MitchellGrassRangeland'
     }
 PLACEHOLDER = '<site>'
-SITE_ATTR_TAGS = ['variables', 'hardware']
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -389,80 +384,216 @@ class PathsManager():
 
 #------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+class GlobalConfigsManager():
+    """Class to retrieve global configuration file content."""
+
+    #--------------------------------------------------------------------------
+    def __init__(self):
+        """
+        Set configuration paths.
+
+        Returns:
+            None.
+
+        """
+
+        paths = (
+            _get_generic_configs(file=LOCAL_CONFIG_PATH_FILE)['configs']
+            )
+        self.paths = {
+            x: pathlib.Path(paths['base_path']) / (paths['stream'][x])
+            for x in paths['stream'].keys()
+            }
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def list_global_configs(self) -> list:
+        """
+        List the categories and paths of the defined global configuration
+        files. Note that some paths contain site placeholder values, and are
+        therefore not valid without site name.
+
+        Returns:
+            the list.
+
+        """
+
+        return [key for key, value in self.paths.items()
+                if value.parts[2] == 'Globals'
+                ]
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_global_configs(self, which: str) -> dict:
+        """
+        Retrieve a set of global configurations.
+
+        Args:
+            which: configuration category for which to return configuration info.
+
+        Returns:
+            configuration info.
+
+        """
+
+        allowed_list = self.list_global_configs()
+        if not which in allowed_list:
+            raise KeyError(
+                f'"which" must be one of {", ".join(allowed_list)}'
+                )
+        return _get_generic_configs(file=self.paths[which])
+    #--------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+class SiteConfigsManager(GlobalConfigsManager):
+    """Class to retrieve variable and global configuration file content.
+    Inherits from GlobalConfigsManager."""
+
+    #--------------------------------------------------------------------------
+    def __init__(self, site: str):
+        """
+        Set configuration paths.
+
+        Args:
+            site: name of site.
+
+        Returns:
+            None.
+
+        """
+
+        super().__init__()
+        self.site = site
+        self.paths = {
+            key: pathlib.Path(str(value).replace(PLACEHOLDER, self.site))
+            for key, value in self.paths.items()
+            }
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def list_hardware_devices(self):
+
+        return list(_get_generic_configs(file=self.paths['hardware']).keys())
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_hardware_configs(self, which: str=None) -> dict:
+        """
+        Retrieve a set of hardware configurations.
+
+        Args:
+            which (TYPE, optional): DESCRIPTION. Defaults to None.
+
+        Returns:
+            TYPE: DESCRIPTION.
+
+        """
+
+        rslt = _get_generic_configs(file=self.paths['hardware'])
+        if which is None:
+            return rslt
+        return rslt[which]
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_variable_configs(self, which):
+        """
+
+
+        Args:
+            which (TYPE): DESCRIPTION.
+
+        Returns:
+            TYPE: DESCRIPTION.
+
+        """
+
+        return _get_generic_configs(file=self.paths[f'variables_{which}'])
+    #--------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def _get_generic_configs(file):
+    """
+
+
+    Args:
+        file (TYPE): DESCRIPTION.
+
+    Returns:
+        TYPE: DESCRIPTION.
+
+    """
+
+    with open(file) as f:
+        return yaml.safe_load(stream=f)
+#------------------------------------------------------------------------------
+
+
 ###############################################################################
-### BEGIN CONFIG GETTERS FUNCTIONS ###
+### BEGIN CONFIG GETTER FUNCTIONS ###
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def get_site_configs(site:str, which: str) -> dict:
+def get_site_hardware_configs(site:str, which: str=None) -> dict:
     """
-    Get site-specific configuration files.
+    Get site-specific hardware configurations.
 
     Args:
         site: site for which to get the configurations.
-        which: configuration to return.
-
-    Raises:
-        KeyError: raised if `which` kwarg is not either "variables" or "hardware".
+        which: configuration to return (modem, logger, camera).
 
     Returns:
-        Dictionary of configuration elements.
+        Configuration elements.
 
     """
 
-    if not which in SITE_ATTR_TAGS:
-        raise KeyError(
-            f'"which" must be one of {", ".join(SITE_ATTR_TAGS)}!'
-            )
-    return _get_generic_configs(
-        file = (
-            PathsManager().get_local_stream_path(
-                resource='configs', stream=which, site=site
-                )
-            )
+    return (
+        SiteConfigsManager(site='Calperum')
+        .get_hardware_configs(which=which)
+        )
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_site_variable_configs(site:str, which: str) -> dict:
+    """
+    Get site-specific variable configurations.
+
+    Args:
+        site: site for which to get the configurations.
+        which: configuration to return (pfp or vis).
+
+    Returns:
+        Configuration elements.
+
+    """
+
+    return (
+        SiteConfigsManager(site='Calperum')
+        .get_variable_configs(which=which)
         )
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def get_global_configs(which):
     """
-    Get global configuration file content.
+    Get global configurations.
 
     Args:
         which: configuration to return.
-
-    Raises:
-        KeyError: raised if `which` kwarg is not a key in the paths file.
 
     Returns:
         Dictionary of configuration elements.
 
     """
 
-    paths = PathsManager()
-    stream_list = paths.list_local_streams(resource='configs')
-    for stream in SITE_ATTR_TAGS:
-        stream_list.remove(stream)
-    if not which in stream_list:
-        raise KeyError(
-            f'"which" must be one of {", ".join(stream_list)}!'
-            )
-    return _get_generic_configs(
-        file = (
-            paths.get_local_stream_path(
-                resource='configs', stream=which
-                )
-            )
-        )
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def _get_generic_configs(file):
-
-    with open(file) as f:
-        return yaml.safe_load(stream=f)
+    return GlobalConfigsManager().get_global_configs(which=which)
 #------------------------------------------------------------------------------
 
 ###############################################################################
-### END CONFIG GETTERS FUNCTIONS ###
+### END CONFIG GETTER FUNCTIONS ###
 ###############################################################################

@@ -3,6 +3,11 @@
 Created on Tue Apr  9 15:29:34 2024
 
 @author: jcutern-imchugh
+
+Todo:
+    - tighten up the logic on the pfp name parser
+    (currently won't allow process identifiers in slot 2).
+
 """
 
 import numpy as np
@@ -15,7 +20,7 @@ from sparql_site_details import site_details
 
 
 paths = cm.PathsManager()
-VALID_DEVICES = ['SONIC', 'IRGA', 'RAD']
+VALID_INSTRUMENTS = ['SONIC', 'IRGA', 'RAD']
 VALID_LOC_UNITS = ['cm', 'm']
 VALID_SUFFIXES = {
     'Av': 'average', 'Sd': 'standard deviation', 'Vr': 'variance'
@@ -32,12 +37,14 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def __init__(self, site: str, read_fmt: str='yaml'):
+    def __init__(self, site: str, variable_map: str='pfp'):
         """
         Do inits - read the yaml / json files, build lookup tables.
 
         Args:
             site: name of site.
+            variable_map (optional): which variable configuration
+            ('pfp' or 'vis') to use. Defaults to 'pfp'.
 
         Returns:
             None.
@@ -54,22 +61,39 @@ class MetaDataManager():
             )
 
         # Make the variable configuration dict
-        self.variable_configs = cm.get_site_configs(site=site, which='variables')
+        self.variable_configs = cm.get_site_variable_configs(
+            site=site, which=variable_map
+            )
         self.variables = list(self.variable_configs.keys())
 
         # Make lookup tables
-        self.variable_lookup_table = make_variable_lookup_table(site=site)
+        self.variable_lookup_table = make_variable_lookup_table(
+            site=site, variable_map=variable_map
+            )
 
-        # Get flux instrumewnt types
+        # Get flux instrument types
         self.irga_type = self._get_inst_type('IRGA')
         self.sonic_type = self._get_inst_type('SONIC')
 
         # Private inits
-        self._NAME_MAP = {'site_name': 'name', 'pfp_name': 'pfp_name'}
+        self._NAME_MAP = {'site_name': 'name', 'std_name': 'std_name'}
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _get_inst_type(self, inst):
+    def _get_inst_type(self, inst: str) -> str:
+        """
+        Get the instrument types for SONIC and IRGA.
+
+        Args:
+            inst: generic name of instrument to return (must be irga or sonic).
+
+        Raises:
+            RuntimeError: raised if more than one instrument type found.
+
+        Returns:
+            instrument type description.
+
+        """
 
         var_list = [x for x in self.variable_lookup_table.index if inst in x]
         inst_list = self.variable_lookup_table.loc[var_list].instrument.unique()
@@ -82,21 +106,31 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_file_attrs(self, file):
+    def get_file_attributes(self, file: str) -> pd.core.series.Series:
+        """
 
-        return (
+
+        Args:
+            file: file for which to get attributes.
+
+        Returns:
+            series of attributes.
+
+        """
+
+        return pd.Series(
             io.get_file_info(file=self.data_path / file) |
             io.get_start_end_dates(file=self.data_path / file)
             )
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def list_tables(self):
+    def list_tables(self) -> list:
         """
-
+        List the tables defined in the variable map.
 
         Returns:
-            TYPE: DESCRIPTION.
+            the list of tables.
 
         """
 
@@ -105,6 +139,14 @@ class MetaDataManager():
 
     #--------------------------------------------------------------------------
     def list_files(self):
+        """
+        List the files constructed from the site, logger and table attributes
+        of the variable map.
+
+        Returns:
+            the list of files.
+
+        """
 
         return self.variable_lookup_table.file.unique().tolist()
     #--------------------------------------------------------------------------
@@ -113,6 +155,19 @@ class MetaDataManager():
     def map_tables_to_files(
         self, table: str | list=None, abs_path: bool=False
         ) -> dict:
+        """
+
+
+        Args:
+            table (optional): table for which to return file. If None, maps all
+            available tables to files. Defaults to None.
+            abs_path (optional): whether to return the absolute path (if True)
+            or just the file name (if False). Defaults to False.
+
+        Returns:
+            the map.
+
+        """
 
         if table is None:
             table = self.list_tables()
@@ -137,7 +192,7 @@ class MetaDataManager():
 
     #--------------------------------------------------------------------------
     def get_variable_attributes(
-            self, variable: str, source_field: str='pfp_name',
+            self, variable: str, source_field: str='std_name',
             return_field: str=None
             ) -> pd.Series | str:
         """
@@ -146,7 +201,7 @@ class MetaDataManager():
         Args:
             variable: the variable for which to return the attribute(s).
             source_field (optional): the source field for the variable name
-            (either 'pfp_name' or 'site_name'). Defaults to 'pfp_name'.
+            (either 'std_name' or 'site_name'). Defaults to 'std_name'.
             return_field (optional): the attribute field to return.
             Defaults to None.
 
@@ -168,7 +223,7 @@ class MetaDataManager():
 
         Args:
             source_field (optional): the source field for the variable name
-            (either 'pfp_name' or 'site_name'). Defaults to 'site_name'.
+            (either 'std_name' or 'site_name'). Defaults to 'site_name'.
 
         Returns:
             Dictionary containing the mapping.
@@ -195,7 +250,7 @@ class MetaDataManager():
         Args:
             table: name of table for which to fetch translations.
             source_field (optional): the source field for the variable name
-            (either 'pfp_name' or 'site_name'). Defaults to 'site_name'.
+            (either 'std_name' or 'site_name'). Defaults to 'site_name'.
 
         Returns:
             Dictionary containing the mapping.
@@ -223,7 +278,7 @@ class MetaDataManager():
         Args:
             variable (optional): name of variable. Defaults to None.
             source_field (optional): the source field for the variable name
-            (either 'pfp_name' or 'site_name'). Defaults to 'site_name'.
+            (either 'std_name' or 'site_name'). Defaults to 'site_name'.
 
         Returns:
             Dictionary containing the mapping.
@@ -237,7 +292,18 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _get_target_field_from_source(self, source_field):
+    def _get_target_field_from_source(self, source_field: str) -> str:
+        """
+        Get the gets the inverse of the source field.
+
+        Args:
+            source_field: field for which to retrieve inverse
+            (if 'site_name' is source, 'std_name' is return, and vice versa).
+
+        Returns:
+            inverse return string.
+
+        """
 
         translate_to = self._NAME_MAP.copy()
         translate_to.pop(source_field)
@@ -245,7 +311,17 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _index_translator(self, use_index: str):
+    def _index_translator(self, use_index: str) -> pd.core.frame.DataFrame:
+        """
+        Reindex the variable lookup table on the desired index.
+
+        Args:
+            use_index: name of index to use.
+
+        Returns:
+            reindexed dataframe.
+
+        """
 
         return (
             self.variable_lookup_table
@@ -277,7 +353,7 @@ class PFPNameParser():
     (self.valid_variable_identifiers).
 
     2) Second component can be either a unique device identifier (listed under
-    VALID_DEVICES in this module) or a location identifier. The former are
+    VALID_INSTRUMENTS in this module) or a location identifier. The former are
     variables that are either unique to that device or that contain attribute
     ambiguities for the same variable identifier (e.g. Tv_SONIC_)
 
@@ -297,27 +373,41 @@ class PFPNameParser():
 
         # Load yaml and create attribute lookup table
         rslt = cm.get_global_configs(which='pfp_std_names')
-        self.lookup_table = pd.DataFrame(rslt).T.rename_axis('pfp_name')
+        self.lookup_table = pd.DataFrame(rslt).T.rename_axis('std_name')
 
         # List of valid variable identifier substrings
         self.valid_variable_identifiers = (
-            np.unique(
+            pd.Series(
                 [var.split('_')[0] for var in self.lookup_table.index]
                 )
+            .unique()
             .tolist()
             )
 
+        # List of valid instrument identifiers
+        self.valid_instrument_identifiers = VALID_INSTRUMENTS
+
+        # List of valid location units
+        self.valid_location_identifiers = VALID_LOC_UNITS
+
+        # List of valid processes
+        self.valid_process_identifiers = list(VALID_SUFFIXES.keys())
+
         # Dict of device names with valid variables (variables that may contain
         # the device name i.e. SONIC or IRGA)
-        self.valid_device_variables = {
-            device: np.unique(
-                [
-                    var.split('_')[0] for var in self.lookup_table.index
-                    if device in var
-                    ]
-                ).tolist()
-            for device in VALID_DEVICES
-            }
+        self.valid_instrument_variable_identifiers = {
+            instrument: (
+                pd.Series(
+                    [
+                        var.split('_')[0] for var in self.lookup_table.index
+                        if instrument in var
+                        ]
+                    )
+                .unique()
+                .tolist()
+                )
+        for instrument in VALID_INSTRUMENTS
+        }
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -327,7 +417,7 @@ class PFPNameParser():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_variable_attributes(
+    def get_standard_variable_attributes(
             self, variable_name: str, return_field: str=None
             ) -> pd.Series | str:
         """
@@ -337,7 +427,7 @@ class PFPNameParser():
         variable naming standards.
 
         Args:
-            pfp_name: name for which to return attributes.
+            std_name: name for which to return attributes.
             return_field (optional): specific attribute to return. Defaults to None.
 
         Returns:
@@ -345,7 +435,7 @@ class PFPNameParser():
 
         """
 
-        rslt = self.get_variable_name_components(variable_name=variable_name)
+        rslt = self.parse_variable_name(variable_name=variable_name)
         rslt_list = list(filter(lambda x: isinstance(x, str), rslt.values()))
         while True:
             try:
@@ -363,15 +453,7 @@ class PFPNameParser():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_device_variables(self, device: str=None) -> list:
-
-        if not device is None:
-            return self.valid_device_variables[device]
-        return sum([x for x in self.valid_device_variables.values()], [])
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_variable_name_components(self, variable_name: str):
+    def parse_variable_name(self, variable_name: str) -> dict:
         """
         Parse the variable name string for conformity
 
@@ -403,7 +485,7 @@ class PFPNameParser():
             # the device (e.g. Sws_SONIC is not okay).
             if i == 1:
                 try:
-                    rslt['device'] = self._check_str_is_device(
+                    rslt['device'] = self._check_str_is_instrument(
                         parse_str=parse_str, var_id=rslt['variable']
                         )
                     continue
@@ -448,10 +530,10 @@ class PFPNameParser():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _check_str_is_device(self, parse_str: str, var_id: str) -> str:
+    def _check_str_is_instrument(self, parse_str: str, var_id: str) -> str:
 
         try:
-            valid_vars = self.valid_device_variables[parse_str]
+            valid_vars = self.valid_instrument_variable_identifiers[parse_str]
             if var_id in valid_vars:
                 return parse_str
             raise TypeError(
@@ -533,6 +615,34 @@ class PFPNameParser():
     #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+class PFPStdNames():
+
+    def __init__(self):
+
+        self.lookup_table = (
+            pd.DataFrame(
+                cm.get_global_configs(which='pfp_std_names')
+                )
+            .T
+            .rename_axis('variable')
+            )
+
+    def list_fields(self):
+
+        return self.lookup_df.columns.tolist()
+
+    def list_variables(self):
+
+        return self.lookup_table.index.tolist()
+
+    def get_variable_attributes(
+            self, variable_name: str, return_field: str=None
+            ) -> pd.core.series.Series | str:
+
+        if return_field is None:
+            return self.lookup_table.loc[variable_name]
+        return self.lookup_table.loc[variable_name, return_field]
+#------------------------------------------------------------------------------
 
 ###############################################################################
 ### BEGIN SITE-SPECIFIC HARDWARE CONFIGURATION FUNCTIONS ###
@@ -551,7 +661,7 @@ def get_logger_list(site: str) -> list:
 
     """
 
-    hardware_configs = cm.get_site_configs(site=site, which='hardware')
+    hardware_configs = cm.get_site_hardware_configs(site=site, which='hardware')
     return list(hardware_configs['loggers'].keys())
 #--------------------------------------------------------------------------
 
@@ -576,16 +686,16 @@ def map_logger_tables_to_files(
 
     """
 
-    hardware_configs = cm.get_site_configs(site=site, which='hardware')
+    hardware_configs = cm.get_site_hardware_configs(site=site, which='logger')
     data_path = paths.get_local_stream_path(
         site=site, resource='data', stream='flux_slow'
         )
-    logger_list = list(hardware_configs['logger'].keys())
+    logger_list = list(hardware_configs.keys())
     if not logger is None:
         logger_list = [logger]
     rslt_list = []
     for this_logger in logger_list:
-        for this_table in hardware_configs['logger'][this_logger]['tables']:
+        for this_table in hardware_configs[this_logger]['tables']:
             rslt_list.append(
                 {
                     'logger': this_logger,
@@ -598,10 +708,7 @@ def map_logger_tables_to_files(
     if raise_if_no_file:
         for record in df.index:
             file = df.loc[record, 'file']
-            try:
-                abs_path = pathlib.Path(data_path / file)
-            except TypeError:
-                breakpoint()
+            abs_path = pathlib.Path(data_path / file)
             if not abs_path.exists():
                 raise FileNotFoundError(
                     f'No file named {file} exists for table {record[0]}!'
@@ -624,11 +731,12 @@ def get_modem_details(site: str, field: str=None) -> pd.Series | str:
 
     """
 
-    hardware_configs = cm.get_site_configs(site=site, which='hardware')
-    modem_fields = pd.Series(hardware_configs['modem'])
+    modem_configs = pd.Series(
+        cm.get_site_hardware_configs(site=site, which='modem')
+        )
     if field is None:
-        return modem_fields
-    return modem_fields[field]
+        return modem_configs
+    return modem_configs[field]
 #------------------------------------------------------------------------------
 
 ###############################################################################
@@ -642,10 +750,10 @@ def get_modem_details(site: str, field: str=None) -> pd.Series | str:
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def make_variable_lookup_table(site):
+def make_variable_lookup_table(site, variable_map):
     """
     Build a lookup table that maps variables to attributes
-    (pfp_name as index).
+    (std_name as index).
 
     Args:
         site: name of site for which to return variable lookup table.
@@ -656,9 +764,11 @@ def make_variable_lookup_table(site):
     """
 
     # Make the basic variable table
-    variable_configs = cm.get_site_configs(site=site, which='variables')
+    variable_configs = cm.get_site_variable_configs(
+        site=site, which=variable_map
+        )
     vars_df = pd.DataFrame(variable_configs).T
-    vars_df.index.name = 'pfp_name'
+    vars_df.index.name = 'std_name'
 
     # Make the file mapping table
     file_lookup_table = map_logger_tables_to_files(site=site)
@@ -674,7 +784,11 @@ def make_variable_lookup_table(site):
         .set_index(vars_df.index)
         )
 
-    # Make the standard naming table
+    # Return the table without standard name, long name required for .nc file
+    if not variable_configs == 'pfp':
+        return pd.concat([vars_df, files_df], axis=1)
+
+    # If pfp, make the standard naming table
     var_parser = PFPNameParser()
     names_df = (
         pd.DataFrame(

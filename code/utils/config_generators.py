@@ -10,7 +10,6 @@ web-based UI where the PI can enter the requisite info.
 @author: jcutern-imchugh
 """
 
-import json
 import pandas as pd
 import pathlib
 import yaml
@@ -392,33 +391,12 @@ class SiteConfigsGenerator():
         return (
             self._xl.parse(sheet_name)
             .set_index('name')
-            .pipe(self._listify_tables)
+            .pipe(self._listify, 'tables')
             .fillna('')
             .squeeze()
             .T
             .to_dict()
             )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _listify_tables(
-            self, data: pd.core.frame.DataFrame
-            ) -> pd.core.frame.DataFrame:
-        """
-        Convert comma-separated table string to list.
-
-        Args:
-            data: the data containing the comma-separated table string.
-
-        Returns:
-            data: the data containing the table list.
-
-        """
-        try:
-            data['tables'] = data['tables'].apply(lambda x: x.split(','))
-            return data
-        except KeyError:
-            return data
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -439,6 +417,7 @@ class SiteConfigsGenerator():
         rslt = (
             self._xl.parse(sheet_name=sheet_name)
             .set_index('variable')
+            # .pipe(self._listify, 'instrument')
             .fillna('')
             .T
             .to_dict()
@@ -450,6 +429,29 @@ class SiteConfigsGenerator():
             subdir=['Variables'],
             file_name_elem=which
             )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _listify(
+            self, data: pd.core.frame.DataFrame, series_name
+            ) -> pd.core.frame.DataFrame:
+        """
+        Convert comma-separated string to list.
+
+        Args:
+            data: the data containing the comma-separated table string.
+            series_name: the name of the series for which elements will be listified.
+
+        Returns:
+            data: the data with listified series.
+
+        """
+
+        try:
+            data[series_name] = data[series_name].apply(lambda x: x.split(','))
+            return data
+        except KeyError:
+            return data
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -562,31 +564,37 @@ class PFPL1CntlToXl():
 
 #------------------------------------------------------------------------------
 
-# def pfp_std_names_to_yaml():
-#     """
-#     Write yml configuration file of pfp naming conventions.
+def pfp_std_names_to_yml():
+    """
+    Write yml configuration file of pfp naming conventions.
 
-#     Returns:
-#         None.
+    Returns:
+        None.
 
-#     """
+    """
 
-#     io_path = paths_mngr.get_local_resource_path(
-#         resource='configs', subdirs=['Globals']
-#         )
-#     data = (
-#         io.read_excel(
-#             file=io_path / 'std_names.xlsx',
-#             sheet_name='names'
-#             )
-#         .fillna('')
-#         .apply(lambda x: x.str.strip())
-#         .set_index(keys='pfp_name')
-#         .T
-#         .to_dict()
-#         )
-#     with open(file=io_path / 'std_names.yml', mode='w', encoding='utf-8') as f:
-#         yaml.dump(data=data, stream=f, sort_keys=False)
+    file_path = paths_mngr.get_local_resource_path(
+        resource='configs', subdirs=['Globals']
+        )
+    data = (
+        pd.read_excel(
+            io=file_path / 'pfp_std_names.xlsx',
+            sheet_name='names',
+            )
+        .pipe(_selective_strip)
+        .fillna('')
+        .set_index(keys='pfp_name')
+        .T
+        .to_dict()
+        )
+    with open(file=file_path / 'pfp_std_names.yml', mode='w', encoding='utf-8') as f:
+        yaml.dump(data=data, stream=f, sort_keys=False)
+
+def _selective_strip(df):
+
+    for this_col in df.select_dtypes(include='object').columns:
+        df[this_col] = df[this_col].str.strip()
+    return df
 
 def PFPL1XlToYml(site: str):
     """

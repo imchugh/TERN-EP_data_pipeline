@@ -9,8 +9,8 @@ Created on Thu Nov  9 11:52:46 2023
 import numpy as np
 import pandas as pd
 
-import data_handling.file_io as io
-import data_handling.file_concatenators as fc
+import file_handling.file_io as io
+import file_handling.file_concatenators as fc
 
 ###############################################################################
 ### CLASSES ###
@@ -595,7 +595,7 @@ def _get_concatenated_file_data(file, concat_list):
             file=file, file_type=file_type, dummy_override=True
             ),
         'data': concatenator.get_concatenated_data(),
-        'headers': concatenator.get_concatenated_header(),
+        'headers': concatenator.get_concatenated_headers(),
         'concat_list': concat_list,
         'concat_report': concatenator.get_concatenation_report(as_text=True),
         '_configs': configs
@@ -628,43 +628,80 @@ def _get_single_file_data(file, fallback=False):
 ### BEGIN PUBLIC FUNCTIONS ###
 ###############################################################################
 
-#------------------------------------------------------------------------------
-def merge_data(
-        files: list | dict, concat_files: bool=False
-        ) -> pd.core.frame.DataFrame:
-    """
-    Merge and align data from different files.
+# #------------------------------------------------------------------------------
+# def merge_data(
+#         files: list | dict, concat_files: bool=False
+#         ) -> pd.core.frame.DataFrame:
+#     """
+#     Merge and align data from different files.
 
-    Args:
-        files: the absolute path of the files to parse.
-        If a list, all variables returned; if a dict, file is value, and key
-        is passed to the file_handler. That key can be a list of variables, or
-        a dictionary mapping translation of variable names (see file handler
-        documentation).
+#     Args:
+#         files: the absolute path of the files to parse.
+#         If a list, all variables returned; if a dict, file is value, and key
+#         is passed to the file_handler. That key can be a list of variables, or
+#         a dictionary mapping translation of variable names (see file handler
+#         documentation).
 
-    Returns:
-        merged data.
+#     Returns:
+#         merged data.
 
-    """
+#     """
 
-    df_list = []
-    for file in files:
-        try:
-            usecols = files[file]
-        except TypeError:
-            usecols = None
-        data_handler = DataHandler(file=file, concat_files=concat_files)
-        df_list.append(
-            data_handler.get_conditioned_data(
-                usecols=usecols, drop_non_numeric=True,
-                monotonic_index=True
-                )
-            )
-    return (
-        pd.concat(df_list, axis=1)
-        .rename_axis('time')
-        )
-#------------------------------------------------------------------------------
+#     df_list = []
+#     for file in files:
+#         try:
+#             usecols = files[file]
+#         except TypeError:
+#             usecols = None
+#         data_handler = DataHandler(file=file, concat_files=concat_files)
+#         df_list.append(
+#             data_handler.get_conditioned_data(
+#                 usecols=usecols, drop_non_numeric=True,
+#                 monotonic_index=True
+#                 )
+#             )
+#     return (
+#         pd.concat(df_list, axis=1)
+#         .rename_axis('time')
+#         )
+# #------------------------------------------------------------------------------
+
+# #------------------------------------------------------------------------------
+# def merge_headers(
+#         files: list | dict, concat_files: bool=False
+#         ) -> pd.core.frame.DataFrame:
+#     """
+#     Merge and align data from different files.
+
+#     Args:
+#         files: the absolute path of the files to parse.
+#         If a list, all variables returned; if a dict, file is value, and key
+#         is passed to the file_handler. That key can be a list of variables, or
+#         a dictionary mapping translation of variable names (see file handler
+#         documentation).
+
+#     Returns:
+#         merged data.
+
+#     """
+
+#     df_list = []
+#     for file in files:
+#         try:
+#             usecols = files[file]
+#         except TypeError:
+#             usecols = None
+#         data_handler = DataHandler(file=file, concat_files=concat_files)
+#         df_list.append(
+#             data_handler.get_conditioned_headers(
+#                 usecols=usecols, drop_non_numeric=True,
+#                 )
+#             )
+#     return (
+#         pd.concat(df_list)
+#         .rename_axis('variable')
+#         )
+# #------------------------------------------------------------------------------
 
 ###############################################################################
 ### END PUBLIC FUNCTIONS ###

@@ -6,7 +6,8 @@ Created on Tue Apr  9 15:29:34 2024
 
 Todo:
     - tighten up the logic on the pfp name parser
-    (currently won't allow process identifiers in slot 2).
+    (currently won't allow process identifiers in slot 2);
+    - pfp naming convention should provide a separate slot for replicates!
 
 """
 
@@ -15,7 +16,7 @@ import pandas as pd
 import pathlib
 
 import utils.configs_manager as cm
-import data_handling.file_io as io
+import file_handling.file_io as io
 from sparql_site_details import site_details
 
 
@@ -60,11 +61,16 @@ class MetaDataManager():
                 )
             )
 
+        #
+        self.requisite_variables = (
+            cm.get_global_configs(which='requisite_variables')
+            [variable_map]
+            )
+
         # Make the variable configuration dict
         self.variable_configs = cm.get_site_variable_configs(
             site=site, which=variable_map
             )
-        self.variables = list(self.variable_configs.keys())
 
         # Make lookup tables
         self.variable_lookup_table = make_variable_lookup_table(
@@ -138,7 +144,7 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def list_files(self):
+    def list_files(self) -> list:
         """
         List the files constructed from the site, logger and table attributes
         of the variable map.
@@ -149,6 +155,40 @@ class MetaDataManager():
         """
 
         return self.variable_lookup_table.file.unique().tolist()
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def list_variables(self) -> list:
+        """
+        List the variables defined in the configuration file.
+
+        Returns:
+            the list of variables.
+
+        """
+
+        return self.variable_lookup_table.index.tolist()
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def list_variables_for_conversion(self) -> list:
+        """
+        List the variables defined in the configuration file that have
+        site units that differ from standard units.
+
+        Returns:
+            the list of variables.
+
+        """
+
+        return (
+            self.variable_lookup_table.loc[
+                self.variable_lookup_table.units!=
+                self.variable_lookup_table.standard_units
+                ]
+            .index
+            .tolist()
+            )
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -648,22 +688,22 @@ class PFPStdNames():
 ### BEGIN SITE-SPECIFIC HARDWARE CONFIGURATION FUNCTIONS ###
 ###############################################################################
 
-#--------------------------------------------------------------------------
-def get_logger_list(site: str) -> list:
-    """
-    Get list of loggers.
+# #--------------------------------------------------------------------------
+# def get_logger_list(site: str) -> list:
+#     """
+#     Get list of loggers.
 
-    Args:
-        site: name of site for which to return logger list.
+#     Args:
+#         site: name of site for which to return logger list.
 
-    Returns:
-        List of loggers.
+#     Returns:
+#         List of loggers.
 
-    """
+#     """
 
-    hardware_configs = cm.get_site_hardware_configs(site=site, which='hardware')
-    return list(hardware_configs['loggers'].keys())
-#--------------------------------------------------------------------------
+#     hardware_configs = cm.get_site_hardware_configs(site=site, which='hardware')
+#     return list(hardware_configs['loggers'].keys())
+# #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def map_logger_tables_to_files(
@@ -717,27 +757,27 @@ def map_logger_tables_to_files(
     return df.assign(path=abs_path_list)
 #------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-def get_modem_details(site: str, field: str=None) -> pd.Series | str:
-    """
-    Get details of modem.
+# #------------------------------------------------------------------------------
+# def get_modem_details(site: str, field: str=None) -> pd.Series | str:
+#     """
+#     Get details of modem.
 
-    Args:
-        site: name of site for which to return modem details.
-        field: field to return. Defaults to None.
+#     Args:
+#         site: name of site for which to return modem details.
+#         field: field to return. Defaults to None.
 
-    Returns:
-        Details of modem.
+#     Returns:
+#         Details of modem.
 
-    """
+#     """
 
-    modem_configs = pd.Series(
-        cm.get_site_hardware_configs(site=site, which='modem')
-        )
-    if field is None:
-        return modem_configs
-    return modem_configs[field]
-#------------------------------------------------------------------------------
+#     modem_configs = pd.Series(
+#         cm.get_site_hardware_configs(site=site, which='modem')
+#         )
+#     if field is None:
+#         return modem_configs
+#     return modem_configs[field]
+# #------------------------------------------------------------------------------
 
 ###############################################################################
 ### END SITE-SPECIFIC HARDWARE CONFIGURATION FUNCTIONS ###
@@ -784,16 +824,12 @@ def make_variable_lookup_table(site, variable_map):
         .set_index(vars_df.index)
         )
 
-    # Return the table without standard name, long name required for .nc file
-    if not variable_configs == 'pfp':
-        return pd.concat([vars_df, files_df], axis=1)
-
-    # If pfp, make the standard naming table
+    # Make the standard naming table
     var_parser = PFPNameParser()
     names_df = (
         pd.DataFrame(
             [
-                var_parser.get_variable_attributes(variable_name=var)
+                var_parser.get_standard_variable_attributes(variable_name=var)
                 for var in vars_df.index
                 ]
             )
@@ -810,3 +846,7 @@ def make_variable_lookup_table(site, variable_map):
 ###############################################################################
 ### END SITE-SPECIFIC VARIABLE CONFIGURATION FUNCTIONS ###
 ###############################################################################
+
+if __name__=='__main__':
+
+    md_mngr = MetaDataManager(site='Calperum')

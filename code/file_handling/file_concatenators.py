@@ -94,7 +94,7 @@ class FileConcatenator():
                 io.get_data(file=file, file_type=self.file_type)
                 .rename(self.alias_maps[file], axis=1)
                 )
-        ordered_vars = self.get_concatenated_header().index.tolist()
+        ordered_vars = self.get_concatenated_headers().index.tolist()
         return (
             pd.concat(df_list)
             [ordered_vars]
@@ -103,7 +103,7 @@ class FileConcatenator():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_concatenated_header(self):
+    def get_concatenated_headers(self):
         """
         Concatenate the headers from the (legal) files in the concatenation list.
 

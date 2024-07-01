@@ -40,7 +40,7 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
     def __init__(self, site: str, variable_map: str='pfp'):
         """
-        Do inits - read the yaml / json files, build lookup tables.
+        Do inits - read the yaml files, build lookup tables.
 
         Args:
             site: name of site.
@@ -54,6 +54,7 @@ class MetaDataManager():
 
         # Set basic attrs
         self.site = site
+        self.variable_map = variable_map
         self.site_details = site_details().get_single_site_details(site=site)
         self.data_path = (
             paths.get_local_stream_path(
@@ -61,21 +62,43 @@ class MetaDataManager():
                 )
             )
 
-        #
-        self.requisite_variables = (
-            cm.get_global_configs(which='requisite_variables')
-            [variable_map]
+        # Create global standard variables table
+        self.standard_variables = (
+            pd.DataFrame(cm.get_global_configs(which='pfp_std_names'))
+            .T
+            .rename_axis('quantity')
             )
 
-        # Make the variable configuration dict
-        self.variable_configs = cm.get_site_variable_configs(
-            site=site, which=variable_map
+
+        self.variable_lookup_table = (
+            self._get_site_variable_map()
+            .pipe(self._test_variable_conformity)
+            .pipe(self._map_tables_to_files)
             )
 
-        # Make lookup tables
-        self.variable_lookup_table = make_variable_lookup_table(
-            site=site, variable_map=variable_map
-            )
+        breakpoint()
+        # # Create site-based variable lookup tables
+        # self.variable_lookup_table = make_variable_lookup_table(
+        #     site=site, variable_map=variable_map
+        #     )
+
+        # # Make the variable configuration dict
+        # self.variable_configs = cm.get_site_variable_configs(
+        #     site=site, which=variable_map
+        #     )
+
+
+        # # Set missing variables
+        # requisite_variables = (
+        #     cm.get_global_configs(which='requisite_variables')
+        #     [variable_map]
+        #     )
+        # self.missing_variables = None
+        # if not requisite_variables is None:
+        #     self.missing_variables = [
+        #         var for var in requisite_variables if not var in
+        #         self.variable_lookup_table.quantity.unique()
+        #         ]
 
         # Get flux instrument types
         self.irga_type = self._get_inst_type('IRGA')
@@ -83,6 +106,52 @@ class MetaDataManager():
 
         # Private inits
         self._NAME_MAP = {'site_name': 'name', 'std_name': 'std_name'}
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _get_site_variable_map(self):
+
+        # Make the basic variable table
+        # variable_configs = cm.get_site_variable_configs(
+        #     site=self.site, which=self.variable_map
+        #     )
+        return (
+            pd.DataFrame(
+                cm.get_site_variable_configs(
+                    site=self.site, which=self.variable_map
+                    )
+                )
+            .T
+            .rename_axis('std_name')
+            )
+        # vars_df = pd.DataFrame(variable_configs).T
+        # vars_df.index.name = 'std_name'
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _test_variable_conformity(self, df):
+
+        name_parser = PFPNameParser()
+        breakpoint()
+        test = pd.DataFrame(
+            [
+                name_parser.parse_variable_name(variable_name=variable_name)
+                for variable_name in df.index
+                ]
+            )
+        breakpoint()
+        pass
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _map_tables_to_files(self, df):
+
+        file_lookup_table = map_logger_tables_to_files(site=self.site)
+        files_df = (
+            file_lookup_table.loc[zip(df.logger.tolist(), df.table.tolist())]
+            .set_index(df.index)
+            )
+        return pd.concat([df, files_df], axis=1)
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -376,8 +445,6 @@ class MetaDataManager():
 
 #------------------------------------------------------------------------------
 
-
-
 #------------------------------------------------------------------------------
 class PFPNameParser():
     """Tool that:
@@ -411,299 +478,173 @@ class PFPNameParser():
 
         """
 
-        # Load yaml and create attribute lookup table
-        rslt = cm.get_global_configs(which='pfp_std_names')
-        self.lookup_table = pd.DataFrame(rslt).T.rename_axis('std_name')
+        self.split_char = '_'
 
-        # List of valid variable identifier substrings
-        self.valid_variable_identifiers = (
-            pd.Series(
-                [var.split('_')[0] for var in self.lookup_table.index]
-                )
-            .unique()
-            .tolist()
+        # Load yaml and create attribute lookup table
+        # rslt = cm.get_global_configs(which='pfp_std_names')
+        # self.lookup_table = pd.DataFrame(rslt).T.rename_axis('quantity')
+        self.variable_list = (
+            list(cm.get_global_configs(which='pfp_std_names').keys())
             )
 
         # List of valid instrument identifiers
-        self.valid_instrument_identifiers = VALID_INSTRUMENTS
+        # self.valid_instrument_identifiers = VALID_INSTRUMENTS
 
-        # List of valid location units
-        self.valid_location_identifiers = VALID_LOC_UNITS
+        # # List of valid location units
+        # self.valid_location_identifiers = VALID_LOC_UNITS
 
-        # List of valid processes
-        self.valid_process_identifiers = list(VALID_SUFFIXES.keys())
+        # # List of valid processes
+        # self.valid_process_identifiers = list(VALID_SUFFIXES.keys())
 
-        # Dict of device names with valid variables (variables that may contain
-        # the device name i.e. SONIC or IRGA)
-        self.valid_instrument_variable_identifiers = {
-            instrument: (
-                pd.Series(
-                    [
-                        var.split('_')[0] for var in self.lookup_table.index
-                        if instrument in var
-                        ]
-                    )
-                .unique()
-                .tolist()
-                )
-        for instrument in VALID_INSTRUMENTS
-        }
+        # # Dict of device names with valid variables (variables that may contain
+        # # the device name i.e. SONIC or IRGA)
+        # self.valid_instrument_variable_identifiers = {
+        #     instrument: (
+        #         pd.Series(
+        #             [
+        #                 var.split('_')[0] for var in self.lookup_table.index
+        #                 if instrument in var
+        #                 ]
+        #             )
+        #         .unique()
+        #         .tolist()
+        #         )
+        # for instrument in VALID_INSTRUMENTS
+        # }
     #--------------------------------------------------------------------------
 
+    # #--------------------------------------------------------------------------
+    # def list_standard_variables(self):
+
+    #     return self.lookup_table.index.tolist()
+    # #--------------------------------------------------------------------------
+
+    # #--------------------------------------------------------------------------
+    # def get_standard_variable_attributes(self, variable_name):
+
+    #     quantity = (
+    #         self._extract_quantity(
+    #             parse_list=variable_name.split(self.split_char)
+    #             )
+    #         ['quantity']
+    #         )
+    #     idx = self.lookup_table.index.get_loc(quantity)
+    #     return self.lookup_table.reset_index().iloc[idx]
+    # #--------------------------------------------------------------------------
+
     #--------------------------------------------------------------------------
-    def list_standard_variables(self):
+    def parse_variable_name(self, variable_name):
 
-        return self.lookup_table.index.tolist()
-    #--------------------------------------------------------------------------
+        rslt_dict = {
+            'quantity': None,
+            'instrument': None,
+            'location': None,
+            'replicate': None,
+            'process': None
+            }
 
-    #--------------------------------------------------------------------------
-    def get_standard_variable_attributes(
-            self, variable_name: str, return_field: str=None
-            ) -> pd.Series | str:
-        """
-        Return attributes of variable. Note that the naming convention does NOT
-        have to exactly match the pfp_variable (e.g. Ta_2m_Av can be passed
-        and will retrieve Ta attributes), but it MUST conform to the pfp
-        variable naming standards.
+        # Get string elements
+        elems = variable_name.split('_')
 
-        Args:
-            std_name: name for which to return attributes.
-            return_field (optional): specific attribute to return. Defaults to None.
+        # Find quantity and instrument (if valid)
+        rslt_dict.update(self._extract_quantity(elems))
 
-        Returns:
-            Attribute(s).
+        # Raise if too many remaining elements
+        if len(elems) > 2:
+            raise IndexError('Too many elements in variable name string!')
 
-        """
+        # Enforce element order if there are two elements
+        # (location must be first, process must be second)
+        if len(elems) == 2:
+            rslt_dict.update(self._check_str_is_location(parse_list=elems))
+            rslt_dict.update(self._check_str_is_process(parse_list=elems))
+            return rslt_dict
 
-        rslt = self.parse_variable_name(variable_name=variable_name)
-        rslt_list = list(filter(lambda x: isinstance(x, str), rslt.values()))
-        while True:
+        # Test for location OR process if there is only one element remaining
+        if len(elems) == 1:
             try:
-                attrs = self.lookup_table.loc['_'.join(rslt_list)]
-                break
-            except KeyError as e:
-                rslt_list.remove(rslt_list[-1])
-                if len(rslt_list) == 0:
-                    raise KeyError(
-                        f'No entry found for any variants of {variable_name}'
-                        ) from e
-        if return_field is None:
-            return attrs
-        return attrs[return_field]
+                rslt_dict.update(self._check_str_is_location(parse_list=elems))
+            except TypeError:
+                rslt_dict.update(self._check_str_is_process(parse_list=elems))
+
+        return rslt_dict
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def parse_variable_name(self, variable_name: str) -> dict:
-        """
-        Parse the variable name string for conformity
+    def _extract_quantity(self, parse_list: str) -> str:
 
-        Args:
-            variable_name (str): DESCRIPTION.
+        quantity = parse_list[0]
+        instrument = None
+        parse_list.remove(quantity)
+        if not len(parse_list) == 0:
+            if parse_list[0] in VALID_INSTRUMENTS:
+                quantity = '_'.join([quantity, parse_list[0]])
+                instrument = parse_list[0]
+                parse_list.remove(instrument)
+        if not quantity in self.variable_list:
+            raise KeyError(
+                'Not a valid quantity identifier!'
+                )
+        return {'quantity': quantity, 'instrument': instrument}
+    #--------------------------------------------------------------------------
 
-        Raises:
-            KeyError: raised if any slots contain unrecognised variables,
-            devices or processes.
-            IndexError: raised if too many slots (>3).
+    #--------------------------------------------------------------------------
+    def _check_str_is_location(self, parse_list):
 
-        Returns:
-            None.
+        parse_str = parse_list[0]
 
-        """
+        for units in VALID_LOC_UNITS:
 
-        # Parse the string components
-        rslt = {}
-        for i, parse_str in enumerate(variable_name.split('_')):
-
-            # First slot must contain a variable identifier
-            if i == 0:
-                rslt['variable'] = self._check_str_is_variable(
-                    parse_str=parse_str
+            sub_list = parse_str.split(units)
+            if len(sub_list) == 1:
+                error = (
+                    'No recognised height / depth units in location '
+                    'identifier!'
                     )
+                continue
 
-            # Second slot must contain either a device or location identifier;
-            # if it is a device, it must have a valid variable identifier for
-            # the device (e.g. Sws_SONIC is not okay).
-            if i == 1:
-                try:
-                    rslt['device'] = self._check_str_is_instrument(
-                        parse_str=parse_str, var_id=rslt['variable']
+            if not sub_list[0].isdigit():
+                error = (
+                    'Characters preceding height / depth units must be '
+                    'numeric'
+                    )
+                continue
+
+            if len(sub_list[1]) != 0:
+                if not sub_list[1].isalpha:
+                    error = (
+                        'Characters succeeding valid location identifier '
+                        'must be single alpha character'
                         )
                     continue
-                except TypeError:
-                    raise
-                except KeyError as e:
-                    first_error = e.args[0]
-                    rslt['device'] = None
-                try:
-                    rslt.update(
-                        self._check_str_is_location(parse_str=parse_str)
-                        )
-                except (KeyError, TypeError) as e:
-                    second_error = e.args[0]
-                    raise Exception(
-                        'Neither a valid device or location was found! \n'
-                        f'{first_error}\n'
-                        f'{second_error}'
-                        )
 
-            # Third slot must contain a process identifier
-            if i == 2:
-                rslt['process'] = self._check_str_is_process(
-                    parse_str=parse_str
-                    )
+            parse_list.remove(parse_str)
+            location = ''.join([sub_list[0], units])
+            replicate = None
+            if len(sub_list[1]) != 0:
+                replicate = sub_list[1]
+            return {'location': location, 'replicate': replicate}
 
-            # No fourth slot allowed!
-            if i == 3:
-                raise IndexError('Too many slots!')
-
-        return rslt
+        raise TypeError(error)
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _check_str_is_variable(self, parse_str: str) -> str:
+    def _check_str_is_process(self, parse_list: list) -> dict:
 
-        if parse_str in self.valid_variable_identifiers:
-            return parse_str
-        raise KeyError(
-            f'{parse_str} is not a valid variable identifier'
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _check_str_is_instrument(self, parse_str: str, var_id: str) -> str:
-
-        try:
-            valid_vars = self.valid_instrument_variable_identifiers[parse_str]
-            if var_id in valid_vars:
-                return parse_str
-            raise TypeError(
-                f'Variable {var_id} is not valid for device {parse_str}'
-                )
-        except KeyError:
+        process = parse_list[0]
+        if not process in VALID_SUFFIXES.keys():
             raise KeyError(
-                f'{parse_str} is not a valid device identifier'
+                f'{parse_list[0]} is not a valid process identifier'
                 )
+        parse_list.remove(process)
+        return {'process': process}
     #--------------------------------------------------------------------------
 
-    #--------------------------------------------------------------------------
-    def _check_str_is_process(self, parse_str: str) -> str:
-
-        if parse_str in VALID_SUFFIXES.keys():
-            return parse_str
-        raise KeyError(
-            f'{parse_str} is not a valid process identifier'
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _check_str_is_location(self, parse_str: str):
-        """
-
-
-        Args:
-            parse_str (str): DESCRIPTION.
-
-        Returns:
-            bool: DESCRIPTION.
-
-        """
-
-        def parse_single_char(char: str) -> bool:
-
-            if not char.isalpha:
-                raise KeyError(
-                    'Replicate identifier must be single alphabet character '
-                    f'(you passed {char})'
-                    )
-            if char in VALID_LOC_UNITS:
-                raise KeyError(
-                    'Replicate identifier must not be a height / depth unit '
-                    f'(you passed {char})'
-                    )
-            return char
-
-        # Parse single character str
-        if len(parse_str) == 1:
-            return {
-                'location': None,
-                'replicate': parse_single_char(char=parse_str)
-                }
-
-        # Parse multicharacter str (must have height units embedded, these
-        # units must be )
-        for units in VALID_LOC_UNITS:
-            if units in parse_str:
-                parse_list = parse_str.split(units)
-                if not parse_list[0].isdigit():
-                    raise TypeError(
-                        'Location identifier units must be preceded by integer'
-                        )
-                if len(parse_list[1]) == 0:
-                    return {
-                        'location': parse_list[0] + units,
-                        'replicate': None
-                        }
-                if len(parse_list[1]) == 1:
-                    return {
-                        'location': parse_list[0] + units,
-                        'replicate': parse_single_char(char=parse_list[1])
-                        }
-        raise KeyError(
-            'Multi-character location identifiers must contain height / depth '
-            'units'
-            )
-    #--------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-class PFPStdNames():
-
-    def __init__(self):
-
-        self.lookup_table = (
-            pd.DataFrame(
-                cm.get_global_configs(which='pfp_std_names')
-                )
-            .T
-            .rename_axis('variable')
-            )
-
-    def list_fields(self):
-
-        return self.lookup_df.columns.tolist()
-
-    def list_variables(self):
-
-        return self.lookup_table.index.tolist()
-
-    def get_variable_attributes(
-            self, variable_name: str, return_field: str=None
-            ) -> pd.core.series.Series | str:
-
-        if return_field is None:
-            return self.lookup_table.loc[variable_name]
-        return self.lookup_table.loc[variable_name, return_field]
 #------------------------------------------------------------------------------
 
 ###############################################################################
 ### BEGIN SITE-SPECIFIC HARDWARE CONFIGURATION FUNCTIONS ###
 ###############################################################################
-
-# #--------------------------------------------------------------------------
-# def get_logger_list(site: str) -> list:
-#     """
-#     Get list of loggers.
-
-#     Args:
-#         site: name of site for which to return logger list.
-
-#     Returns:
-#         List of loggers.
-
-#     """
-
-#     hardware_configs = cm.get_site_hardware_configs(site=site, which='hardware')
-#     return list(hardware_configs['loggers'].keys())
-# #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def map_logger_tables_to_files(
@@ -757,28 +698,6 @@ def map_logger_tables_to_files(
     return df.assign(path=abs_path_list)
 #------------------------------------------------------------------------------
 
-# #------------------------------------------------------------------------------
-# def get_modem_details(site: str, field: str=None) -> pd.Series | str:
-#     """
-#     Get details of modem.
-
-#     Args:
-#         site: name of site for which to return modem details.
-#         field: field to return. Defaults to None.
-
-#     Returns:
-#         Details of modem.
-
-#     """
-
-#     modem_configs = pd.Series(
-#         cm.get_site_hardware_configs(site=site, which='modem')
-#         )
-#     if field is None:
-#         return modem_configs
-#     return modem_configs[field]
-# #------------------------------------------------------------------------------
-
 ###############################################################################
 ### END SITE-SPECIFIC HARDWARE CONFIGURATION FUNCTIONS ###
 ###############################################################################
@@ -825,7 +744,7 @@ def make_variable_lookup_table(site, variable_map):
         )
 
     # Make the standard naming table
-    var_parser = PFPNameParser()
+    var_parser = PFPVariableParser()
     names_df = (
         pd.DataFrame(
             [

@@ -21,7 +21,7 @@ class data_merger():
     def __init__(self, site, variable_map='pfp', concat_files=True):
 
         self.site = site
-        self.md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
+        self.md_mngr = mh.MetaDataManager(site=site, variable_map=variable_map)
         merge_dict = {
             file: self.md_mngr.translate_variables_by_table(table=table)
             for table, file in self.md_mngr.map_tables_to_files(abs_path=True).items()
@@ -32,7 +32,10 @@ class data_merger():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_data(self, convert_units=True, apply_limits=True):
+    def get_data(
+            self, convert_units: bool=True, apply_limits: bool=True,
+            calculate_missing: bool=True
+            ):
 
         output_data = self.data.copy()
 
@@ -40,11 +43,39 @@ class data_merger():
         if convert_units:
             self._convert_units(output_data)
 
+        # Calculate missing variables
+        if calculate_missing:
+            self._calculate_missing(output_data)
+
         # Apply range limits (if requested)
         if apply_limits:
             self._apply_limits(df=output_data)
 
         return output_data
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    # def calculate_quantity(self, quantity):
+
+    #     data = self.get_data()
+    #     rslt = dtc.get_function(variable=quantity, with_params=True)
+    #     args_dict = {
+    #         parameter: data[parameter] for parameter in
+    #         rslt[1]
+    #         }
+    #     return rslt[0](**args_dict)
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def list_available_quantities(self, list_parameters=False):
+
+        quantities = dtc.CALCS_DICT.keys()
+        if not list_parameters:
+            return quantities
+        return {
+            quantity: list(dtc.get_function(quantity, with_params=True)[1])
+            for quantity in dtc.CALCS_DICT.keys()
+            }
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -68,6 +99,18 @@ class data_merger():
                 max_val=attrs['plausible_max'],
                 min_val=attrs['plausible_min']
                 )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _calculate_missing(self, df):
+
+        for quantity in self.md_mngr.missing_variables:
+            rslt = dtc.get_function(variable=quantity, with_params=True)
+            args_dict = {
+                parameter: self.data[parameter] for parameter in
+                rslt[1]
+                }
+            df[quantity] = rslt[0](**args_dict)
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------

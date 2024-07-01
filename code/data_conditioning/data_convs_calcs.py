@@ -8,6 +8,7 @@ Add a way to fill unknown variables with NaN to the function getter
 """
 
 import ephem
+import inspect
 import numpy as np
 import pandas as pd
 from pytz import timezone
@@ -21,21 +22,6 @@ CO2_MOL_MASS = 44
 H2O_MOL_MASS = 18
 K = 273.15
 R = 8.3143
-
-#------------------------------------------------------------------------------
-### OTHER STUFF ###
-#------------------------------------------------------------------------------
-
-input_vars = {
-    'es': ['Ta'],
-    'e': ['Ta', 'RH'],
-    'AH_sensor': ['Ta', 'RH', 'ps'],
-    'molar_density': ['Ta', 'ps'],
-    'CO2_mole_fraction': ['CO2_density', 'Ta', 'ps'],
-    'RH': ['Ta', 'AH_sensor', 'ps'],
-    'CO2_density': ['Ta', 'ps', 'CO2'],
-    'ustar': ['Tau', 'rho']
-    }
 
 #------------------------------------------------------------------------------
 ### CLASSES ###
@@ -95,6 +81,31 @@ class TimeFunctions():
             return funcs_dict[rise_or_set][next_or_last]
         return funcs_dict[rise_or_set][next_or_last] + self.utc_offset
 #------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_timezone(lat, lon):
+    """Get the timezone (as region/city)"""
+
+    tf = TimezoneFinder()
+    return tf.timezone_at(lng=lon, lat=lat)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_timezone_utc_offset(tz, date, dst=False):
+    """Get the UTC offset (local standard or daylight)"""
+
+    tz_obj = timezone(tz)
+    utc_offset = tz_obj.utcoffset(date)
+    if not dst:
+        return utc_offset - tz_obj.dst(date)
+    return utc_offset
+#------------------------------------------------------------------------------
+
+
+
+
+
+
 
 #------------------------------------------------------------------------------
 class UnitConverter():
@@ -208,110 +219,82 @@ def convert_variable(variable):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def calculate_AH_from_RH(**kwargs):
+def calculate_AH_from_RH(Ta: pd.Series, RH: pd.Series, ps: pd.Series):
 
     return (
-        calculate_e(Ta=kwargs['Ta'], RH=kwargs['RH']) / kwargs['ps'] *
-        calculate_molar_density(Ta=kwargs['Ta'], ps=kwargs['ps']) * H2O_MOL_MASS
+        calculate_e(Ta=Ta, RH=RH) / ps *
+        calculate_molar_density(Ta=Ta, ps=ps) * H2O_MOL_MASS
         )
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def calculate_CO2_density(**kwargs):
+def calculate_CO2_density(
+        CO2: pd.Series, Ta: pd.Series, ps: pd.Series
+        ) -> pd.Series:
+
+    return CO2 / 10**3 * calculate_molar_density(Ta=Ta, ps=ps) * CO2_MOL_MASS
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def calculate_CO2_mole_fraction(
+        CO2dens: pd.Series, Ta: pd.Series, ps: pd.Series
+        ) -> pd.Series:
 
     return (
-        kwargs['CO2'] / 10**3 *
-        calculate_molar_density(Ta=kwargs['Ta'], ps=kwargs['ps']) * CO2_MOL_MASS
+        (CO2dens / CO2_MOL_MASS) /
+        calculate_molar_density(Ta=Ta, ps=ps)
+        * 10**3
         )
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def calculate_CO2_mole_fraction(**kwargs):
+def calculate_e(Ta: pd.Series, RH: pd.Series) -> pd.Series:
 
-    return (
-        (kwargs['CO2dens'] / CO2_MOL_MASS) /
-        calculate_molar_density(Ta=kwargs['Ta'], ps=kwargs['ps']) * 10**3
-        )
+    return calculate_es(Ta=Ta) * RH / 100
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def calculate_e(**kwargs):
+def calculate_es(Ta: pd.Series) -> pd.Series:
 
-    return calculate_es(Ta=kwargs['Ta']) * kwargs['RH'] / 100
+    return 0.6106 * np.exp(17.27 * Ta / (Ta + 237.3))
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def calculate_es(**kwargs):
+def calculate_molar_density(ps: pd.Series, Ta: pd.Series) -> pd.Series:
 
-    return 0.6106 * np.exp(17.27 * kwargs['Ta'] / (kwargs['Ta'] + 237.3))
+    return ps * 1000 / ((Ta + K) * R)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def calculate_molar_density(**kwargs):
+def calculate_RH_from_AH(AH, Ta, ps):
 
-    return kwargs['ps'] * 1000 / ((kwargs['Ta'] + K) * R)
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def calculate_RH_from_AH(**kwargs):
-
-    e = (
-        (kwargs['AH_sensor'] / 18) /
-        calculate_molar_density(Ta=kwargs['Ta'], ps=kwargs['ps']) * kwargs['ps']
-        )
-    es = calculate_es(Ta=kwargs['Ta'])
+    e = (AH / 18) / calculate_molar_density(Ta=Ta, ps=ps) * ps
+    es = calculate_es(Ta=Ta)
     return e / es * 100
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def calculate_ustar_from_tau_rho(**kwargs):
+def calculate_ustar_from_tau_rho(tau, rho):
 
-    return abs(kwargs['tau']) / kwargs['rho']
+    return abs(tau) / rho
 #------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-def get_timezone(lat, lon):
-    """Get the timezone (as region/city)"""
-
-    tf = TimezoneFinder()
-    return tf.timezone_at(lng=lon, lat=lat)
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def get_timezone_utc_offset(tz, date, dst=False):
-    """Get the UTC offset (local standard or daylight)"""
-
-    tz_obj = timezone(tz)
-    utc_offset = tz_obj.utcoffset(date)
-    if not dst:
-        return utc_offset - tz_obj.dst(date)
-    return utc_offset
-#------------------------------------------------------------------------------
+CALCS_DICT = {
+    'es': calculate_es,
+    'e': calculate_e,
+    'AH': calculate_AH_from_RH,
+    'molar_density': calculate_molar_density,
+    'CO2': calculate_CO2_mole_fraction,
+    'RH': calculate_RH_from_AH,
+    'CO2dens': calculate_CO2_density,
+    'ustar': calculate_ustar_from_tau_rho
+    }
 
 #------------------------------------------------------------------------------
-def get_function(variable):
+def get_function(variable, with_params=True):
 
-    calculate_dict = {
-        'es': calculate_es,
-        'e': calculate_e,
-        'AH_sensor': calculate_AH_from_RH,
-        'molar_density': calculate_molar_density,
-        'CO2_mole_fraction': calculate_CO2_mole_fraction,
-        'RH': calculate_RH_from_AH,
-        'CO2dens': calculate_CO2_density,
-        'ustar': calculate_ustar_from_tau_rho
-        }
-    return calculate_dict[variable]
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def calculate_variable_from_std_frame(variable, df):
-
-    try:
-        func = get_function(variable)
-        args = {arg: df[arg] for arg in input_vars}
-        return func(**args)
-    except KeyError:
-        return pd.Series(np.tile(np.nan, len(df)))
-
+    func = CALCS_DICT[variable]
+    if not with_params:
+        return func
+    return func, inspect.signature(func).parameters
 #------------------------------------------------------------------------------

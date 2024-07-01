@@ -14,7 +14,7 @@ To do:
 
 import pandas as pd
 
-import data_handling.file_io as io
+import file_handling.file_io as io
 
 UNIT_ALIASES = {
     'degC': ['C'],

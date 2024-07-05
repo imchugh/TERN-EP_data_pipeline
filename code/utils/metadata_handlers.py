@@ -69,36 +69,12 @@ class MetaDataManager():
             .rename_axis('quantity')
             )
 
-
-        self.variable_lookup_table = (
+        self.site_variables = (
             self._get_site_variable_map()
             .pipe(self._test_variable_conformity)
             .pipe(self._map_tables_to_files)
+            .pipe(self._get_standard_attributes)
             )
-
-        breakpoint()
-        # # Create site-based variable lookup tables
-        # self.variable_lookup_table = make_variable_lookup_table(
-        #     site=site, variable_map=variable_map
-        #     )
-
-        # # Make the variable configuration dict
-        # self.variable_configs = cm.get_site_variable_configs(
-        #     site=site, which=variable_map
-        #     )
-
-
-        # # Set missing variables
-        # requisite_variables = (
-        #     cm.get_global_configs(which='requisite_variables')
-        #     [variable_map]
-        #     )
-        # self.missing_variables = None
-        # if not requisite_variables is None:
-        #     self.missing_variables = [
-        #         var for var in requisite_variables if not var in
-        #         self.variable_lookup_table.quantity.unique()
-        #         ]
 
         # Get flux instrument types
         self.irga_type = self._get_inst_type('IRGA')
@@ -111,10 +87,6 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
     def _get_site_variable_map(self):
 
-        # Make the basic variable table
-        # variable_configs = cm.get_site_variable_configs(
-        #     site=self.site, which=self.variable_map
-        #     )
         return (
             pd.DataFrame(
                 cm.get_site_variable_configs(
@@ -124,23 +96,35 @@ class MetaDataManager():
             .T
             .rename_axis('std_name')
             )
-        # vars_df = pd.DataFrame(variable_configs).T
-        # vars_df.index.name = 'std_name'
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
     def _test_variable_conformity(self, df):
 
         name_parser = PFPNameParser()
-        breakpoint()
-        test = pd.DataFrame(
-            [
-                name_parser.parse_variable_name(variable_name=variable_name)
-                for variable_name in df.index
-                ]
+        test = (
+            pd.DataFrame(
+                [
+                    name_parser.parse_variable_name(variable_name=variable_name)
+                    for variable_name in df.index
+                    ]
+                )
+            .set_index(df.index)
+            .fillna('')
+            .drop('instrument', axis=1)
             )
-        breakpoint()
-        pass
+        return pd.concat([df, test], axis=1)
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _get_standard_attributes(self, df):
+
+        test = (
+            self.standard_variables
+            .loc[df.quantity]
+            .set_index(df.index)
+            )
+        return pd.concat([df, test], axis=1)
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -170,8 +154,8 @@ class MetaDataManager():
 
         """
 
-        var_list = [x for x in self.variable_lookup_table.index if inst in x]
-        inst_list = self.variable_lookup_table.loc[var_list].instrument.unique()
+        var_list = [x for x in self.site_variables.index if inst in x]
+        inst_list = self.site_variables.loc[var_list].instrument.unique()
         if not len(inst_list) == 1:
             raise RuntimeError(
                 'More than one instrument specified as instrument attribute '
@@ -209,7 +193,7 @@ class MetaDataManager():
 
         """
 
-        return self.variable_lookup_table.table.unique().tolist()
+        return self.site_variables.table.unique().tolist()
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -223,7 +207,7 @@ class MetaDataManager():
 
         """
 
-        return self.variable_lookup_table.file.unique().tolist()
+        return self.site_variables.file.unique().tolist()
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -236,7 +220,7 @@ class MetaDataManager():
 
         """
 
-        return self.variable_lookup_table.index.tolist()
+        return self.site_variables.index.tolist()
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -251,9 +235,9 @@ class MetaDataManager():
         """
 
         return (
-            self.variable_lookup_table.loc[
-                self.variable_lookup_table.units!=
-                self.variable_lookup_table.standard_units
+            self.site_variables.loc[
+                self.site_variables.units!=
+                self.site_variables.standard_units
                 ]
             .index
             .tolist()
@@ -283,8 +267,8 @@ class MetaDataManager():
 
         s = (
             pd.Series(
-                data=self.variable_lookup_table.file.tolist(),
-                index=self.variable_lookup_table.table.tolist()
+                data=self.site_variables.file.tolist(),
+                index=self.site_variables.table.tolist()
                 )
             .drop_duplicates()
             .loc[table]
@@ -433,7 +417,7 @@ class MetaDataManager():
         """
 
         return (
-            self.variable_lookup_table
+            self.site_variables
             .reset_index()
             .set_index(keys=self._NAME_MAP[use_index])
             )
@@ -547,31 +531,38 @@ class PFPNameParser():
         elems = variable_name.split('_')
 
         # Find quantity and instrument (if valid)
-        rslt_dict.update(self._extract_quantity(elems))
+        rslt_dict.update(self._check_str_is_quantity(elems))
 
-        # Raise if too many remaining elements
-        if len(elems) > 2:
-            raise IndexError('Too many elements in variable name string!')
-
-        # Enforce element order if there are two elements
-        # (location must be first, process must be second)
-        if len(elems) == 2:
-            rslt_dict.update(self._check_str_is_location(parse_list=elems))
-            rslt_dict.update(self._check_str_is_process(parse_list=elems))
+        # Return if list exhausted
+        if len(elems) == 0:
             return rslt_dict
 
-        # Test for location OR process if there is only one element remaining
-        if len(elems) == 1:
+        # Check for replicates / locations
+        try:
+            rslt_dict.update(self._check_str_is_num_replicate(parse_list=elems))
+        except TypeError:
             try:
                 rslt_dict.update(self._check_str_is_location(parse_list=elems))
             except TypeError:
-                rslt_dict.update(self._check_str_is_process(parse_list=elems))
+                pass
 
-        return rslt_dict
+        # Return if list exhausted
+        if len(elems) == 0:
+            return rslt_dict
+
+        # Check for process
+        rslt_dict.update(self._check_str_is_process(parse_list=elems))
+
+        # Return if list exhausted
+        if len(elems) == 0:
+            return rslt_dict
+
+        # Raise error if list elements remain
+        raise RuntimeError('Process identifier must be the final element!')
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _extract_quantity(self, parse_list: str) -> str:
+    def _check_str_is_quantity(self, parse_list: str) -> dict:
 
         quantity = parse_list[0]
         instrument = None
@@ -586,6 +577,16 @@ class PFPNameParser():
                 'Not a valid quantity identifier!'
                 )
         return {'quantity': quantity, 'instrument': instrument}
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _check_str_is_num_replicate(self, parse_list: str) -> dict:
+
+        digit = parse_list[0]
+        if digit.isdigit():
+            parse_list.remove(digit)
+            return {'replicate': digit}
+        raise TypeError('Not a number!')
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -744,7 +745,7 @@ def make_variable_lookup_table(site, variable_map):
         )
 
     # Make the standard naming table
-    var_parser = PFPVariableParser()
+    var_parser = PFPNameParser()
     names_df = (
         pd.DataFrame(
             [

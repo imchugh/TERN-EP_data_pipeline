@@ -23,9 +23,9 @@ H2O_MOL_MASS = 18
 K = 273.15
 R = 8.3143
 
-#------------------------------------------------------------------------------
-### CLASSES ###
-#------------------------------------------------------------------------------
+###############################################################################
+### BEGIN TIME CLASSES / FUNCTIONS ###
+###############################################################################
 
 #------------------------------------------------------------------------------
 class TimeFunctions():
@@ -101,23 +101,15 @@ def get_timezone_utc_offset(tz, date, dst=False):
     return utc_offset
 #------------------------------------------------------------------------------
 
+###############################################################################
+### END TIME CLASSES / FUNCTIONS ###
+###############################################################################
 
 
 
-
-
-
-#------------------------------------------------------------------------------
-class UnitConverter():
-
-    def __init__(self, data):
-
-        pass
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-### FUNCTIONS ###
-#------------------------------------------------------------------------------
+###############################################################################
+### BEGIN QUANTITY CONVERSION FUNCTIONS ###
+###############################################################################
 
 #------------------------------------------------------------------------------
 def apply_limits(data, data_min, data_max, inplace=False):
@@ -218,6 +210,16 @@ def convert_variable(variable):
     return conversions_dict[variable]
 #------------------------------------------------------------------------------
 
+###############################################################################
+### END QUANTITY CONVERSION FUNCTIONS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN QUANTITY CALCULATION FUNCTIONS ###
+###############################################################################
+
 #------------------------------------------------------------------------------
 def calculate_AH_from_RH(Ta: pd.Series, RH: pd.Series, ps: pd.Series):
 
@@ -279,22 +281,49 @@ def calculate_ustar_from_tau_rho(tau, rho):
     return abs(tau) / rho
 #------------------------------------------------------------------------------
 
-CALCS_DICT = {
-    'es': calculate_es,
-    'e': calculate_e,
-    'AH': calculate_AH_from_RH,
-    'molar_density': calculate_molar_density,
-    'CO2': calculate_CO2_mole_fraction,
-    'RH': calculate_RH_from_AH,
-    'CO2dens': calculate_CO2_density,
-    'ustar': calculate_ustar_from_tau_rho
-    }
-
 #------------------------------------------------------------------------------
 def get_function(variable, with_params=True):
+
+    CALCS_DICT = {
+        'es': calculate_es,
+        'e': calculate_e,
+        'AH': calculate_AH_from_RH,
+        'molar_density': calculate_molar_density,
+        'CO2': calculate_CO2_mole_fraction,
+        'CO2_IRGA': calculate_CO2_mole_fraction,
+        'RH': calculate_RH_from_AH,
+        'CO2dens': calculate_CO2_density,
+        'ustar': calculate_ustar_from_tau_rho
+        }
 
     func = CALCS_DICT[variable]
     if not with_params:
         return func
     return func, inspect.signature(func).parameters
 #------------------------------------------------------------------------------
+
+###############################################################################
+### END QUANTITY CALCULATION FUNCTIONS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN DATA FILTERING FUNCTIONS ###
+###############################################################################
+
+#------------------------------------------------------------------------------
+def filter_range(series, max_val, min_val):
+
+    if isinstance(max_val, (int, float)) and isinstance(min_val, (int, float)):
+        return series.where((series <= max_val) & (series >= min_val), np.nan)
+    if isinstance(max_val, (int, float)):
+        return series.where(series <= max_val, np.nan)
+    if isinstance(min_val, (int, float)):
+        return series.where(series >= min_val, np.nan)
+    return series
+#------------------------------------------------------------------------------
+
+###############################################################################
+### END DATA FILTERING FUNCTIONS ###
+###############################################################################

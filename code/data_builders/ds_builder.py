@@ -30,9 +30,9 @@ import pandas as pd
 import pathlib
 import xarray as xr
 
+import data_builders.data_merger as dm
 import utils.configs_manager as cm
-import data_handling.file_handler as fh
-import data_handling.file_io as io
+import file_handling.file_io as io
 import utils.metadata_handlers as mh
 
 #------------------------------------------------------------------------------
@@ -78,8 +78,17 @@ class L1DataBuilder():
         if md_mngr is None:
             md_mngr = mh.MetaDataManager(site=site)
         self.md_mngr = md_mngr
-        self.data = merge_data_by_manager(
-            site=site, md_mngr=self.md_mngr, concat_files=concat_files
+
+        # Merge the raw data (no corrections applied)
+        merge_dict = {
+            file: self.md_mngr.translate_variables_by_table(table=table)
+            for table, file in self.md_mngr.map_tables_to_files(abs_path=True).items()
+            }
+        self.data = (
+            dm.merge_all(
+                files=merge_dict, concat_files=concat_files
+                )
+            ['data']
             )
         self.data_years = self.data.index.year.unique().tolist()
         self.global_attrs = self._get_site_global_attrs()
@@ -231,6 +240,7 @@ class L1DataBuilder():
                 longitude=self.global_attrs['longitude']
                 )
             .reset_index()
+            .rename({'DATETIME': 'time'}, axis=1)
             .set_index(keys=['time', 'latitude', 'longitude'])
             .to_xarray()
             )
@@ -278,7 +288,7 @@ class L1DataBuilder():
             year_str = f' for the calendar year {year_list[0]}'
         title_str = (
             f'Flux tower data set from the {self.site} site'
-            f'{year_str}, {self.md_mngr.irga_type}'
+            f'{year_str}, {self.md_mngr.instruments["IRGA"]}'
             )
 
         # Get current time info for run
@@ -296,8 +306,8 @@ class L1DataBuilder():
                 'history': f'{this_month} {this_year} processing',
                 'time_coverage_start': func(ds.time.values[0]),
                 'time_coverage_end': func(ds.time.values[-1]),
-                'irga_type': self.md_mngr.irga_type,
-                'sonic_type': self.md_mngr.sonic_type
+                'irga_type': self.md_mngr.instruments['IRGA'],
+                'sonic_type': self.md_mngr.instruments['SONIC']
                 }
             )
     #--------------------------------------------------------------------------
@@ -642,30 +652,30 @@ def append_to_nc(site: str, nc_file: pathlib.Path | str):
 ### BEGIN MERGE FUNCTIONS ###
 ###############################################################################
 
-#------------------------------------------------------------------------------
-def merge_data_by_manager(
-        site: str, md_mngr: mh.MetaDataManager=None, concat_files=False
-        ) -> pd.core.frame.DataFrame:
-    """
+# #------------------------------------------------------------------------------
+# def merge_data_by_manager(
+#         site: str, md_mngr: mh.MetaDataManager=None, concat_files=False
+#         ) -> pd.core.frame.DataFrame:
+#     """
 
 
-    Args:
-        site (str): DESCRIPTION.
-        md_mngr (mh.MetaDataManager, optional): DESCRIPTION. Defaults to None.
+#     Args:
+#         site (str): DESCRIPTION.
+#         md_mngr (mh.MetaDataManager, optional): DESCRIPTION. Defaults to None.
 
-    Returns:
-        TYPE: DESCRIPTION.
+#     Returns:
+#         TYPE: DESCRIPTION.
 
-    """
+#     """
 
-    if md_mngr is None:
-        md_mngr = mh.MetaDataManager(site=site)
-    merge_dict = {
-        file: md_mngr.translate_variables_by_table(table=table)
-        for table, file in md_mngr.map_tables_to_files(abs_path=True).items()
-        }
-    return fh.merge_data(files=merge_dict, concat_files=concat_files)
-#------------------------------------------------------------------------------
+#     if md_mngr is None:
+#         md_mngr = mh.MetaDataManager(site=site)
+#     merge_dict = {
+#         file: md_mngr.translate_variables_by_table(table=table)
+#         for table, file in md_mngr.map_tables_to_files(abs_path=True).items()
+#         }
+#     return fh.merge_data(files=merge_dict, concat_files=concat_files)
+# #------------------------------------------------------------------------------
 
 ###############################################################################
 ### END MERGE FUNCTIONS ###

@@ -45,7 +45,7 @@ class data_merger():
         # Set site and instance of metadata manager
         self.site = site
         self.md_mngr = AugmentedMetaDataManager(
-            site=site, variable_map=variable_map
+            site=site, variable_map=variable_map, concat_files=concat_files
             )
 
         # Merge the raw data
@@ -65,7 +65,7 @@ class data_merger():
             ) -> pd.DataFrame:
         """
         Return a COPY of the raw data with QC applied (convert units,
-        calculate requisite missing variables and apply rangelimits).
+        calculate requisite missing variables and apply range limits).
 
         Args:
             convert_units (optional): whether to convert units. Defaults to True.
@@ -90,7 +90,9 @@ class data_merger():
 
         # Apply range limits (if requested)
         if apply_limits:
-            self._apply_limits(df=output_data)
+            self._apply_limits(
+                df=output_data, include_missing=calculate_missing
+                )
 
         return output_data
     #--------------------------------------------------------------------------
@@ -138,7 +140,7 @@ class data_merger():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _apply_limits(self, df: pd.DataFrame) -> None:
+    def _apply_limits(self, df: pd.DataFrame, include_missing: bool) -> None:
         """
         Apply range limits.
 
@@ -150,9 +152,9 @@ class data_merger():
 
         """
 
-        variables = pd.concat(
-            [self.md_mngr.site_variables, self.md_mngr.missing_variables]
-            )
+        variables = self.md_mngr.site_variables
+        if include_missing:
+            variables = pd.concat([variables, self.md_mngr.missing_variables])
         for variable in variables.index:
             attrs = variables.loc[variable]
             df[variable] = ccf.filter_range(
@@ -235,7 +237,7 @@ class AugmentedMetaDataManager(mh.MetaDataManager):
     """Adds missing variable table to standard MetaDataManager class"""
 
     #--------------------------------------------------------------------------
-    def __init__(self, site, variable_map='pfp'):
+    def __init__(self, site, variable_map='pfp', concat_files=True):
 
         super().__init__(site, variable_map)
 

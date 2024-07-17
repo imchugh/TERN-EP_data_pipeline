@@ -8,11 +8,13 @@ Todo:
     - tighten up the logic on the pfp name parser
     (currently won't allow process identifiers in slot 2);
     - pfp naming convention should provide a separate slot for replicates!
+    - pfp name parser currently hacky because we need to handle variances.
+    This complicates the parsing because the units are different. We should
+    ditch variances.
 
 """
 
 import pandas as pd
-import pathlib
 
 import utils.configs_manager as cm
 import file_handling.file_io as io
@@ -24,7 +26,7 @@ SPLIT_CHAR = '_'
 VALID_INSTRUMENTS = ['SONIC', 'IRGA', 'RAD']
 VALID_LOC_UNITS = ['cm', 'm']
 VALID_SUFFIXES = {
-    'Av': 'average', 'Sd': 'standard deviation', 'Vr': 'variance'
+    'Av': 'average', 'Sd': 'standard deviation', 'Vr': 'variance', 'Sum': 'Sum'
     }
 
 ###############################################################################
@@ -64,7 +66,7 @@ class MetaDataManager():
 
         # Create global standard variables table
         self.standard_variables = (
-            pd.DataFrame(cm.get_global_configs(which='pfp_std_names'))
+            pd.DataFrame(cm.get_global_configs(which='pfp_std_names_b'))
             .T
             .rename_axis('quantity')
             )
@@ -74,7 +76,6 @@ class MetaDataManager():
             self._get_site_variable_map()
             .pipe(self._test_variable_conformity)
             .pipe(self._map_table_to_file)
-            .pipe(self._get_standard_attributes)
             )
 
         # Get flux instrument types
@@ -118,7 +119,7 @@ class MetaDataManager():
 
         """
 
-        name_parser = PFPNameParser()
+        name_parser = PFPNameParser2()
         test = (
             pd.DataFrame(
                 [
@@ -128,32 +129,8 @@ class MetaDataManager():
                 )
             .set_index(df.index)
             .fillna('')
-            .drop('instrument', axis=1)
             )
         return pd.concat([df, test], axis=1)
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _get_standard_attributes(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Get the standard attribute information from the pfp standard names
-        configs.
-
-        Args:
-            df: the dataframe to which to append the information.
-
-        Returns:
-            the dataframe with additional information.
-
-        """
-
-        return pd.concat(
-            [
-                df,
-                self.standard_variables.loc[df.quantity].set_index(df.index)
-                ],
-            axis=1
-            )
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -408,13 +385,75 @@ class MetaDataManager():
 
     #--------------------------------------------------------------------------
     def translate_variables_by_table(
-            self, table: str, source_field: str='site_name'
+            self, table: str=None, source_field: str='site_name'
             ) -> dict:
         """
-        Maps the translation between site names and pfp names for a specific file.
+        Maps the translation between site names and pfp names for a specific
+        table.
 
         Args:
-            table: name of table for which to fetch translations.
+            table (optional): name of table for which to fetch translations.
+            Defaults to None.
+            source_field (optional): the source field for the variable name
+            (either 'std_name' or 'site_name'). Defaults to 'site_name'.
+
+        Returns:
+            Dictionary containing the mapping.
+
+        """
+
+        return self._translate_by_something(
+            translate_by='table',
+            file_or_table=table,
+            source_field=source_field
+            )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def translate_variables_by_file(
+            self, file: str=None, source_field: str='site_name',
+            abs_path: bool=False
+            ):
+        """
+        Maps the translation between site names and pfp names for a specific
+        file.
+
+        Args:
+            file (optional): name of file for which to fetch translations.
+            Defaults to None.
+            source_field (optional): the source field for the variable name
+            (either 'std_name' or 'site_name'). Defaults to 'site_name'.
+
+        Returns:
+            Dictionary containing the mapping.
+
+        """
+
+        rslt = self._translate_by_something(
+            translate_by='file',
+            file_or_table=file,
+            source_field=source_field
+            )
+        if not abs_path:
+            return rslt
+        return {
+            self.data_path / the_file: the_map
+            for the_file, the_map in rslt.items()
+            }
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _translate_by_something(
+            self, translate_by: str, file_or_table: str=None,
+            source_field: str='site_name',
+            ):
+        """
+
+
+        Args:
+            translate_by: group translation maps by either file or table.
+            file_or_table (optional): pass a valid file or table for
+            specific translation map. Defaults to None.
             source_field (optional): the source field for the variable name
             (either 'std_name' or 'site_name'). Defaults to 'site_name'.
 
@@ -427,11 +466,16 @@ class MetaDataManager():
             source_field=source_field
             )
         df = self._index_translator(use_index=source_field)
-        return (
-            df.loc[df.table==table]
-            [translate_to]
-            .to_dict()
-            )
+        if file_or_table is not None:
+            return (
+                df.loc[df[translate_by]==file_or_table]
+                [translate_to]
+                .to_dict()
+                )
+        return {
+            grp[0]: grp[1][translate_to].to_dict()
+            for grp in df.groupby(translate_by)
+            }
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -518,6 +562,9 @@ class PFPNameParser():
     variables that are either unique to that device or that would be ambiguous
     in the absence of a device identifier (e.g. AH versus AH_IRGA).
 
+    3) If there is a process identifier, it must occur as the last substring.
+    If it is 'Vr', this must become past of the unique variable identifier,
+    because variances necessarily have different units.
 
     """
 
@@ -539,16 +586,17 @@ class PFPNameParser():
     #--------------------------------------------------------------------------
     def parse_variable_name(self, variable_name: str) -> dict:
         """
-
+        Break variable name into components and parse each for conformity.
 
         Args:
-            variable_name (TYPE): DESCRIPTION.
+            variable_name: the complete variable name.
 
         Raises:
-            RuntimeError: DESCRIPTION.
+            RuntimeError: raised if number of elements in substring list is
+            wrong.
 
         Returns:
-            rslt_dict (TYPE): DESCRIPTION.
+            rslt_dict: the identities of the substrings.
 
         """
 
@@ -566,56 +614,102 @@ class PFPNameParser():
         # Find quantity and instrument (if valid)
         rslt_dict.update(self._check_str_is_quantity(elems))
 
-        # Return if list exhausted
-        if len(elems) == 0:
-            return rslt_dict
+        # Check how many elements remain. If more than one, throw an error
+        if len(elems) > 1:
+            raise RuntimeError('Too many elements!')
 
-        # Check for replicates / locations
+        errors = []
+        # Check if next element is a replicate
         try:
             rslt_dict.update(
                 self._check_str_is_alphanum_replicate(parse_list=elems)
                 )
-        except TypeError:
-            try:
-                rslt_dict.update(self._check_str_is_location(parse_list=elems))
-            except TypeError:
-                pass
+        except TypeError as e:
+            errors.append(e.args[0])
 
-        # Return if list exhausted
-        if len(elems) == 0:
-            return rslt_dict
+        # Check if next element is a location / replicate combo
+        try:
+            rslt_dict.update(self._check_str_is_location(parse_list=elems))
+        except TypeError as e:
+            errors.append(e.args[0])
 
-        # Check for process
-        rslt_dict.update(self._check_str_is_process(parse_list=elems))
+        # Raise error if list element remains
+        if len(elems) > 0:
+            raise RuntimeError(
+                'Unrecognised element remains: replicate and location checks '
+                f'failed with the following messages: {errors}'
+                )
 
-        # Return if list exhausted
-        if len(elems) == 0:
-            return rslt_dict
-
-        # Raise error if list elements remain
-        raise RuntimeError('Process identifier must be the final element!')
+        # Return results
+        return rslt_dict
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
     def _check_str_is_quantity(self, parse_list: str) -> dict:
+        """
+        Check the list of elements for quantity substrings.
 
+        Args:
+            parse_list: the list of substring elements to parse.
+
+        Raises:
+            KeyError: raised if a valid quantity identifier not found.
+
+        Returns:
+            the identities of the substrings.
+
+        """
+
+        # Inits
         quantity = parse_list[0]
         instrument = None
+        process = None
         parse_list.remove(quantity)
+
+        # Check for an instrument identifier
         if not len(parse_list) == 0:
             if parse_list[0] in VALID_INSTRUMENTS:
                 quantity = '_'.join([quantity, parse_list[0]])
                 instrument = parse_list[0]
                 parse_list.remove(instrument)
+
+        # Check for a process identifier
+        if not len(parse_list) == 0:
+            if parse_list[-1] in VALID_SUFFIXES.keys():
+                if parse_list[-1] == 'Vr':
+                    quantity = '_'.join([quantity, parse_list[-1]])
+                process = parse_list[-1]
+                parse_list.remove(process)
+
+        # Check quantity is defined in standard names
         if quantity not in self.variable_list:
             raise KeyError(
-                'Not a valid quantity identifier!'
+                f'{quantity} is not a valid quantity identifier!'
                 )
-        return {'quantity': quantity, 'instrument': instrument}
+
+        return {
+            'quantity': quantity, 'instrument': instrument, 'process': process
+            }
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
     def _check_str_is_alphanum_replicate(self, parse_list: str) -> dict:
+        """
+        Check the list of elements for alphanumeric replicate substrings.
+
+        Args:
+            parse_list: the list of substring elements to parse.
+
+        Raises:
+            TypeError: raised if not a single alphanumeric character.
+
+        Returns:
+            the identities of the substrings.
+
+        """
+
+        if len(parse_list) == 0:
+            return {}
 
         elem = parse_list[0]
         if len(elem) == 1:
@@ -623,12 +717,29 @@ class PFPNameParser():
                 parse_list.remove(elem)
                 return {'replicate': elem}
         raise TypeError(
-            'Replicate identifier must be a single alphanumeric character!'
+            'Replicate identifier must be a single alphanumeric character! '
+            f'You passed "{elem}"!'
             )
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _check_str_is_location(self, parse_list):
+    def _check_str_is_location(self, parse_list: str) -> dict:
+        """
+        Check the list of elements for location / replicate substrings.
+
+        Args:
+            parse_list: the list of substring elements to parse.
+
+        Raises:
+            TypeError: raised if substring non-conformal.
+
+        Returns:
+            the identities of the substrings.
+
+        """
+
+        if len(parse_list) == 0:
+            return {}
 
         parse_str = parse_list[0]
 
@@ -645,7 +756,7 @@ class PFPNameParser():
             if not sub_list[0].isdigit():
                 error = (
                     'Characters preceding height / depth units must be '
-                    'numeric'
+                    'numeric!'
                     )
                 continue
 
@@ -653,7 +764,7 @@ class PFPNameParser():
                 if not sub_list[1].isalpha():
                     error = (
                         'Characters succeeding valid location identifier '
-                        'must be single alpha character'
+                        'must be single alpha character!'
                         )
                     continue
 
@@ -664,143 +775,279 @@ class PFPNameParser():
                 replicate = sub_list[1]
             return {'location': location, 'replicate': replicate}
 
-        raise TypeError(error)
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _check_str_is_process(self, parse_list: list) -> dict:
-
-        process = parse_list[0]
-        if not process in VALID_SUFFIXES.keys():
-            raise KeyError(
-                f'{parse_list[0]} is not a valid process identifier'
-                )
-        parse_list.remove(process)
-        return {'process': process}
+        raise TypeError(
+            error + f' Passed substring "{parse_str}" does not conform!'
+            )
     #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 
-###############################################################################
-### BEGIN SITE-SPECIFIC HARDWARE CONFIGURATION FUNCTIONS ###
-###############################################################################
+#------------------------------------------------------------------------------
+class PFPNameParser2():
+    """Tool that checks names in site-based configuration files conform to pfp
+    rules.
 
-# #------------------------------------------------------------------------------
-# def map_logger_tables_to_files(
-#         site:str, logger:str=None, raise_if_no_file: bool=True
-#         ) -> pd.Series:
-#     """
-#     Tie table names to local file locations. Note that this assumes that
-#     file nomenclature rules have been followed.
+    PFP names are composed of descriptive substrings separated by underscores.
 
-#     Args:
-#         site: name of site for which to return map.
-#         logger: logger name for which to provide mapping.
-#         raise_if_no_file: raise exception if the file does not exist. Defaults to True.
+    1) First component MUST be a unique variable identifier. The list of
+    currently defined variable identifiers can be accessed as a class attribute
+    (self.variable_list).
 
-#     Raises:
-#         FileNotFoundError: DESCRIPTION.
+    2) Second component can be either a unique device identifier (listed under
+    VALID_INSTRUMENTS in this module) or a location identifier. The former are
+    variables that are either unique to that device or that would be ambiguous
+    in the absence of a device identifier (e.g. AH versus AH_IRGA).
 
-#     Returns:
-#         Series mapping logger and table to absolute file path (value).
+    3) If there is a process identifier, it must occur as the last substring.
+    If it is 'Vr', this must become past of the unique variable identifier,
+    because variances necessarily have different units.
 
-#     """
+    """
 
-#     hardware_configs = cm.get_site_hardware_configs(site=site, which='logger')
-#     data_path = paths.get_local_stream_path(
-#         site=site, resource='data', stream='flux_slow'
-#         )
-#     logger_list = list(hardware_configs.keys())
-#     if not logger is None:
-#         logger_list = [logger]
-#     rslt_list = []
-#     for this_logger in logger_list:
-#         for this_table in hardware_configs[this_logger]['tables']:
-#             rslt_list.append(
-#                 {
-#                     'logger': this_logger,
-#                     'table': this_table,
-#                     'file': f'{site}_{this_logger}_{this_table}.dat'
-#                  }
-#             )
-#     df = pd.DataFrame(rslt_list).set_index(keys=['logger', 'table'])
-#     abs_path_list = []
-#     if raise_if_no_file:
-#         for record in df.index:
-#             file = df.loc[record, 'file']
-#             abs_path = pathlib.Path(data_path / file)
-#             if not abs_path.exists():
-#                 raise FileNotFoundError(
-#                     f'No file named {file} exists for table {record[0]}!'
-#                     )
-#             abs_path_list.append(abs_path)
-#     return df.assign(path=abs_path_list)
-# #------------------------------------------------------------------------------
+    #--------------------------------------------------------------------------
+    def __init__(self):
+        """
+        Load the naming info from the std_names yml.
 
-###############################################################################
-### END SITE-SPECIFIC HARDWARE CONFIGURATION FUNCTIONS ###
-###############################################################################
+        Returns:
+            None.
 
+        """
 
+        self.variables = (
+            pd.DataFrame(cm.get_global_configs(which='pfp_std_names_b'))
+            .T
+            .rename_axis('quantity')
+            )
+    #--------------------------------------------------------------------------
 
-###############################################################################
-### BEGIN SITE-SPECIFIC VARIABLE CONFIGURATION FUNCTIONS ###
-###############################################################################
+    #--------------------------------------------------------------------------
+    def parse_variable_name(self, variable_name: str) -> dict:
+        """
+        Break variable name into components and parse each for conformity.
 
-# #------------------------------------------------------------------------------
-# def make_variable_lookup_table(site, variable_map):
-#     """
-#     Build a lookup table that maps variables to attributes
-#     (std_name as index).
+        Args:
+            variable_name: the complete variable name.
 
-#     Args:
-#         site: name of site for which to return variable lookup table.
+        Raises:
+            RuntimeError: raised if number of elements in substring list is
+            wrong.
 
-#     Returns:
-#         Table containing the mapping.
+        Returns:
+            rslt_dict: the identities of the substrings.
 
-#     """
+        """
 
-#     # Make the basic variable table
-#     variable_configs = cm.get_site_variable_configs(
-#         site=site, which=variable_map
-#         )
-#     vars_df = pd.DataFrame(variable_configs).T
-#     vars_df.index.name = 'std_name'
+        rslt_dict = {
+            'quantity': None,
+            'instrument_type': None,
+            'location': None,
+            'replicate': None,
+            'process': None
+            }
 
-#     # Make the file mapping table
-#     file_lookup_table = map_logger_tables_to_files(site=site)
-#     columns = ['file', 'path']
-#     files_df = (
-#         pd.DataFrame(
-#             [
-#                 file_lookup_table.loc[x, columns] for x in
-#                 zip(vars_df.logger.tolist(), vars_df.table.tolist())
-#                 ],
-#             columns=columns
-#             )
-#         .set_index(vars_df.index)
-#         )
+        errors = []
 
-#     # Make the standard naming table
-#     var_parser = PFPNameParser()
-#     names_df = (
-#         pd.DataFrame(
-#             [
-#                 var_parser.get_standard_variable_attributes(variable_name=var)
-#                 for var in vars_df.index
-#                 ]
-#             )
-#         .set_index(vars_df.index)
-#         )
+        # Get string elements
+        elems = variable_name.split(SPLIT_CHAR)
 
-#     # Concatenate
-#     return pd.concat(
-#         [vars_df, files_df, names_df],
-#         axis=1
-#         )
-# #------------------------------------------------------------------------------
+        # Find quantity and instrument (if valid)
+        rslt_dict.update(self._check_str_is_quantity(elems))
 
-###############################################################################
-### END SITE-SPECIFIC VARIABLE CONFIGURATION FUNCTIONS ###
-###############################################################################
+        # Check if final element is a process
+        try:
+            rslt_dict.update(self._check_str_is_process(parse_list=elems))
+        except TypeError as e:
+            errors.append(e.args[0])
+
+        # Check how many elements remain. If more than one, throw an error
+        if len(elems) > 1:
+            raise RuntimeError('Too many elements!')
+
+        # Check if next element is a replicate
+        try:
+            rslt_dict.update(
+                self._check_str_is_alphanum_replicate(parse_list=elems)
+                )
+        except TypeError as e:
+            errors.append(e.args[0])
+
+        # Check if next element is a location / replicate combo
+        try:
+            rslt_dict.update(self._check_str_is_location(parse_list=elems))
+        except TypeError as e:
+            errors.append(e.args[0])
+
+        # Raise error if list element remains
+        if len(elems) > 0:
+            raise RuntimeError(
+                'Unrecognised element remains: checks failed with the '
+                f'following messages: {errors}'
+                )
+
+        # Get properties
+        rslt_dict.update(self.variables.loc[rslt_dict['quantity']].to_dict())
+        if rslt_dict['process'] == 'Vr':
+            rslt_dict['standard_units'] = (
+                convert_units_to_variance(units=rslt_dict['standard_units'])
+                )
+
+        # Return results
+        return rslt_dict
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _check_str_is_quantity(self, parse_list: str) -> dict:
+        """
+        Check the list of elements for quantity substrings.
+
+        Args:
+            parse_list: the list of substring elements to parse.
+
+        Raises:
+            KeyError: raised if a valid quantity identifier not found.
+
+        Returns:
+            the identities of the substrings.
+
+        """
+
+        # Inits
+        quantity = parse_list[0]
+        parse_list.remove(quantity)
+        instrument = None
+
+        # Check for an instrument identifier
+        if not len(parse_list) == 0:
+            if parse_list[0] in VALID_INSTRUMENTS:
+                quantity = '_'.join([quantity, parse_list[0]])
+                instrument = parse_list[0]
+                parse_list.remove(instrument)
+        if not quantity in self.variables.index:
+            raise KeyError(
+                f'{quantity} is not a valid quantity identifier!'
+                )
+
+        return {
+            'quantity': quantity,
+            'instrument_type': instrument,
+            }
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _check_str_is_process(self, parse_list: str) -> dict:
+
+        if len(parse_list) == 0:
+            return {}
+        if not parse_list[-1] in VALID_SUFFIXES.keys():
+            raise TypeError(
+                f'{parse_list[-1]} is not a valid process identifier!'
+                )
+        process = parse_list[-1]
+        parse_list.remove(process)
+        return {'process': process}
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _check_str_is_alphanum_replicate(self, parse_list: str) -> dict:
+        """
+        Check the list of elements for alphanumeric replicate substrings.
+
+        Args:
+            parse_list: the list of substring elements to parse.
+
+        Raises:
+            TypeError: raised if not a single alphanumeric character.
+
+        Returns:
+            the identities of the substrings.
+
+        """
+
+        if len(parse_list) == 0:
+            return {}
+
+        elem = parse_list[0]
+        if len(elem) == 1:
+            if elem.isdigit() or elem.isalpha():
+                parse_list.remove(elem)
+                return {'replicate': elem}
+        raise TypeError(
+            'Replicate identifier must be a single alphanumeric character! '
+            f'You passed "{elem}"!'
+            )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _check_str_is_location(self, parse_list: str) -> dict:
+        """
+        Check the list of elements for location / replicate substrings.
+
+        Args:
+            parse_list: the list of substring elements to parse.
+
+        Raises:
+            TypeError: raised if substring non-conformal.
+
+        Returns:
+            the identities of the substrings.
+
+        """
+
+        if len(parse_list) == 0:
+            return {}
+
+        parse_str = parse_list[0]
+
+        for units in VALID_LOC_UNITS:
+
+            sub_list = parse_str.split(units)
+            if len(sub_list) == 1:
+                error = (
+                    'No recognised height / depth units in location '
+                    'identifier!'
+                    )
+                continue
+
+            if not sub_list[0].isdigit():
+                error = (
+                    'Characters preceding height / depth units must be '
+                    'numeric!'
+                    )
+                continue
+
+            if len(sub_list[1]) != 0:
+                if not sub_list[1].isalpha():
+                    error = (
+                        'Characters succeeding valid location identifier '
+                        'must be single alpha character!'
+                        )
+                    continue
+
+            parse_list.remove(parse_str)
+            location = ''.join([sub_list[0], units])
+            replicate = None
+            if len(sub_list[1]) != 0:
+                replicate = sub_list[1]
+            return {'location': location, 'replicate': replicate}
+
+        raise TypeError(
+            error + f' Passed substring "{parse_str}" does not conform!'
+            )
+    #--------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def convert_units_to_variance(units):
+
+    ref_dict = {
+        'g/m^3': 'g^2/m^6',
+        'umol/mol': 'umol/mol',
+        'mg/m^3': 'mg^2/m^6',
+        'degC': 'degC^2',
+        'm/s': 'm^2/s^2'
+        }
+
+    return ref_dict[units]
+#------------------------------------------------------------------------------

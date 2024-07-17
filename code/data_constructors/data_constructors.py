@@ -9,7 +9,7 @@ metadata (from configuration files and TERN DSA database) into xarray datasets
 and netcdf files (only L1 so far).
 
 Module classes:
-    - L1DataBuilder - builds an xarray dataset with data and metadata required
+    - L1DataConstructor - builds an xarray dataset with data and metadata required
     to generate L1 files.
     - NCConverter - used to extract data from an existing .nc file and push
     back out to Campbell Scientific TOA5 format data file.
@@ -30,9 +30,11 @@ import pandas as pd
 import pathlib
 import xarray as xr
 
+import data_constructors.convert_calc_filter as ccf
 import data_builders.data_merger as dm
 import utils.configs_manager as cm
 import file_handling.file_io as io
+import file_handling.file_handler as fh
 import utils.metadata_handlers as mh
 
 #------------------------------------------------------------------------------
@@ -53,7 +55,7 @@ TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 ###############################################################################
 
 #------------------------------------------------------------------------------
-class L1DataBuilder():
+class L1DataConstructor():
 
     #--------------------------------------------------------------------------
     def __init__(
@@ -85,7 +87,7 @@ class L1DataBuilder():
             for table, file in self.md_mngr.map_tables_to_files(abs_path=True).items()
             }
         self.data = (
-            dm.merge_all(
+            dm.merge_data(
                 files=merge_dict, concat_files=concat_files
                 )
             ['data']
@@ -417,6 +419,133 @@ class L1DataBuilder():
 ### END L1 DATA BUILDER CLASS ###
 ###############################################################################
 
+
+
+###############################################################################
+### BEGIN NC WRITERS ###
+###############################################################################
+
+#------------------------------------------------------------------------------
+def make_nc_file(site: str, split_by_year: bool=True):
+    """
+    Merge all data and metadata sources to create a netcdf file.
+
+    Args:
+        site: name of site.
+        split_by_year (optional): write discrete year files. Defaults to True.
+
+    Returns:
+        None.
+
+    """
+
+    data_builder = L1DataConstructor(site=site, concat_files=True)
+    if not split_by_year:
+        ds = data_builder.build_xarray_dataset_complete()
+        output_path = data_builder.md_mngr.data_path / f'{site}_L1.nc'
+        ds.to_netcdf(path=output_path, mode='w')
+        return
+    for year in data_builder.data_years:
+        ds = data_builder.build_xarray_dataset_by_year(year=year)
+        output_path = data_builder.md_mngr.data_path / f'{site}_{year}_L1.nc'
+        ds.to_netcdf(path=output_path, mode='w')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def make_nc_year_file(site: str, year: int):
+    """
+    Merge all data and metadata sources to create a single year netcdf file.
+
+    Args:
+        site: name of site.
+        year: year to write.
+
+    Raises:
+        IndexError: raised if dataset does not contain passed year.
+
+    Returns:
+        None.
+
+    """
+
+    data_builder = L1DataConstructor(site=site, concat_files=True)
+    if not year in data_builder.data_years:
+        raise IndexError('No data available for current data year!')
+    ds = data_builder.build_xarray_dataset_by_year(year=year)
+    output_path = data_builder.md_mngr.data_path / f'{site}_{year}_L1.nc'
+    ds.to_netcdf(path=output_path, mode='w')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def append_to_current_nc_file(site: str):
+    """
+    Check for current year nc file, and if exists, append. If not, create.
+
+    Args:
+        site: name of site.
+
+    Returns:
+        None.
+
+    """
+
+    md_mngr = mh.MetaDataManager(site=site)
+    expected_year = dt.datetime.now().year
+    expected_file = md_mngr.data_path / f'{site}_{expected_year}_L1.nc'
+    if not expected_file.exists():
+        make_nc_year_file(site=site, year=expected_year)
+    else:
+        append_to_nc(site=site, nc_file=expected_file)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def append_to_nc(site: str, nc_file: pathlib.Path | str):
+    """
+    Generic append function. Only appends new data.
+
+    Args:
+        site: name of site.
+        nc_file: nc file to which to append data.
+
+    Returns:
+        None.
+
+    """
+
+    ds = xr.open_dataset(nc_file)
+    last_nc_date = pd.Timestamp(ds.time.values[-1]).to_pydatetime()
+    md_mngr = mh.MetaDataManager(site=site)
+    last_raw_date = min(
+        [md_mngr.get_file_attrs(x)['end_date'] for x in md_mngr.list_files()]
+        )
+    if not last_raw_date > last_nc_date:
+        print('No new data to append!')
+        return
+    data_builder = L1DataConstructor(site=site, md_mngr=md_mngr)
+    date_iloc = data_builder.data.index.get_loc(last_nc_date) + 1
+    new_ds = data_builder.build_xarray_dataset_by_slice(
+        start_date=data_builder.data.index[date_iloc]
+        )
+    combined_ds = xr.concat([ds, new_ds], dim='time', combine_attrs='override')
+    ds.close()
+    combined_ds.attrs['time_coverage_end'] = (
+        pd.to_datetime(combined_ds.time.values[-1])
+        .strftime(TIME_FORMAT)
+        )
+    combined_ds.attrs['nc_nrecs'] = len(combined_ds.time)
+    combined_ds.to_netcdf(path=nc_file, mode='w')
+#------------------------------------------------------------------------------
+
+###############################################################################
+### END NC WRITERS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN nc CONVERTER CLASS ###
+###############################################################################
+
 #------------------------------------------------------------------------------
 class NCConverter():
     """
@@ -525,158 +654,319 @@ class NCConverter():
 
 #------------------------------------------------------------------------------
 
+###############################################################################
+### END nc CONVERTER CLASS ###
+###############################################################################
+
 
 
 ###############################################################################
-### BEGIN NC WRITERS ###
+### BEGIN VISUALISATION DATA BUILDER CLASS ###
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def make_nc_file(site: str, split_by_year: bool=True):
+class VisDataConstructor():
+    """Class to:
+        1) merge variables from different sources;
+        2) fill missing variables;
+        3) apply broad range limits, and;
+        4) output data to TOA5 file.
     """
-    Merge all data and metadata sources to create a netcdf file.
+
+    #--------------------------------------------------------------------------
+    def __init__(
+            self, site: str, concat_files: bool=True,
+            ) -> None:
+        """
+        Assign metadata manager, missing variables and raw data and headers.
+
+        Args:
+            site: name of site.
+            variable_map (optional): whether to use the visualisation or pfp
+            variable map. Defaults to 'pfp'.
+            concat_files (optional): whether to concatenate backups.
+            Defaults to True.
+
+        Returns:
+            None.
+
+        """
+
+        # Set site and instance of metadata manager
+        self.site = site
+        self.md_mngr = AugmentedMetaDataManager(
+            site=site, concat_files=concat_files
+            )
+        # self.md_mngr = mh.MetaDataManager(site=site, variable_map=variable_map)
+
+        # Merge the raw data
+        merge_dict = self.md_mngr.translate_variables_by_file(abs_path=True)
+        rslt = merge_data(files=merge_dict, concat_files=concat_files)
+        self.data = rslt['data']
+        self.headers = rslt['headers']
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_data(
+            self, convert_units: bool=True, calculate_missing: bool=True,
+            apply_limits: bool=True,
+            ) -> pd.DataFrame:
+        """
+        Return a COPY of the raw data with QC applied (convert units,
+        calculate requisite missing variables and apply range limits).
+
+        Args:
+            convert_units (optional): whether to convert units. Defaults to True.
+            calculate_missing (optional): calculate missing variables. Defaults to True.
+            apply_limits (optional): apply range limits. Defaults to True.
+
+
+        Returns:
+            output_data: the amended data.
+
+        """
+
+        output_data = self.data.copy()
+
+        # Convert from site-based to standard units (if requested and if different)
+        if convert_units:
+            self._convert_units(output_data)
+
+        # Calculate missing variables
+        if calculate_missing:
+            self._calculate_missing(output_data)
+
+        # Apply range limits (if requested)
+        if apply_limits:
+            self._apply_limits(
+                df=output_data, include_missing=calculate_missing
+                )
+
+        return output_data
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _convert_units(self, df: pd.DataFrame) -> None:
+        """
+        Apply unit conversions.
+
+        Args:
+            df: data for unit conversion.
+
+        Returns:
+            None.
+
+        """
+
+        for variable in self.md_mngr.list_variables_for_conversion():
+
+            attrs = self.md_mngr.get_variable_attributes(variable)
+            func = ccf.convert_variable(variable=variable)
+            df[variable] = func(df[variable], from_units=attrs['units'])
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _calculate_missing(self, df: pd.DataFrame) -> None:
+        """
+        Calculate requisite missing quantities from existing data.
+
+        Args:
+            df: the data from which to source input variables.
+
+        Returns:
+            None.
+
+        """
+
+        req_vars = (
+            cm.get_global_configs(which='requisite_variables')
+            ['vis']
+            )
+        missing_variables = [
+            var for var in req_vars if not var in
+            self.md_mngr.site_variables.quantity.unique()
+            ]
+        for var in missing_variables:
+            rslt = ccf.get_function(variable=var, with_params=True)
+            args_dict = {
+                parameter: self.data[parameter] for parameter in
+                rslt[1]
+                }
+            df[var] = rslt[0](**args_dict)
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _apply_limits(self, df: pd.DataFrame, include_missing: bool) -> None:
+        """
+        Apply range limits.
+
+        Args:
+            df: data to filter.
+
+        Returns:
+            None.
+
+        """
+
+        variables = self.md_mngr.site_variables
+        if include_missing:
+            variables = pd.concat([variables, self.md_mngr.missing_variables])
+        for variable in variables.index:
+            attrs = variables.loc[variable]
+            df[variable] = ccf.filter_range(
+                series=df[variable],
+                max_val=attrs.plausible_max,
+                min_val=attrs.plausible_min
+                )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_headers(
+            self, convert_units: bool=True, include_missing: bool=True
+            ) -> pd.DataFrame:
+        """
+        Return a COPY of the raw headers with converted units (if requested).
+
+        Args:
+            convert_units (optional): whether to return converted units.
+            Defaults to True.
+            include_missing (optional): add missing variables to header.
+            Defaults to True.
+
+        Returns:
+            headers.
+
+        """
+
+        output_headers = self.headers.copy()
+        if convert_units:
+            output_headers['units'] = (
+                self.md_mngr.site_variables.standard_units
+                .reindex(output_headers.index)
+                )
+        if include_missing:
+            try:
+                append_headers = (
+                    self.md_mngr.missing_variables[['standard_units']]
+                    .rename_axis('variable')
+                    .rename({'standard_units': 'units'}, axis=1)
+                    )
+                append_headers['sampling'] = ''
+                output_headers = pd.concat([output_headers, append_headers])
+            except KeyError:
+                pass
+        return output_headers
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def write_to_file(self, path_to_file: pathlib.Path | str=None) -> None:
+        """
+        Write data to file.
+
+        Args:
+            path_to_file (optional): output file path. If None, slow data path
+            and default name used. Defaults to None.
+
+        Returns:
+            None.
+
+        """
+
+        if not path_to_file:
+            path_to_file = (
+                self.md_mngr.data_path / f'{self.site}_merged.dat'
+                )
+        headers = self.get_headers()
+        data = self.get_data()
+        io.write_data_to_file(
+            headers=io.reformat_headers(headers=headers, output_format='TOA5'),
+            data=io.reformat_data(data=data, output_format='TOA5'),
+            abs_file_path=path_to_file,
+            output_format='TOA5'
+            )
+    #--------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+class AugmentedMetaDataManager(mh.MetaDataManager):
+    """Adds missing variable table to standard MetaDataManager class"""
+
+    #--------------------------------------------------------------------------
+    def __init__(self, site, concat_files=True):
+
+        super().__init__(site, variable_map='vis')
+
+        # Get missing variables and create table
+        requisite_variables = (
+            cm.get_global_configs(which='requisite_variables')['vis']
+            )
+        missing_variables = [
+            variable for variable in requisite_variables if not variable in
+            self.site_variables.quantity.unique()
+            ]
+        if missing_variables:
+            self.missing_variables = (
+                self.standard_variables.loc[missing_variables]
+                )
+    #--------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+
+###############################################################################
+### END VISUALISATION DATA BUILDER CLASS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN GENERIC FUNCTIONS ###
+###############################################################################
+
+#------------------------------------------------------------------------------
+def merge_data(
+        files: list | dict, concat_files: bool=False
+        ) -> pd.core.frame.DataFrame:
+    """
+    Merge and align data and headers from different files.
 
     Args:
-        site: name of site.
-        split_by_year (optional): write discrete year files. Defaults to True.
+        files: the absolute path of the files to parse.
+        If a list, all variables returned; if a dict, file is value, and key
+        is passed to the file_handler. That key can be a list of variables, or
+        a dictionary mapping translation of variable names (see file handler
+        documentation).
+        concat_files (optional): concat backup files to current.
 
     Returns:
-        None.
+        merged data.
 
     """
 
-    data_builder = L1DataBuilder(site=site, concat_files=True)
-    if not split_by_year:
-        ds = data_builder.build_xarray_dataset_complete()
-        output_path = data_builder.md_mngr.data_path / f'{site}_L1.nc'
-        ds.to_netcdf(path=output_path, mode='w')
-        return
-    for year in data_builder.data_years:
-        ds = data_builder.build_xarray_dataset_by_year(year=year)
-        output_path = data_builder.md_mngr.data_path / f'{site}_{year}_L1.nc'
-        ds.to_netcdf(path=output_path, mode='w')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def make_nc_year_file(site: str, year: int):
-    """
-    Merge all data and metadata sources to create a single year netcdf file.
-
-    Args:
-        site: name of site.
-        year: year to write.
-
-    Raises:
-        IndexError: raised if dataset does not contain passed year.
-
-    Returns:
-        None.
-
-    """
-
-    data_builder = L1DataBuilder(site=site, concat_files=True)
-    if not year in data_builder.data_years:
-        raise IndexError('No data available for current data year!')
-    ds = data_builder.build_xarray_dataset_by_year(year=year)
-    output_path = data_builder.md_mngr.data_path / f'{site}_{year}_L1.nc'
-    ds.to_netcdf(path=output_path, mode='w')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def append_to_current_nc_file(site: str):
-    """
-    Check for current year nc file, and if exists, append. If not, create.
-
-    Args:
-        site: name of site.
-
-    Returns:
-        None.
-
-    """
-
-    md_mngr = mh.MetaDataManager(site=site)
-    expected_year = dt.datetime.now().year
-    expected_file = md_mngr.data_path / f'{site}_{expected_year}_L1.nc'
-    if not expected_file.exists():
-        make_nc_year_file(site=site, year=expected_year)
-    else:
-        append_to_nc(site=site, nc_file=expected_file)
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def append_to_nc(site: str, nc_file: pathlib.Path | str):
-    """
-    Generic append function. Only appends new data.
-
-    Args:
-        site: name of site.
-        nc_file: nc file to which to append data.
-
-    Returns:
-        None.
-
-    """
-
-    ds = xr.open_dataset(nc_file)
-    last_nc_date = pd.Timestamp(ds.time.values[-1]).to_pydatetime()
-    md_mngr = mh.MetaDataManager(site=site)
-    last_raw_date = min(
-        [md_mngr.get_file_attrs(x)['end_date'] for x in md_mngr.list_files()]
-        )
-    if not last_raw_date > last_nc_date:
-        print('No new data to append!')
-        return
-    data_builder = L1DataBuilder(site=site, md_mngr=md_mngr)
-    date_iloc = data_builder.data.index.get_loc(last_nc_date) + 1
-    new_ds = data_builder.build_xarray_dataset_by_slice(
-        start_date=data_builder.data.index[date_iloc]
-        )
-    combined_ds = xr.concat([ds, new_ds], dim='time', combine_attrs='override')
-    ds.close()
-    combined_ds.attrs['time_coverage_end'] = (
-        pd.to_datetime(combined_ds.time.values[-1])
-        .strftime(TIME_FORMAT)
-        )
-    combined_ds.attrs['nc_nrecs'] = len(combined_ds.time)
-    combined_ds.to_netcdf(path=nc_file, mode='w')
+    data_list, header_list = [], []
+    for file in files:
+        try:
+            usecols = files[file]
+        except TypeError:
+            usecols = None
+        data_handler = fh.DataHandler(file=file, concat_files=concat_files)
+        data_list.append(
+            data_handler.get_conditioned_data(
+                usecols=usecols, drop_non_numeric=True,
+                monotonic_index=True
+                )
+            )
+        header_list.append(
+            data_handler.get_conditioned_headers(
+                usecols=usecols, drop_non_numeric=True
+                )
+            )
+    return {
+        'headers': pd.concat(header_list),
+        'data': pd.concat(data_list, axis=1)
+        }
 #------------------------------------------------------------------------------
 
 ###############################################################################
-### END NC WRITERS ###
-###############################################################################
-
-
-
-###############################################################################
-### BEGIN MERGE FUNCTIONS ###
-###############################################################################
-
-# #------------------------------------------------------------------------------
-# def merge_data_by_manager(
-#         site: str, md_mngr: mh.MetaDataManager=None, concat_files=False
-#         ) -> pd.core.frame.DataFrame:
-#     """
-
-
-#     Args:
-#         site (str): DESCRIPTION.
-#         md_mngr (mh.MetaDataManager, optional): DESCRIPTION. Defaults to None.
-
-#     Returns:
-#         TYPE: DESCRIPTION.
-
-#     """
-
-#     if md_mngr is None:
-#         md_mngr = mh.MetaDataManager(site=site)
-#     merge_dict = {
-#         file: md_mngr.translate_variables_by_table(table=table)
-#         for table, file in md_mngr.map_tables_to_files(abs_path=True).items()
-#         }
-#     return fh.merge_data(files=merge_dict, concat_files=concat_files)
-# #------------------------------------------------------------------------------
-
-###############################################################################
-### END MERGE FUNCTIONS ###
+### BEGIN GENERIC FUNCTIONS ###
 ###############################################################################

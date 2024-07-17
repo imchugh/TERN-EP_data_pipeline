@@ -15,7 +15,7 @@ import pathlib
 import yaml
 from configobj import ConfigObj
 
-import data_handling.file_io as io
+import file_handling.file_io as io
 from utils.configs_manager import PathsManager
 from sparql_site_details import site_details
 

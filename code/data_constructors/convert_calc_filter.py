@@ -239,11 +239,11 @@ def calculate_CO2_density(
 
 #------------------------------------------------------------------------------
 def calculate_CO2_mole_fraction(
-        CO2dens: pd.Series, Ta: pd.Series, ps: pd.Series
+        CO2c_IRGA: pd.Series, Ta: pd.Series, ps: pd.Series
         ) -> pd.Series:
 
     return (
-        (CO2dens / CO2_MOL_MASS) /
+        (CO2c_IRGA / CO2_MOL_MASS) /
         calculate_molar_density(Ta=Ta, ps=ps)
         * 10**3
         )
@@ -292,7 +292,7 @@ def get_function(variable, with_params=True):
         'CO2': calculate_CO2_mole_fraction,
         'CO2_IRGA': calculate_CO2_mole_fraction,
         'RH': calculate_RH_from_AH,
-        'CO2dens': calculate_CO2_density,
+        'CO2c': calculate_CO2_density,
         'ustar': calculate_ustar_from_tau_rho
         }
 

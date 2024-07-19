@@ -66,9 +66,9 @@ class MetaDataManager():
 
         # Create global standard variables table
         self.standard_variables = (
-            pd.DataFrame(cm.get_global_configs(which='pfp_std_names_b'))
+            pd.DataFrame(cm.get_global_configs(which='pfp_std_names'))
             .T
-            .rename_axis('quantity')
+            .rename_axis('variable')
             )
 
         # Create site-based variables table
@@ -119,7 +119,7 @@ class MetaDataManager():
 
         """
 
-        name_parser = PFPNameParser2()
+        name_parser = PFPNameParser()
         test = (
             pd.DataFrame(
                 [
@@ -555,7 +555,7 @@ class PFPNameParser():
 
     1) First component MUST be a unique variable identifier. The list of
     currently defined variable identifiers can be accessed as a class attribute
-    (self.variable_list).
+    (`self.variable_list`).
 
     2) Second component can be either a unique device identifier (listed under
     VALID_INSTRUMENTS in this module) or a location identifier. The former are
@@ -571,243 +571,7 @@ class PFPNameParser():
     #--------------------------------------------------------------------------
     def __init__(self):
         """
-        Load the naming info from the std_names yml.
-
-        Returns:
-            None.
-
-        """
-
-        self.variable_list = (
-            list(cm.get_global_configs(which='pfp_std_names').keys())
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def parse_variable_name(self, variable_name: str) -> dict:
-        """
-        Break variable name into components and parse each for conformity.
-
-        Args:
-            variable_name: the complete variable name.
-
-        Raises:
-            RuntimeError: raised if number of elements in substring list is
-            wrong.
-
-        Returns:
-            rslt_dict: the identities of the substrings.
-
-        """
-
-        rslt_dict = {
-            'quantity': None,
-            'instrument': None,
-            'location': None,
-            'replicate': None,
-            'process': None
-            }
-
-        # Get string elements
-        elems = variable_name.split(SPLIT_CHAR)
-
-        # Find quantity and instrument (if valid)
-        rslt_dict.update(self._check_str_is_quantity(elems))
-
-        # Check how many elements remain. If more than one, throw an error
-        if len(elems) > 1:
-            raise RuntimeError('Too many elements!')
-
-        errors = []
-        # Check if next element is a replicate
-        try:
-            rslt_dict.update(
-                self._check_str_is_alphanum_replicate(parse_list=elems)
-                )
-        except TypeError as e:
-            errors.append(e.args[0])
-
-        # Check if next element is a location / replicate combo
-        try:
-            rslt_dict.update(self._check_str_is_location(parse_list=elems))
-        except TypeError as e:
-            errors.append(e.args[0])
-
-        # Raise error if list element remains
-        if len(elems) > 0:
-            raise RuntimeError(
-                'Unrecognised element remains: replicate and location checks '
-                f'failed with the following messages: {errors}'
-                )
-
-        # Return results
-        return rslt_dict
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _check_str_is_quantity(self, parse_list: str) -> dict:
-        """
-        Check the list of elements for quantity substrings.
-
-        Args:
-            parse_list: the list of substring elements to parse.
-
-        Raises:
-            KeyError: raised if a valid quantity identifier not found.
-
-        Returns:
-            the identities of the substrings.
-
-        """
-
-        # Inits
-        quantity = parse_list[0]
-        instrument = None
-        process = None
-        parse_list.remove(quantity)
-
-        # Check for an instrument identifier
-        if not len(parse_list) == 0:
-            if parse_list[0] in VALID_INSTRUMENTS:
-                quantity = '_'.join([quantity, parse_list[0]])
-                instrument = parse_list[0]
-                parse_list.remove(instrument)
-
-        # Check for a process identifier
-        if not len(parse_list) == 0:
-            if parse_list[-1] in VALID_SUFFIXES.keys():
-                if parse_list[-1] == 'Vr':
-                    quantity = '_'.join([quantity, parse_list[-1]])
-                process = parse_list[-1]
-                parse_list.remove(process)
-
-        # Check quantity is defined in standard names
-        if quantity not in self.variable_list:
-            raise KeyError(
-                f'{quantity} is not a valid quantity identifier!'
-                )
-
-        return {
-            'quantity': quantity, 'instrument': instrument, 'process': process
-            }
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _check_str_is_alphanum_replicate(self, parse_list: str) -> dict:
-        """
-        Check the list of elements for alphanumeric replicate substrings.
-
-        Args:
-            parse_list: the list of substring elements to parse.
-
-        Raises:
-            TypeError: raised if not a single alphanumeric character.
-
-        Returns:
-            the identities of the substrings.
-
-        """
-
-        if len(parse_list) == 0:
-            return {}
-
-        elem = parse_list[0]
-        if len(elem) == 1:
-            if elem.isdigit() or elem.isalpha():
-                parse_list.remove(elem)
-                return {'replicate': elem}
-        raise TypeError(
-            'Replicate identifier must be a single alphanumeric character! '
-            f'You passed "{elem}"!'
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _check_str_is_location(self, parse_list: str) -> dict:
-        """
-        Check the list of elements for location / replicate substrings.
-
-        Args:
-            parse_list: the list of substring elements to parse.
-
-        Raises:
-            TypeError: raised if substring non-conformal.
-
-        Returns:
-            the identities of the substrings.
-
-        """
-
-        if len(parse_list) == 0:
-            return {}
-
-        parse_str = parse_list[0]
-
-        for units in VALID_LOC_UNITS:
-
-            sub_list = parse_str.split(units)
-            if len(sub_list) == 1:
-                error = (
-                    'No recognised height / depth units in location '
-                    'identifier!'
-                    )
-                continue
-
-            if not sub_list[0].isdigit():
-                error = (
-                    'Characters preceding height / depth units must be '
-                    'numeric!'
-                    )
-                continue
-
-            if len(sub_list[1]) != 0:
-                if not sub_list[1].isalpha():
-                    error = (
-                        'Characters succeeding valid location identifier '
-                        'must be single alpha character!'
-                        )
-                    continue
-
-            parse_list.remove(parse_str)
-            location = ''.join([sub_list[0], units])
-            replicate = None
-            if len(sub_list[1]) != 0:
-                replicate = sub_list[1]
-            return {'location': location, 'replicate': replicate}
-
-        raise TypeError(
-            error + f' Passed substring "{parse_str}" does not conform!'
-            )
-    #--------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-class PFPNameParser2():
-    """Tool that checks names in site-based configuration files conform to pfp
-    rules.
-
-    PFP names are composed of descriptive substrings separated by underscores.
-
-    1) First component MUST be a unique variable identifier. The list of
-    currently defined variable identifiers can be accessed as a class attribute
-    (self.variable_list).
-
-    2) Second component can be either a unique device identifier (listed under
-    VALID_INSTRUMENTS in this module) or a location identifier. The former are
-    variables that are either unique to that device or that would be ambiguous
-    in the absence of a device identifier (e.g. AH versus AH_IRGA).
-
-    3) If there is a process identifier, it must occur as the last substring.
-    If it is 'Vr', this must become past of the unique variable identifier,
-    because variances necessarily have different units.
-
-    """
-
-    #--------------------------------------------------------------------------
-    def __init__(self):
-        """
-        Load the naming info from the std_names yml.
+        Load the naming info from the `std_names` yml.
 
         Returns:
             None.
@@ -815,7 +579,7 @@ class PFPNameParser2():
         """
 
         self.variables = (
-            pd.DataFrame(cm.get_global_configs(which='pfp_std_names_b'))
+            pd.DataFrame(cm.get_global_configs(which='pfp_std_names'))
             .T
             .rename_axis('quantity')
             )

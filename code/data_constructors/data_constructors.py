@@ -4,23 +4,28 @@ Created on Thu May 16 16:25:29 2024
 
 @author: imchugh
 
-This module is used to merge data (from multiple raw data file sources) and
-metadata (from configuration files and TERN DSA database) into xarray datasets
-and netcdf files (only L1 so far).
+This module is used to merge data from multiple raw data file sources into a
+single file. The metadata required to find, collate and rename variables and
+retrieve their attributes are accessed via the MetaDataManager class.
 
 Module classes:
-    - L1DataConstructor - builds an xarray dataset with data and metadata required
-    to generate L1 files.
-    - NCConverter - used to extract data from an existing .nc file and push
+    - L1DataConstructor: builds an xarray dataset with data and metadata
+    required to generate L1 .nc files.
+    - NCConverter: used to extract data from an existing .nc file and push
     back out to Campbell Scientific TOA5 format data file.
+    - StdDataConstructor: builds a pseudo-TOA5 dataset with a predictable
+    variable set and standard naming conventions, with unit conversions and
+    range-limits applied.
 
 Module functions:
-    - make_nc_file - generates the xarray dataset and writes out to nc file.
-    - make_nc_year_file - as above, but confined to a single data year.
-    - append_to_current_nc_file - checks for a current-year .nc file - appends
-    if it exists, generates it if it doesn't.
+    - make_nc_file: generate the xarray dataset and write out to nc file.
+    - make_nc_year_file: as above, but confined to a single data year.
+    - append_to_current_nc_file: check for a current-year .nc file - append
+    if it exists, generate it if it doesn't.
     - append_to_nc - generic append function where existing file is passed as
     arg.
+    - merge_data: generic function to merge data using lower-level data
+    handlers.
 
 """
 
@@ -31,10 +36,10 @@ import pathlib
 import xarray as xr
 
 import data_constructors.convert_calc_filter as ccf
-import data_builders.data_merger as dm
 import utils.configs_manager as cm
 import file_handling.file_io as io
 import file_handling.file_handler as fh
+import utils.configs_manager as cm
 import utils.metadata_handlers as mh
 
 #------------------------------------------------------------------------------
@@ -87,7 +92,7 @@ class L1DataConstructor():
             for table, file in self.md_mngr.map_tables_to_files(abs_path=True).items()
             }
         self.data = (
-            dm.merge_data(
+            merge_data(
                 files=merge_dict, concat_files=concat_files
                 )
             ['data']
@@ -665,7 +670,7 @@ class NCConverter():
 ###############################################################################
 
 #------------------------------------------------------------------------------
-class VisDataConstructor():
+class StdDataConstructor():
     """Class to:
         1) merge variables from different sources;
         2) fill missing variables;
@@ -675,15 +680,16 @@ class VisDataConstructor():
 
     #--------------------------------------------------------------------------
     def __init__(
-            self, site: str, concat_files: bool=True,
+            self, site: str, include_missing=False, concat_files: bool=True
             ) -> None:
         """
         Assign metadata manager, missing variables and raw data and headers.
 
         Args:
             site: name of site.
-            variable_map (optional): whether to use the visualisation or pfp
-            variable map. Defaults to 'pfp'.
+            include_missing (optional): if True, accesses the
+            requisite_variables yml for a list of minimum required variables,
+            and attempts to calculate anything missing.
             concat_files (optional): whether to concatenate backups.
             Defaults to True.
 
@@ -695,9 +701,8 @@ class VisDataConstructor():
         # Set site and instance of metadata manager
         self.site = site
         self.md_mngr = AugmentedMetaDataManager(
-            site=site, concat_files=concat_files
+            site=site, include_missing=include_missing
             )
-        # self.md_mngr = mh.MetaDataManager(site=site, variable_map=variable_map)
 
         # Merge the raw data
         merge_dict = self.md_mngr.translate_variables_by_file(abs_path=True)
@@ -707,10 +712,7 @@ class VisDataConstructor():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_data(
-            self, convert_units: bool=True, calculate_missing: bool=True,
-            apply_limits: bool=True,
-            ) -> pd.DataFrame:
+    def parse_data(self) -> pd.DataFrame:
         """
         Return a COPY of the raw data with QC applied (convert units,
         calculate requisite missing variables and apply range limits).
@@ -728,19 +730,14 @@ class VisDataConstructor():
 
         output_data = self.data.copy()
 
-        # Convert from site-based to standard units (if requested and if different)
-        if convert_units:
-            self._convert_units(output_data)
+        # Convert from site-based to standard units
+        self._convert_units(df=output_data)
 
         # Calculate missing variables
-        if calculate_missing:
-            self._calculate_missing(output_data)
+        self._calculate_missing(df=output_data)
 
         # Apply range limits (if requested)
-        if apply_limits:
-            self._apply_limits(
-                df=output_data, include_missing=calculate_missing
-                )
+        self._apply_limits(df=output_data)
 
         return output_data
     #--------------------------------------------------------------------------
@@ -759,7 +756,6 @@ class VisDataConstructor():
         """
 
         for variable in self.md_mngr.list_variables_for_conversion():
-
             attrs = self.md_mngr.get_variable_attributes(variable)
             func = ccf.convert_variable(variable=variable)
             df[variable] = func(df[variable], from_units=attrs['units'])
@@ -778,15 +774,7 @@ class VisDataConstructor():
 
         """
 
-        req_vars = (
-            cm.get_global_configs(which='requisite_variables')
-            ['vis']
-            )
-        missing_variables = [
-            var for var in req_vars if not var in
-            self.md_mngr.site_variables.quantity.unique()
-            ]
-        for var in missing_variables:
+        for var in self.md_mngr.missing_variables.index:
             rslt = ccf.get_function(variable=var, with_params=True)
             args_dict = {
                 parameter: self.data[parameter] for parameter in
@@ -796,7 +784,7 @@ class VisDataConstructor():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _apply_limits(self, df: pd.DataFrame, include_missing: bool) -> None:
+    def _apply_limits(self, df: pd.DataFrame) -> None:
         """
         Apply range limits.
 
@@ -808,9 +796,9 @@ class VisDataConstructor():
 
         """
 
-        variables = self.md_mngr.site_variables
-        if include_missing:
-            variables = pd.concat([variables, self.md_mngr.missing_variables])
+        variables = pd.concat(
+            [self.md_mngr.site_variables, self.md_mngr.missing_variables]
+            )
         for variable in variables.index:
             attrs = variables.loc[variable]
             df[variable] = ccf.filter_range(
@@ -821,17 +809,9 @@ class VisDataConstructor():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_headers(
-            self, convert_units: bool=True, include_missing: bool=True
-            ) -> pd.DataFrame:
+    def parse_headers(self) -> pd.DataFrame:
         """
         Return a COPY of the raw headers with converted units (if requested).
-
-        Args:
-            convert_units (optional): whether to return converted units.
-            Defaults to True.
-            include_missing (optional): add missing variables to header.
-            Defaults to True.
 
         Returns:
             headers.
@@ -839,22 +819,19 @@ class VisDataConstructor():
         """
 
         output_headers = self.headers.copy()
-        if convert_units:
-            output_headers['units'] = (
-                self.md_mngr.site_variables.standard_units
-                .reindex(output_headers.index)
+        output_headers['units'] = (
+            self.md_mngr.site_variables.loc[
+                output_headers.index, 'standard_units'
+                ]
+            )
+        if len(self.md_mngr.missing_variables) > 0:
+            append_headers = (
+                self.md_mngr.missing_variables[['standard_units']]
+                .rename_axis('variable')
+                .rename({'standard_units': 'units'}, axis=1)
                 )
-        if include_missing:
-            try:
-                append_headers = (
-                    self.md_mngr.missing_variables[['standard_units']]
-                    .rename_axis('variable')
-                    .rename({'standard_units': 'units'}, axis=1)
-                    )
-                append_headers['sampling'] = ''
-                output_headers = pd.concat([output_headers, append_headers])
-            except KeyError:
-                pass
+            append_headers['sampling'] = ''
+            output_headers = pd.concat([output_headers, append_headers])
         return output_headers
     #--------------------------------------------------------------------------
 
@@ -876,8 +853,8 @@ class VisDataConstructor():
             path_to_file = (
                 self.md_mngr.data_path / f'{self.site}_merged.dat'
                 )
-        headers = self.get_headers()
-        data = self.get_data()
+        headers = self.parse_headers()
+        data = self.parse_data()
         io.write_data_to_file(
             headers=io.reformat_headers(headers=headers, output_format='TOA5'),
             data=io.reformat_data(data=data, output_format='TOA5'),
@@ -889,26 +866,115 @@ class VisDataConstructor():
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+def write_to_file(self, path_to_file: pathlib.Path | str=None) -> None:
+    """
+    Write data to file.
+
+    Args:
+        path_to_file (optional): output file path. If None, slow data path
+        and default name used. Defaults to None.
+
+    Returns:
+        None.
+
+    """
+
+    if not path_to_file:
+        path_to_file = (
+            self.md_mngr.data_path / f'{self.site}_merged.dat'
+            )
+    headers = self.parse_headers()
+    data = self.parse_data()
+    io.write_data_to_file(
+        headers=io.reformat_headers(headers=headers, output_format='TOA5'),
+        data=io.reformat_data(data=data, output_format='TOA5'),
+        abs_file_path=path_to_file,
+        output_format='TOA5'
+        )
+
+
+
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+
+def append_to_file(site):
+
+    file_loc = 'E:/Scratch/test.dat'
+    file_type = 'TOA5'
+
+    # Get information for raw data
+    data_const = StdDataConstructor(
+        site=site, include_missing=True, concat_files=False
+        )
+    new_data = io.reformat_data(
+        data=data_const.parse_data(),
+        output_format='TOA5'
+        )
+
+    # Get information for existing standardised data record
+    file_end_date = (
+        io.get_start_end_dates(
+            file=file_loc,
+            file_type=file_type
+            )
+        ['end_date']
+        )
+
+    # Check to see if any new data exists relative to existing file
+    append_data = new_data.loc[file_end_date:].drop(file_end_date)
+    if len(append_data) == 0:
+        print('No new data to append')
+        return
+
+    # Cross-check header content
+    existing_headers = io.get_header_df(file=file_loc).reset_index()
+    new_headers = (
+        io.reformat_headers(
+            headers=data_const.parse_headers(),
+            output_format='TOA5'
+            )
+        .reset_index()
+        )
+    for column in existing_headers:
+        try:
+            assert all(new_headers==existing_headers)
+        except AssertionError:
+            raise RuntimeError(
+                f'header row {column} in new data does not match header row '
+                'in existing file!'
+                )
+
+    # Append to existing
+    file_configs = cm.get_global_configs(which='file_formats')['TOA5']
+    append_data.to_csv(
+        path_or_buf=file_loc, mode='a', header=False, index=False,
+        na_rep=file_configs['na_values'], sep=file_configs['separator'],
+        quoting=file_configs['quoting']
+        )
+
+#------------------------------------------------------------------------------
 class AugmentedMetaDataManager(mh.MetaDataManager):
-    """Adds missing variable table to standard MetaDataManager class"""
+    """Adds missing variables to standard MetaDataManager class"""
 
     #--------------------------------------------------------------------------
-    def __init__(self, site, concat_files=True):
+    def __init__(self, site, include_missing):
 
         super().__init__(site, variable_map='vis')
 
         # Get missing variables and create table
-        requisite_variables = (
-            cm.get_global_configs(which='requisite_variables')['vis']
-            )
-        missing_variables = [
-            variable for variable in requisite_variables if not variable in
-            self.site_variables.quantity.unique()
-            ]
-        if missing_variables:
-            self.missing_variables = (
-                self.standard_variables.loc[missing_variables]
+        if include_missing:
+            requisite_variables = (
+                cm.get_global_configs(which='requisite_variables')['vis']
                 )
+            missing = [
+                variable for variable in requisite_variables if not
+                variable in self.site_variables.quantity.unique()
+                ]
+            if len(missing) > 0:
+                self.missing_variables = self.standard_variables.loc[missing]
+        else:
+            self.missing_variables = pd.DataFrame()
     #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -968,5 +1034,5 @@ def merge_data(
 #------------------------------------------------------------------------------
 
 ###############################################################################
-### BEGIN GENERIC FUNCTIONS ###
+### END GENERIC FUNCTIONS ###
 ###############################################################################

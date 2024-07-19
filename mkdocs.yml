@@ -2,17 +2,27 @@ site_name: TERN EP Data Pipeline
 
 theme:
   name: "material"
-  
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+
 plugins:
   - mkdocstrings:
       handlers:
         python:
           paths: [code]  # actually not needed, default
   
+
+docs:
+  - img/
+        System.png
+  
 nav:
   - Main docs: index.md
   - Network architecture: network_architecture.md
   - Data visualisation: visualisation.md
   - Code:
-    - data_merging: reference.md
-    - metadata_handling: metadata.md
+    - Raw data handling: file_handling.md
+    - Metadata handling: metadata.md
+    - Data merging / construction: reference.md
+

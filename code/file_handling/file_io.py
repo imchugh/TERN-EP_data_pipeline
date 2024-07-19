@@ -29,6 +29,8 @@ from numpy.typing import ArrayLike
 import pandas as pd
 import pathlib
 
+import utils.configs_manager as cm
+
 ###############################################################################
 ### CONSTANTS ###
 ###############################################################################
@@ -65,6 +67,8 @@ FILE_CONFIGS = {
             ]
         }
     }
+
+# FILE_CONFIGS = cm.get_global_configs(which='file_formats')
 
 INFO_FIELDS = [
     'format', 'station_name', 'logger_type', 'serial_num', 'OS_version',

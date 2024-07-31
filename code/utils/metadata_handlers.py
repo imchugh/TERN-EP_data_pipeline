@@ -40,7 +40,7 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def __init__(self, site: str, variable_map: str='pfp'):
+    def __init__(self, site: str, variable_map: str='pfp') -> None:
         """
         Do inits - read the yaml files, build lookup tables.
 
@@ -57,7 +57,6 @@ class MetaDataManager():
         # Set basic attrs
         self.site = site
         self.variable_map = variable_map
-        self.site_details = site_details().get_single_site_details(site=site)
         self.data_path = (
             paths.get_local_stream_path(
                 site=site, resource='data', stream='flux_slow'
@@ -180,7 +179,22 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_file_attributes(self, file: str) -> pd.Series:
+    def get_site_details(self) -> pd.Series:
+        """
+        Get the non-variable site details.
+
+        Returns:
+            The details.
+
+        """
+
+        return site_details().get_single_site_details(site=self.site)
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_file_attributes(
+            self, file: str, include_extended=False
+            ) -> pd.Series:
         """
         Get file attributes from file header.
 
@@ -192,12 +206,16 @@ class MetaDataManager():
 
         """
 
-        return pd.Series(
+        rslt = (
             io.get_file_info(file=self.data_path / file) |
-            io.get_start_end_dates(file=self.data_path / file) |
-            {'interval': io.get_file_interval(self.data_path / file)} |
-            {'backups': io.get_eligible_concat_files(self.data_path / file)}
+            io.get_start_end_dates(file=self.data_path / file)
             )
+        if include_extended:
+            rslt.update(
+                {'interval': io.get_file_interval(self.data_path / file)} |
+                {'backups': io.get_eligible_concat_files(self.data_path / file)}
+                )
+        return pd.Series(rslt)
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -219,7 +237,7 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def list_files(self) -> list:
+    def list_files(self, abs_path=False) -> list:
         """
         List the files constructed from the site, logger and table attributes
         of the variable map.
@@ -228,8 +246,10 @@ class MetaDataManager():
             the list of files.
 
         """
-
-        return self.site_variables.file.unique().tolist()
+        the_list = self.site_variables.file.unique().tolist()
+        if not abs_path:
+            return the_list
+        return [self.data_path / file for file in the_list]
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -274,8 +294,6 @@ class MetaDataManager():
         Args:
             table (optional): table for which to return file. If None, maps all
             available tables to files. Defaults to None.
-            abs_path (optional): whether to return the absolute path (if True)
-            or just the file name (if False). Defaults to False.
 
         Returns:
             the map.

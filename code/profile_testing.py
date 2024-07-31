@@ -5,6 +5,6 @@ Created on Thu Jul 18 12:32:52 2024
 @author: jcutern-imchugh
 """
 
-import data_constructors.data_constructors as dtc
+import network_monitoring.network_status as ns
 
-dtc.StdDataConstructor(site='Calperum')
+ns.get_logger_status(site='Calperum')

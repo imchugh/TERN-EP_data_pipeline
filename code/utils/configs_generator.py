@@ -417,8 +417,8 @@ class SiteConfigsGenerator():
         rslt = (
             self._xl.parse(sheet_name=sheet_name)
             .set_index('variable')
-            # .pipe(self._listify, 'instrument')
             .fillna('')
+            .astype(str)
             .T
             .to_dict()
             )

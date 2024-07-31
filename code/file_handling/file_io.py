@@ -35,40 +35,7 @@ import utils.configs_manager as cm
 ### CONSTANTS ###
 ###############################################################################
 
-
-
-FILE_CONFIGS = {
-    'TOA5': {
-        'info_line': 0,
-        'header_lines': {'variable': 1, 'units': 2, 'sampling': 3},
-        'separator': ',',
-        'non_numeric_cols': ['TIMESTAMP'],
-        'time_variables': {'TIMESTAMP': 0},
-        'na_values': 'NAN',
-        'unique_file_id': 'TOA5',
-        'quoting': csv.QUOTE_NONNUMERIC,
-        'dummy_info': [
-            'TOA5', 'NoStation', 'CR1000', '9999', 'cr1000.std.99.99',
-            'CPU:noprogram.cr1', '9999', 'default_table'
-            ]
-        },
-    'EddyPro': {
-        'info_line': None,
-        'header_lines': {'variable': 0, 'units': 1},
-        'separator': '\t',
-        'non_numeric_cols': ['DATAH', 'filename', 'date', 'time'],
-        'time_variables': {'date': 2, 'time': 3},
-        'na_values': 'NaN',
-        'unique_file_id': 'DATAH',
-        'quoting': csv.QUOTE_MINIMAL,
-        'dummy_info': [
-            'TOA5', 'SmartFlux', 'SmartFlux', '9999', 'OS', 'CPU:noprogram',
-            '9999', 'default_table'
-            ]
-        }
-    }
-
-# FILE_CONFIGS = cm.get_global_configs(which='file_formats')
+FILE_CONFIGS = cm.get_global_configs(which='file_formats')
 
 INFO_FIELDS = [
     'format', 'station_name', 'logger_type', 'serial_num', 'OS_version',
@@ -851,9 +818,7 @@ def _TOA5ify_headers(headers: pd.DataFrame) -> pd.DataFrame:
 
 
 #------------------------------------------------------------------------------
-def get_dates(
-        file: str | pathlib.Path, file_type: str=None
-        ) -> list:
+def get_dates(file: str | pathlib.Path, file_type: str=None) -> list:
     """Date parser only.
 
     Args:
@@ -953,36 +918,6 @@ def get_start_end_dates(file: str | pathlib.Path, file_type: str=None) -> dict:
 
     return {'start_date': start_date, 'end_date': end_date}
 #------------------------------------------------------------------------------
-
-def find_date(file, date: dt.datetime, file_type: str=None):
-
-
-    line_formatter = get_formatter(file_type=file_type, which='read_line')
-    date_formatter = get_formatter(file_type=file_type, which='read_date')
-    with open(file, 'rb') as f:
-        end_date = None
-        f.seek(2, os.SEEK_END)
-        lines_back = 0
-        while True:
-            try:
-                if f.read(1) == b'\n':
-                    pos = f.tell()
-                    line = f.readline().decode()
-                    try:
-                        end_date = (
-                            date_formatter(
-                                line_formatter(line)
-                                )
-                            )
-                        if end_date < date:
-                            return lines_back
-                        lines_back += 1
-                        f.seek(pos - f.tell(), os.SEEK_CUR)
-                    except ValueError:
-                        f.seek(pos - f.tell(), os.SEEK_CUR)
-                f.seek(-2, os.SEEK_CUR)
-            except OSError:
-                break
 
 ###############################################################################
 ### END DATE HANDLING FUNCTIONS ###

@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = 'empty-project-type'
-recent_files = ['data_builders\\ds_builder.py', 'file_handling\\file_handler.py', 'utils\\metadata_handlers.py', 'utils\\configs_manager.py', 'utils\\configs_generator.py', 'data_builders\\data_merger.py', 'data_conditioning\\convert_calc_filter.py', 'network_monitoring\\network_status.py']
+recent_files = ['file_handling\\file_handler.py', 'utils\\metadata_handlers.py', 'utils\\configs_generator.py', 'data_constructors\\data_constructors.py', 'profile_testing.py', '..\\..\\site_details\\sparql_site_details.py', 'file_handling\\file_io.py', 'data_constructors\\convert_calc_filter.py', 'utils\\configs_manager.py', 'network_monitoring\\network_status.py', '..\\..\\VM_data_acquisition\\network_status_parser.py']
 
 [main]
 version = 0.2.0

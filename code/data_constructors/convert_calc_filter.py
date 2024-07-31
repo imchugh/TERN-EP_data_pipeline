@@ -177,9 +177,9 @@ def convert_RH(data, from_units='frac'):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def convert_Sws(data, from_units='%'):
+def convert_Sws(data, from_units='percent'):
 
-    if from_units == '%':
+    if from_units == 'percent':
         return data / 100
 #------------------------------------------------------------------------------
 
@@ -205,7 +205,7 @@ def convert_variable(variable):
         'ps': convert_pressure,
         'Sws': convert_Sws,
         'VPD': convert_pressure,
-        'Rain': convert_precipitation
+        'Precip': convert_precipitation
         }
     return conversions_dict[variable]
 #------------------------------------------------------------------------------
@@ -225,7 +225,8 @@ def calculate_AH_from_RH(Ta: pd.Series, RH: pd.Series, ps: pd.Series):
 
     return (
         calculate_e(Ta=Ta, RH=RH) / ps *
-        calculate_molar_density(Ta=Ta, ps=ps) * H2O_MOL_MASS
+        calculate_molar_density(Ta=Ta, ps=ps) *
+        H2O_MOL_MASS
         )
 #------------------------------------------------------------------------------
 

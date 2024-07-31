@@ -39,7 +39,6 @@ import data_constructors.convert_calc_filter as ccf
 import utils.configs_manager as cm
 import file_handling.file_io as io
 import file_handling.file_handler as fh
-import utils.configs_manager as cm
 import utils.metadata_handlers as mh
 
 #------------------------------------------------------------------------------
@@ -53,6 +52,7 @@ VAR_METADATA_SUBSET = [
     ]
 STATISTIC_ALIASES = {'average': 'Avg', 'variance': 'Vr', 'sum': 'Tot'}
 TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
+MERGED_FILE_NAME = '<site>_merged_std.dat'
 #------------------------------------------------------------------------------
 
 ###############################################################################
@@ -121,7 +121,7 @@ class L1DataConstructor():
         global_attrs.update(new_dict)
 
         site_specific_attrs = (
-            self.md_mngr.site_details
+            self.md_mngr.get_site_details()
             [SITE_DETAIL_SUBSET]
             .rename(SITE_DETAIL_ALIASES)
             .to_dict()
@@ -284,7 +284,7 @@ class L1DataConstructor():
         year_list = (
             (
                 pd.to_datetime(ds.time.values) -
-                dt.timedelta(minutes=self.md_mngr.site_details.time_step)
+                dt.timedelta(minutes=self.global_attrs.time_step)
                 )
             .year
             .unique()
@@ -706,7 +706,11 @@ class StdDataConstructor():
 
         # Merge the raw data
         merge_dict = self.md_mngr.translate_variables_by_file(abs_path=True)
-        rslt = merge_data(files=merge_dict, concat_files=concat_files)
+        rslt = merge_data(
+            files=merge_dict,
+            concat_files=concat_files,
+            interval=f'{int(self.md_mngr.get_site_details().time_step)}T'
+            )
         self.data = rslt['data']
         self.headers = rslt['headers']
     #--------------------------------------------------------------------------
@@ -757,7 +761,7 @@ class StdDataConstructor():
 
         for variable in self.md_mngr.list_variables_for_conversion():
             attrs = self.md_mngr.get_variable_attributes(variable)
-            func = ccf.convert_variable(variable=variable)
+            func = ccf.convert_variable(variable=attrs['quantity'])
             df[variable] = func(df[variable], from_units=attrs['units'])
     #--------------------------------------------------------------------------
 
@@ -774,10 +778,11 @@ class StdDataConstructor():
 
         """
 
+
         for var in self.md_mngr.missing_variables.index:
             rslt = ccf.get_function(variable=var, with_params=True)
             args_dict = {
-                parameter: self.data[parameter] for parameter in
+                parameter: df[parameter] for parameter in
                 rslt[1]
                 }
             df[var] = rslt[0](**args_dict)
@@ -829,8 +834,8 @@ class StdDataConstructor():
                 self.md_mngr.missing_variables[['standard_units']]
                 .rename_axis('variable')
                 .rename({'standard_units': 'units'}, axis=1)
+                .assign(sampling='')
                 )
-            append_headers['sampling'] = ''
             output_headers = pd.concat([output_headers, append_headers])
         return output_headers
     #--------------------------------------------------------------------------
@@ -866,94 +871,6 @@ class StdDataConstructor():
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def write_to_file(self, path_to_file: pathlib.Path | str=None) -> None:
-    """
-    Write data to file.
-
-    Args:
-        path_to_file (optional): output file path. If None, slow data path
-        and default name used. Defaults to None.
-
-    Returns:
-        None.
-
-    """
-
-    if not path_to_file:
-        path_to_file = (
-            self.md_mngr.data_path / f'{self.site}_merged.dat'
-            )
-    headers = self.parse_headers()
-    data = self.parse_data()
-    io.write_data_to_file(
-        headers=io.reformat_headers(headers=headers, output_format='TOA5'),
-        data=io.reformat_data(data=data, output_format='TOA5'),
-        abs_file_path=path_to_file,
-        output_format='TOA5'
-        )
-
-
-
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-
-def append_to_file(site):
-
-    file_loc = 'E:/Scratch/test.dat'
-    file_type = 'TOA5'
-
-    # Get information for raw data
-    data_const = StdDataConstructor(
-        site=site, include_missing=True, concat_files=False
-        )
-    new_data = io.reformat_data(
-        data=data_const.parse_data(),
-        output_format='TOA5'
-        )
-
-    # Get information for existing standardised data record
-    file_end_date = (
-        io.get_start_end_dates(
-            file=file_loc,
-            file_type=file_type
-            )
-        ['end_date']
-        )
-
-    # Check to see if any new data exists relative to existing file
-    append_data = new_data.loc[file_end_date:].drop(file_end_date)
-    if len(append_data) == 0:
-        print('No new data to append')
-        return
-
-    # Cross-check header content
-    existing_headers = io.get_header_df(file=file_loc).reset_index()
-    new_headers = (
-        io.reformat_headers(
-            headers=data_const.parse_headers(),
-            output_format='TOA5'
-            )
-        .reset_index()
-        )
-    for column in existing_headers:
-        try:
-            assert all(new_headers==existing_headers)
-        except AssertionError:
-            raise RuntimeError(
-                f'header row {column} in new data does not match header row '
-                'in existing file!'
-                )
-
-    # Append to existing
-    file_configs = cm.get_global_configs(which='file_formats')['TOA5']
-    append_data.to_csv(
-        path_or_buf=file_loc, mode='a', header=False, index=False,
-        na_rep=file_configs['na_values'], sep=file_configs['separator'],
-        quoting=file_configs['quoting']
-        )
-
-#------------------------------------------------------------------------------
 class AugmentedMetaDataManager(mh.MetaDataManager):
     """Adds missing variables to standard MetaDataManager class"""
 
@@ -973,8 +890,8 @@ class AugmentedMetaDataManager(mh.MetaDataManager):
                 ]
             if len(missing) > 0:
                 self.missing_variables = self.standard_variables.loc[missing]
-        else:
-            self.missing_variables = pd.DataFrame()
+            else:
+                self.missing_variables = pd.DataFrame()
     #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -986,12 +903,142 @@ class AugmentedMetaDataManager(mh.MetaDataManager):
 
 
 ###############################################################################
+### BEGIN VISUALISATION FILE WRITE FUNCTIONS ###
+###############################################################################
+
+#------------------------------------------------------------------------------
+def write_to_std_file(site: str, concat_files: bool=True) -> None:
+    """
+    Write data to file.
+
+    Args:
+        site: name of site.
+        concat_files (optional): if True, concatenates all legal backups.
+        Defaults to True.
+
+    Returns:
+        None.
+
+    """
+
+    # Get information for raw data
+    data_const = StdDataConstructor(
+        site=site, include_missing=True, concat_files=concat_files
+        )
+
+    # Get path information from the embedded metadata manager
+    file_path = f'E:/Scratch/{site}_merged_std.dat'
+    # file_path = data_const.md_mngr.data_path / MERGED_FILE_NAME
+
+    # Parse data and reformat to TOA5
+    data = io.reformat_data(
+        data=data_const.parse_data(),
+        output_format='TOA5'
+        )
+
+    # Parse headers and reformat to TOA5
+    headers = (
+        io.reformat_headers(
+            headers=data_const.parse_headers(),
+            output_format='TOA5'
+            )
+        )
+
+    # Write data to file
+    io.write_data_to_file(
+        headers=headers,
+        data=data,
+        abs_file_path=file_path,
+        output_format='TOA5'
+        )
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def append_to_std_file(site: str) -> None:
+    """
+    Append new data to file.
+
+    Args:
+        site: name of site.
+
+    Raises:
+        RuntimeError: raised if header mismatch between new and existing data.
+
+    Returns:
+        None.
+
+    """
+
+    # Get information for raw data
+    data_const = StdDataConstructor(
+        site=site, include_missing=True, concat_files=False
+        )
+
+    # Get path information from the embedded metadata manager
+    file_path = f'E:/Scratch/{site}_merged_std.dat'
+    # file_path = data_const.md_mngr.data_path / MERGED_FILE_NAME
+
+    # Get the data and format as TOA5
+    new_data = io.reformat_data(
+        data=data_const.parse_data(),
+        output_format='TOA5'
+        )
+
+    # Get information for existing standardised data record
+    file_end_date = (
+        io.get_start_end_dates(
+            file=file_path,
+            file_type='TOA5'
+            )
+        ['end_date']
+        )
+
+    # Check to see if any new data exists relative to existing file
+    append_data = new_data.loc[file_end_date:].drop(file_end_date)
+    if len(append_data) == 0:
+        print('No new data to append')
+        return
+
+    # Cross-check header content
+    existing_headers = io.get_header_df(file=file_path).reset_index()
+    new_headers = (
+        io.reformat_headers(
+            headers=data_const.parse_headers(),
+            output_format='TOA5'
+            )
+        .reset_index()
+        )
+    for column in existing_headers:
+        try:
+            assert all(new_headers==existing_headers)
+        except AssertionError:
+            raise RuntimeError(
+                f'header row {column} in new data does not match header row '
+                'in existing file!'
+                )
+
+    # Append to existing
+    file_configs = cm.get_global_configs(which='file_formats')['TOA5']
+    append_data.to_csv(
+        path_or_buf=file_path, mode='a', header=False, index=False,
+        na_rep=file_configs['na_values'], sep=file_configs['separator'],
+        quoting=file_configs['quoting']
+        )
+#------------------------------------------------------------------------------
+
+###############################################################################
+### END VISUALISATION FILE WRITE FUNCTIONS ###
+###############################################################################
+
+
+
+###############################################################################
 ### BEGIN GENERIC FUNCTIONS ###
 ###############################################################################
 
 #------------------------------------------------------------------------------
 def merge_data(
-        files: list | dict, concat_files: bool=False
+        files: list | dict, concat_files: bool=False, interval=None
         ) -> pd.core.frame.DataFrame:
     """
     Merge and align data and headers from different files.
@@ -999,10 +1046,12 @@ def merge_data(
     Args:
         files: the absolute path of the files to parse.
         If a list, all variables returned; if a dict, file is value, and key
-        is passed to the file_handler. That key can be a list of variables, or
-        a dictionary mapping translation of variable names (see file handler
-        documentation).
+            is passed to the file_handler. That key can be a list of variables, or
+            a dictionary mapping translation of variable names (see file handler
+                                                                documentation).
         concat_files (optional): concat backup files to current.
+            Defaults to False
+        interval (optional): resample files to passed interval.
 
     Returns:
         merged data.
@@ -1018,8 +1067,10 @@ def merge_data(
         data_handler = fh.DataHandler(file=file, concat_files=concat_files)
         data_list.append(
             data_handler.get_conditioned_data(
-                usecols=usecols, drop_non_numeric=True,
-                monotonic_index=True
+                usecols=usecols,
+                drop_non_numeric=True,
+                monotonic_index=True,
+                resample_intvl=interval
                 )
             )
         header_list.append(

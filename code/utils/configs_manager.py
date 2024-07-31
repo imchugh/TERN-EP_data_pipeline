@@ -553,7 +553,7 @@ def get_site_hardware_configs(site:str, which: str=None) -> dict:
     """
 
     return (
-        SiteConfigsManager(site='Calperum')
+        SiteConfigsManager(site=site)
         .get_hardware_configs(which=which)
         )
 #------------------------------------------------------------------------------
@@ -573,7 +573,7 @@ def get_site_variable_configs(site:str, which: str) -> dict:
     """
 
     return (
-        SiteConfigsManager(site='Calperum')
+        SiteConfigsManager(site=site)
         .get_variable_configs(which=which)
         )
 #------------------------------------------------------------------------------

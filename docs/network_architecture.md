@@ -2,6 +2,10 @@
 
 This document describes general principles and architecture for the front end of the TERN-EP eddy covariance data processing pipeline.
 
+Currently it looks like this:
+
+![screenshot](img/network_architecture.png)
+
 
 ## Network nodes
 

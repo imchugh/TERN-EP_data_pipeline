@@ -16,6 +16,7 @@ plugins:
 docs:
   - img/
         System.png
+        network_architecture.png
   
 nav:
   - Main docs: index.md
@@ -25,4 +26,5 @@ nav:
     - Raw data handling: file_handling.md
     - Metadata handling: metadata.md
     - Data merging / construction: reference.md
+    - Network status: status.md
 

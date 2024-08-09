@@ -45,7 +45,6 @@ class PathsManager():
 
         """
 
-
         self.local_paths = _get_generic_configs(file=LOCAL_CONFIG_PATH_FILE)
         self.remote_paths = _get_generic_configs(file=REMOTE_CONFIG_PATH_FILE)
     #--------------------------------------------------------------------------
@@ -310,6 +309,7 @@ class PathsManager():
             Path to resource / stream.
 
         """
+
 
         # Select local or remote configs
         if location == 'local':

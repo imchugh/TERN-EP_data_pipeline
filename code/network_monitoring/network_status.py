@@ -6,6 +6,7 @@ Created on Thu Jul 11 14:42:54 2024
 """
 
 import datetime as dt
+import logging
 import numpy as np
 import os
 import pandas as pd
@@ -20,9 +21,16 @@ from sparql_site_details import site_details
 paths_mngr = PathsManager()
 sd_mngr = site_details()
 
+logger = logging.getLogger(__name__)
+
 ###############################################################################
 ### BEGIN MAIN FUNCTIONS ###
 ###############################################################################
+
+def throw_error():
+
+    raise RuntimeError('Shes a biggun!')
+
 
 #------------------------------------------------------------------------------
 def write_status_xlsx() -> None:
@@ -42,8 +50,14 @@ def write_status_xlsx() -> None:
     fast_file_status_list = []
     site_data_status_dict = {}
 
+    logger.info('Evaluating site status: ')
+
     # Collate data using single call to metadata manager per site
     for site in site_list:
+
+        logger.info(f'    - {site}')
+
+
         md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
         slow_file_status_list.append(
             get_slow_file_status(site=site, md_mngr=md_mngr)

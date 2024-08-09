@@ -30,6 +30,7 @@ Module functions:
 """
 
 import datetime as dt
+import logging
 import numpy as np
 import pandas as pd
 import pathlib
@@ -53,6 +54,7 @@ VAR_METADATA_SUBSET = [
 STATISTIC_ALIASES = {'average': 'Avg', 'variance': 'Vr', 'sum': 'Tot'}
 TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 MERGED_FILE_NAME = '<site>_merged_std.dat'
+logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
 ###############################################################################
@@ -921,14 +923,21 @@ def write_to_std_file(site: str, concat_files: bool=True) -> None:
 
     """
 
+    logger.info(f'Merging data for site {site}...')
+
     # Get information for raw data
     data_const = StdDataConstructor(
         site=site, include_missing=True, concat_files=concat_files
         )
 
     # Get path information from the embedded metadata manager
-    file_path = f'E:/Scratch/{site}_merged_std.dat'
+    file_path = pathlib.Path(f'E:/Scratch/{site}_merged_std.dat')
     # file_path = data_const.md_mngr.data_path / MERGED_FILE_NAME
+    if file_path.exists():
+        raise FileExistsError('File already created!')
+
+    logger.info('... done!')
+    logger.info(f'Writing data to file {file_path.name}')
 
     # Parse data and reformat to TOA5
     data = io.reformat_data(
@@ -951,6 +960,8 @@ def write_to_std_file(site: str, concat_files: bool=True) -> None:
         abs_file_path=file_path,
         output_format='TOA5'
         )
+
+    logger.info('Done')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -975,8 +986,10 @@ def append_to_std_file(site: str) -> None:
         )
 
     # Get path information from the embedded metadata manager
-    file_path = f'E:/Scratch/{site}_merged_std.dat'
+    file_path = pathlib.Path(f'E:/Scratch/{site}_merged_std.dat')
     # file_path = data_const.md_mngr.data_path / MERGED_FILE_NAME
+    if not file_path.exists():
+        raise FileNotFoundError('No standard file exists to append to!')
 
     # Get the data and format as TOA5
     new_data = io.reformat_data(

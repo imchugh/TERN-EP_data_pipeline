@@ -21,8 +21,8 @@ site_list = [
     'Yanco'
     ]
 paths = cm.PathsManager()
+LOGGER_CONFIGS = 'logger_configs.yml'
 LOG_BYTE_LIMIT = 10**6
-
 
 #------------------------------------------------------------------------------
 class TasksManager():
@@ -85,12 +85,16 @@ class TasksManager():
 def run_task(task, site=None):
 
     site_only = {'site': site}
-
     tasks_dict = {
 
         'generate_merged_file': {
             'func': write_std_data,
             'args': site_only
+            },
+
+        'do_blah': {
+            'func': ns.throw_error,
+            'args': None
             }
 
         }
@@ -103,28 +107,13 @@ def run_task(task, site=None):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def _set_logger(log_path):
+def configure_logger(log_path):
 
-    """Create logger and send output to file"""
-
-    # Create logger
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
-
-    # Configure and add the file handler
-    file_handler = logging.handlers.RotatingFileHandler(
-        log_path, maxBytes=LOG_BYTE_LIMIT
-        )
-    formatter = logging.Formatter(
-        '%(asctime)s %(levelname)s [%(name)s] %(message)s'
-        )
-    file_handler.setFormatter(formatter)
-    logger.addHandler(hdlr=file_handler)
-
-    # Configure and add the stream handler
-    stream_handler = logging.StreamHandler()
-    logger.addHandler(hdlr=stream_handler)
-
+    with open(LOGGER_CONFIGS) as f:
+        rslt = yaml.safe_load(stream=f)
+        rslt['handlers']['file']['filename'] = str(log_path)
+        logging.config.dictConfig(rslt)
     return logger
 #------------------------------------------------------------------------------
 
@@ -135,6 +124,50 @@ def write_std_data(site):
         dtc.append_to_std_file(site=site)
     except FileNotFoundError:
         dtc.write_to_std_file(site=site)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def run_site_task(task, site):
+
+    log_path = (
+        paths.get_local_stream_path(
+            resource='logs',
+            stream='site_logs',
+            site=site
+            ) /
+        f'{site}_{task}_b.txt'
+        )
+    logger = configure_logger(log_path=log_path)
+    logger.info(f'Running task "{task}" for site {site}')
+    try:
+        run_task(task=task, site=site)
+        logger.info('Task completed without error\n')
+    except Exception:
+        logger.error(
+            'Task failed with the following error:',
+            exc_info=True
+            )
+        pass
+    logger.handlers.clear()
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def run_generic_task(task):
+
+    log_path = (
+        paths.get_local_stream_path(
+            resource='logs',
+            stream='generic_logs'
+            ) /
+        f'{task}.txt'
+        )
+    logger = configure_logger(log_path)
+    logger.info(f'Running task "{task}"...')
+    try:
+        run_task(task=task)
+    except RuntimeError:
+        logger.error('Task failed with the following error:', exc_info=True)
+
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -159,45 +192,6 @@ def main():
             run_site_task(task=task, site=site)
         return
     run_generic_task(task)
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def run_site_task(task, site):
-
-    log_path = (
-        paths.get_local_stream_path(
-            resource='logs',
-            stream='site_logs',
-            site=site
-            ) /
-        f'{site}_{task}_b.txt'
-        )
-    logger = _set_logger(log_path=log_path)
-    logger.info(f'Running task "{task}" for site {site}')
-    try:
-        run_task(task=task, site=site)
-        logger.info('Task completed without error\n')
-    except Exception:
-        logging.error(
-            'Task failed with the following error:',
-            exc_info=True
-            )
-        pass
-    logger.handlers.clear()
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def run_generic_task(task):
-
-    log_path = (
-        paths.get_local_stream_path(
-            resource='logs',
-            stream='generic_logs'
-            ) /
-        f'{task}.txt'
-        )
-
-    pass
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

@@ -15,117 +15,224 @@ import data_constructors.data_constructors as dtc
 import network_monitoring.network_status as ns
 
 site_list = [
-    'AliceSpringsMulga', 'Boyagin', 'Calperum', 'Fletcherview', 'Gingin',
+    'AliceSpringsMulga', 'Boyagin', 'Calperum', 'Fletcherview' 'Gingin',
     'GreatWesternWoodlands', 'HowardSprings', 'Litchfield', 'MyallValeA',
     'MyallValeB', 'Ridgefield', 'SnowGum', 'SturtPlains', 'Wellington',
     'Yanco'
     ]
 paths = cm.PathsManager()
-LOG_BYTE_LIMIT = 10**6
 
+task_configs_path = paths.get_local_stream_path(
+    resource='configs',
+    stream='tasks'
+    )
+with open(task_configs_path) as f:
+    _task_configs = yaml.safe_load(stream=f)
+NETWORK_TASKS = _task_configs['generic_tasks']
+SITE_TASKS = pd.DataFrame(_task_configs['site_tasks']).T
+
+with open('logger_configs.yml') as f:
+    LOGGER_CONFIGS = yaml.safe_load(stream=f)
+logger = logging.getLogger(__name__)
+
+
+# #------------------------------------------------------------------------------
+# class TasksManager():
+
+#     #--------------------------------------------------------------------------
+#     def __init__(self):
+
+#         file_path = paths.get_local_stream_path(
+#             resource='configs',
+#             stream='tasks'
+#             )
+#         with open(file_path) as f:
+#             task_configs = yaml.safe_load(stream=f)
+#         self.site_tasks = pd.DataFrame(task_configs['site_tasks']).T
+#         self.generic_tasks = task_configs['generic_tasks']
+#     #--------------------------------------------------------------------------
+
+#     #--------------------------------------------------------------------------
+#     def classify_task(self, task):
+
+#         if task in self.site_tasks:
+#             return 'site_task'
+#         if task in self.generic_tasks:
+#             return 'network_task'
+#         raise KeyError('Unrecognised task!')
+#     #--------------------------------------------------------------------------
+
+#     #--------------------------------------------------------------------------
+#     def get_site_log_path(self, task, site):
+
+#         return (
+#             paths.get_local_stream_path(
+#                 resource='logs',
+#                 stream='site_logs',
+#                 site=site
+#                 ) /
+#             f'{site}_{task}.log'
+#             )
+#     #--------------------------------------------------------------------------
+
+#     #--------------------------------------------------------------------------
+#     def get_generic_log_path(self, task):
+
+#         return (
+#             paths.get_local_stream_path(
+#                 resource='logs',
+#                 stream='generic_logs',
+#                 ) /
+#             f'{task}.log'
+#             )
+#     #--------------------------------------------------------------------------
+
+#     #--------------------------------------------------------------------------
+#     def get_log_path(self, task, site=None):
+
+#         task = self.classify_task(task=task)
+
+#         if task == 'site_task':
+#             if site is None:
+#                 raise KeyError(
+#                     'Site task was passed without site!'
+#                     )
+#             return (
+#                 paths.get_local_stream_path(
+#                     resource='logs',
+#                     stream='site_logs',
+#                     site=site
+#                     ) /
+#                 f'{site}_{task}_b.log'
+#                 )
+
+
+#         if task == 'network_task':
+#             if site is not None:
+#                 raise KeyError(
+#                     'Passed task is a network task but site name was passed!'
+#                     )
+#             return (
+#                 paths.get_local_stream_path(
+#                     resource='logs',
+#                     stream='network_logs',
+#                     ) /
+#                 f'{task}.log'
+#                 )
+#     #--------------------------------------------------------------------------
+
+#     #--------------------------------------------------------------------------
+#     def get_site_list_for_task(self, task):
+#         """
+#         Get the list of sites for which a given task is enabled.
+#         """
+
+#         return (
+#             self.site_tasks.loc[self.site_tasks[task]==True]
+#             .index
+#             .to_list()
+#             )
+#     #--------------------------------------------------------------------------
+
+#     #--------------------------------------------------------------------------
+#     def get_task_list_for_site(self, site):
+#         """
+#         Get the list of tasks enabled for a given site.
+#         """
+
+#         return (
+#             self.site_tasks.loc[site, self.site_tasks.loc[site]==True]
+#             .index
+#             .tolist()
+#             )
+#     #--------------------------------------------------------------------------
+
+#     #--------------------------------------------------------------------------
+#     def get_site_task_list(self):
+#         """
+#         Get the list of tasks.
+#         """
+
+#         return self.site_tasks.columns.tolist()
+#     #--------------------------------------------------------------------------
+
+#     #--------------------------------------------------------------------------
+#     def get_generic_task_list(self):
+
+#         return self.generic_tasks
+#     #--------------------------------------------------------------------------
+
+# #------------------------------------------------------------------------------
+
+# tasks = TasksManager()
+
+# #------------------------------------------------------------------------------
+# def run_task(task, site=None):
+
+#     site_only = {'site': site}
+#     tasks_dict = {
+
+#         'generate_merged_file': {
+#             'func': write_std_data,
+#             'args': site_only
+#             },
+
+#         'generate_status_xlsx': {
+#             'func': ns.write_status_xlsx,
+#             'args': None
+#             }
+
+#         }
+
+#     try:
+
+#         # Check the validity of passed arguments
+#         log_path=tasks.get_log_path(task=task,site=site)
+
+#         # Configure the logger and write info
+#         configure_logger_path(log_path=log_path)
+#         logger.info(f'Running task "{task}"...')
+
+#         # Execute task
+#         run_dict = tasks_dict[task]
+#         if not run_dict['args'] is None:
+#             run_dict['func'](**run_dict['args'])
+#         else:
+#             run_dict['func']()
+
+#         logger.info('Task completed without error\n')
+
+#     except Exception:
+
+#         logger.error('Task failed with the following error:', exc_info=True)
+# #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-class TasksManager():
+def configure_logger_path(log_path):
 
-    #--------------------------------------------------------------------------
-    def __init__(self):
-
-        file_path = paths.get_local_stream_path(
-            resource='configs',
-            stream='tasks'
-            )
-        with open(file_path) as f:
-            task_configs = yaml.safe_load(stream=f)
-        self.site_tasks = pd.DataFrame(task_configs['site_tasks']).T
-        self.generic_tasks = task_configs['generic_tasks']
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_site_list_for_task(self, task):
-        """
-        Get the list of sites for which a given task is enabled.
-        """
-
-        return (
-            self.site_tasks.loc[self.site_tasks[task]==True]
-            .index
-            .to_list()
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_task_list_for_site(self, site):
-        """
-        Get the list of tasks enabled for a given site.
-        """
-
-        return (
-            self.site_tasks.loc[site, self.site_tasks.loc[site]==True]
-            .index
-            .tolist()
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_site_task_list(self):
-        """
-        Get the list of tasks.
-        """
-
-        return self.site_tasks.columns.tolist()
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_generic_task_list(self):
-
-        return self.generic_tasks
-    #--------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def run_task(task, site=None):
-
-    site_only = {'site': site}
-
-    tasks_dict = {
-
-        'generate_merged_file': {
-            'func': write_std_data,
-            'args': site_only
-            }
-
-        }
-
-    sub_dict = tasks_dict[task]
-    if not sub_dict['args'] is None:
-        sub_dict['func'](**sub_dict['args'])
-    else:
-        sub_dict['func']()
+    if logger.hasHandlers():
+        logger.handlers.clear()
+    new_configs = LOGGER_CONFIGS.copy()
+    new_configs['handlers']['file']['filename'] = str(log_path)
+    logging.config.dictConfig(new_configs)
 #------------------------------------------------------------------------------
 
+# #------------------------------------------------------------------------------
+# def run_dey_task(task, site=None):
+
+#     configure_logger_path(log_path=tasks.get_log_path(task=task,site=site))
+#     logger.info(f'Running task "{task}"...')
+#     try:
+#         run_task(task=task, site=site)
+#         logger.info('Task completed without error\n')
+#     except Exception:
+#         logger.error('Task failed with the following error:', exc_info=True)
+# #------------------------------------------------------------------------------
+
 #------------------------------------------------------------------------------
-def _set_logger(log_path):
+def get_site_list_for_task(task):
 
-    """Create logger and send output to file"""
-
-    # Create logger
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
-
-    # Configure and add the file handler
-    file_handler = logging.handlers.RotatingFileHandler(
-        log_path, maxBytes=LOG_BYTE_LIMIT
-        )
-    formatter = logging.Formatter(
-        '%(asctime)s %(levelname)s [%(name)s] %(message)s'
-        )
-    file_handler.setFormatter(formatter)
-    logger.addHandler(hdlr=file_handler)
-
-    # Configure and add the stream handler
-    stream_handler = logging.StreamHandler()
-    logger.addHandler(hdlr=stream_handler)
-
-    return logger
+    return SITE_TASKS[SITE_TASKS['reformat_10Hz_main']].index.tolist()
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -138,66 +245,107 @@ def write_std_data(site):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def main():
+def run_site_task(site, task):
 
-    # If site name was passed, run task.
-    # If not, check if the task is a site task, and run task for all sites for
-    #   which task is enabled.
-    # Otherwise run generic task.
+    # Define task functions in dict
+    site_only = {'site': site}
+    tasks_dict = {
 
-    tasks = TasksManager()
+        'generate_merged_file': {
+            'func': write_std_data,
+            'args': site_only
+            }
 
-    site_list = None
-    task = sys.argv[1]
-    try:
-        site_list = [sys.argv[2]]
-    except IndexError:
-        if task in tasks.get_site_task_list():
-            site_list = tasks.get_site_list_for_task(task=task)
-    if site_list is not None:
-        for site in site_list:
-            run_site_task(task=task, site=site)
-        return
-    run_generic_task(task)
-#------------------------------------------------------------------------------
+        }
 
-#------------------------------------------------------------------------------
-def run_site_task(task, site):
-
+    # Get the log output path and configure the logger
     log_path = (
         paths.get_local_stream_path(
             resource='logs',
             stream='site_logs',
             site=site
             ) /
-        f'{site}_{task}_b.txt'
+        f'{site}_{task}_b.log'
         )
-    logger = _set_logger(log_path=log_path)
-    logger.info(f'Running task "{task}" for site {site}')
+    configure_logger_path(log_path=log_path)
+
+    # Run the task
+    logger.info(f'Running task {task}...')
+    run_dict = tasks_dict[task]
     try:
-        run_task(task=task, site=site)
+        run_dict['func'](**run_dict['args'])
         logger.info('Task completed without error\n')
     except Exception:
-        logging.error(
-            'Task failed with the following error:',
-            exc_info=True
-            )
-        pass
-    logger.handlers.clear()
+        logger.error('Task failed with the following error:', exc_info=True)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def run_generic_task(task):
+def run_network_task(task):
 
+    # Define task functions in dict
+    tasks_dict = {
+
+        'generate_status_xlsx': ns.write_status_xlsx
+
+        }
+
+    # Get the log output path and configure the logger
     log_path = (
         paths.get_local_stream_path(
             resource='logs',
-            stream='generic_logs'
+            stream='network_logs',
             ) /
-        f'{task}.txt'
+        f'{task}.log'
         )
+    configure_logger_path(log_path=log_path)
 
-    pass
+    # Run the task
+    logger.info(f'Running task {task}...')
+    try:
+        tasks_dict[task]()
+        logger.info('Task completed without error\n')
+    except Exception:
+        logger.error('Task failed with the following error:', exc_info=True)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def main():
+    """
+    Main externally-called function - evaluates task as site-based or
+        generic and executes accordingly.
+    Returns:
+        None.
+
+    """
+
+    # Inits
+    task = sys.argv[1]
+    if task in SITE_TASKS.columns:
+        try:
+            site_list = [sys.argv[2]]
+        except IndexError:
+            site_list = get_site_list_for_task(task=task)
+        for site in site_list:
+            run_site_task(site=site, task=task)
+
+    elif task in NETWORK_TASKS:
+        run_network_task(task=task)
+#------------------------------------------------------------------------------
+
+
+    # # If site-based task, check for site arg. If missing, get list from task
+    # # manager
+    # if task_type == 'site_task':
+    #     try:
+    #         site_list = [sys.argv[2]]
+    #     except IndexError:
+    #         site_list = tasks.get_site_list_for_task(task=task)
+    #     for site in site_list:
+    #         run_task(task=task, site=site)
+
+    # # Otherwise execute generic task
+    # else:
+    #     run_task(task)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -205,4 +353,3 @@ if __name__=='__main__':
 
     main()
 #------------------------------------------------------------------------------
-

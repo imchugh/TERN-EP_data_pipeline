@@ -54,6 +54,7 @@ VAR_METADATA_SUBSET = [
 STATISTIC_ALIASES = {'average': 'Avg', 'variance': 'Vr', 'sum': 'Tot'}
 TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 MERGED_FILE_NAME = '<site>_merged_std.dat'
+CONSTRAIN_SITES_TO_FLUX = ['CumberlandPlain']
 logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
@@ -286,7 +287,7 @@ class L1DataConstructor():
         year_list = (
             (
                 pd.to_datetime(ds.time.values) -
-                dt.timedelta(minutes=self.global_attrs.time_step)
+                dt.timedelta(minutes=self.global_attrs['time_step'])
                 )
             .year
             .unique()
@@ -549,117 +550,117 @@ def append_to_nc(site: str, nc_file: pathlib.Path | str):
 
 
 
-###############################################################################
-### BEGIN nc CONVERTER CLASS ###
-###############################################################################
+# ###############################################################################
+# ### BEGIN nc CONVERTER CLASS ###
+# ###############################################################################
 
-#------------------------------------------------------------------------------
-class NCConverter():
-    """
-    Class to allow conversion of data from NetCDF format back to a TOA5-like file.
-    This is intended to replace the current functionality for production of the
-    RTMC datasets.
-    """
+# #------------------------------------------------------------------------------
+# class NCConverter():
+#     """
+#     Class to allow conversion of data from NetCDF format back to a TOA5-like file.
+#     This is intended to replace the current functionality for production of the
+#     RTMC datasets.
+#     """
 
-    #--------------------------------------------------------------------------
-    def __init__(self, nc_file: pathlib.Path | str) -> None:
-        """
-        Open the NetCDF file as xarray dataset, and set labels to keep / drop.
+#     #--------------------------------------------------------------------------
+#     def __init__(self, nc_file: pathlib.Path | str) -> None:
+#         """
+#         Open the NetCDF file as xarray dataset, and set labels to keep / drop.
 
-        Args:
-            nc_file: Absolute path to NetCDF file.
+#         Args:
+#             nc_file: Absolute path to NetCDF file.
 
-        Returns:
-            None.
+#         Returns:
+#             None.
 
-        """
-
-
-        self.ds = xr.open_dataset(nc_file)
-        self.labels_to_drop = (
-            ['crs'] + [x for x in self.ds if 'QCFlag' in x]
-            )
-        self.labels_to_keep = [
-            var for var in self.ds if not var in self.labels_to_drop
-            ]
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def make_dataframe(self) -> pd.core.frame.DataFrame:
-        """
-        Strip back the dataset to the minimum required for the dataframe.
-
-        Returns:
-            dataframe.
-
-        """
-
-        return (
-            self.ds
-            .to_dataframe()
-            .droplevel(['latitude', 'longitude'])
-            .drop(self.labels_to_drop, axis=1)
-            .rename_axis('DATETIME')
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def make_headers(self) -> pd.core.frame.DataFrame:
-        """
-        Create the header dataframe required for the TOA5 conversion.
-
-        Returns:
-            dataframe.
-
-        """
-
-        return pd.DataFrame(
-            data = [
-                {
-                    'units': self.ds[var].attrs['units'],
-                    'statistic_type':
-                        STATISTIC_ALIASES[self.ds[var].attrs['statistic_type']]
-                    }
-                for var in self.labels_to_keep
-                ],
-            index=self.labels_to_keep
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def write_to_TOA5(self, file_path):
-        """
+#         """
 
 
-        Args:
-            file_path (TYPE): DESCRIPTION.
+#         self.ds = xr.open_dataset(nc_file)
+#         self.labels_to_drop = (
+#             ['crs'] + [x for x in self.ds if 'QCFlag' in x]
+#             )
+#         self.labels_to_keep = [
+#             var for var in self.ds if not var in self.labels_to_drop
+#             ]
+#     #--------------------------------------------------------------------------
 
-        Returns:
-            None.
+#     #--------------------------------------------------------------------------
+#     def make_dataframe(self) -> pd.core.frame.DataFrame:
+#         """
+#         Strip back the dataset to the minimum required for the dataframe.
 
-        """
+#         Returns:
+#             dataframe.
 
-        headers = io.reformat_headers(
-            headers=(
-                self.make_headers()
-                .rename({'statistic_type': 'sampling'}, axis=1)
-                ),
-            output_format='TOA5'
-            )
-        data = io.reformat_data(
-            data=self.make_dataframe(),
-            output_format='TOA5'
-            )
-        io.write_data_to_file(
-            headers=headers,
-            data=data,
-            abs_file_path=file_path,
-            output_format='TOA5'
-            )
+#         """
 
-    #--------------------------------------------------------------------------
+#         return (
+#             self.ds
+#             .to_dataframe()
+#             .droplevel(['latitude', 'longitude'])
+#             .drop(self.labels_to_drop, axis=1)
+#             .rename_axis('DATETIME')
+#             )
+#     #--------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
+#     #--------------------------------------------------------------------------
+#     def make_headers(self) -> pd.core.frame.DataFrame:
+#         """
+#         Create the header dataframe required for the TOA5 conversion.
+
+#         Returns:
+#             dataframe.
+
+#         """
+
+#         return pd.DataFrame(
+#             data = [
+#                 {
+#                     'units': self.ds[var].attrs['units'],
+#                     'statistic_type':
+#                         STATISTIC_ALIASES[self.ds[var].attrs['statistic_type']]
+#                     }
+#                 for var in self.labels_to_keep
+#                 ],
+#             index=self.labels_to_keep
+#             )
+#     #--------------------------------------------------------------------------
+
+#     #--------------------------------------------------------------------------
+#     def write_to_TOA5(self, file_path):
+#         """
+
+
+#         Args:
+#             file_path (TYPE): DESCRIPTION.
+
+#         Returns:
+#             None.
+
+#         """
+
+#         headers = io.reformat_headers(
+#             headers=(
+#                 self.make_headers()
+#                 .rename({'statistic_type': 'sampling'}, axis=1)
+#                 ),
+#             output_format='TOA5'
+#             )
+#         data = io.reformat_data(
+#             data=self.make_dataframe(),
+#             output_format='TOA5'
+#             )
+#         io.write_data_to_file(
+#             headers=headers,
+#             data=data,
+#             abs_file_path=file_path,
+#             output_format='TOA5'
+#             )
+
+#     #--------------------------------------------------------------------------
+
+# #------------------------------------------------------------------------------
 
 ###############################################################################
 ### END nc CONVERTER CLASS ###
@@ -682,18 +683,17 @@ class StdDataConstructor():
 
     #--------------------------------------------------------------------------
     def __init__(
-            self, site: str, include_missing=False, concat_files: bool=True
+            self, site: str, concat_files: bool=True, error_on_missing=True,
+            constrain_last_to_flux=False
             ) -> None:
         """
         Assign metadata manager, missing variables and raw data and headers.
 
         Args:
             site: name of site.
-            include_missing (optional): if True, accesses the
-            requisite_variables yml for a list of minimum required variables,
-            and attempts to calculate anything missing.
             concat_files (optional): whether to concatenate backups.
-            Defaults to True.
+            error_on_missing (optional): whether to raise error if missing
+                variables are passed. Defaults to True.
 
         Returns:
             None.
@@ -702,16 +702,26 @@ class StdDataConstructor():
 
         # Set site and instance of metadata manager
         self.site = site
-        self.md_mngr = AugmentedMetaDataManager(
-            site=site, include_missing=include_missing
-            )
+        self.error_on_missing = error_on_missing
+        self.md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
+
+        # Use the file allocation of Fco2 as flux file
+        constrain_last_to_file = None
+        if constrain_last_to_flux:
+            constrain_last_to_file = (
+                self.md_mngr.data_path /
+                self.md_mngr.get_variable_attributes(
+                    variable='Fco2', return_field='file'
+                    )
+                )
 
         # Merge the raw data
         merge_dict = self.md_mngr.translate_variables_by_file(abs_path=True)
         rslt = merge_data(
             files=merge_dict,
             concat_files=concat_files,
-            interval=f'{int(self.md_mngr.get_site_details().time_step)}T'
+            interval=f'{int(self.md_mngr.get_site_details().time_step)}T',
+            constrain_last_to_file=constrain_last_to_file
             )
         self.data = rslt['data']
         self.headers = rslt['headers']
@@ -740,7 +750,8 @@ class StdDataConstructor():
         self._convert_units(df=output_data)
 
         # Calculate missing variables
-        self._calculate_missing(df=output_data)
+        if not self.md_mngr.missing_variables is None:
+            self._calculate_missing(df=output_data)
 
         # Apply range limits (if requested)
         self._apply_limits(df=output_data)
@@ -780,14 +791,20 @@ class StdDataConstructor():
 
         """
 
-
         for var in self.md_mngr.missing_variables.index:
-            rslt = ccf.get_function(variable=var, with_params=True)
-            args_dict = {
-                parameter: df[parameter] for parameter in
-                rslt[1]
-                }
-            df[var] = rslt[0](**args_dict)
+            try:
+                rslt = ccf.get_function(variable=var, with_params=True)
+                args_dict = {
+                    parameter: df[parameter] for parameter in
+                    rslt[1]
+                    }
+                df[var] = rslt[0](**args_dict)
+            except KeyError as e:
+                if self.error_on_missing:
+                    raise ValueError(
+                        f'No conversion function for variable {var}'
+                        ) from e
+                df[var] = np.nan
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -831,7 +848,7 @@ class StdDataConstructor():
                 output_headers.index, 'standard_units'
                 ]
             )
-        if len(self.md_mngr.missing_variables) > 0:
+        if self.md_mngr.missing_variables is not None:
             append_headers = (
                 self.md_mngr.missing_variables[['standard_units']]
                 .rename_axis('variable')
@@ -872,32 +889,6 @@ class StdDataConstructor():
 
 #------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-class AugmentedMetaDataManager(mh.MetaDataManager):
-    """Adds missing variables to standard MetaDataManager class"""
-
-    #--------------------------------------------------------------------------
-    def __init__(self, site, include_missing):
-
-        super().__init__(site, variable_map='vis')
-
-        # Get missing variables and create table
-        if include_missing:
-            requisite_variables = (
-                cm.get_global_configs(which='requisite_variables')['vis']
-                )
-            missing = [
-                variable for variable in requisite_variables if not
-                variable in self.site_variables.quantity.unique()
-                ]
-            if len(missing) > 0:
-                self.missing_variables = self.standard_variables.loc[missing]
-            else:
-                self.missing_variables = pd.DataFrame()
-    #--------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-
 ###############################################################################
 ### END VISUALISATION DATA BUILDER CLASS ###
 ###############################################################################
@@ -927,7 +918,9 @@ def write_to_std_file(site: str, concat_files: bool=True) -> None:
 
     # Get information for raw data
     data_const = StdDataConstructor(
-        site=site, include_missing=True, concat_files=concat_files
+        site=site,
+        concat_files=concat_files,
+        constrain_last_to_flux=site in CONSTRAIN_SITES_TO_FLUX
         )
 
     # Get path information from the embedded metadata manager
@@ -980,9 +973,13 @@ def append_to_std_file(site: str) -> None:
 
     """
 
+    logger.info(f'Beginning append for site {site}!')
+
     # Get information for raw data
     data_const = StdDataConstructor(
-        site=site, include_missing=True, concat_files=False
+        site=site,
+        concat_files=False,
+        constrain_last_to_flux = site in CONSTRAIN_SITES_TO_FLUX
         )
 
     # Get path information from the embedded metadata manager
@@ -1009,8 +1006,10 @@ def append_to_std_file(site: str) -> None:
     # Check to see if any new data exists relative to existing file
     append_data = new_data.loc[file_end_date:].drop(file_end_date)
     if len(append_data) == 0:
-        print('No new data to append')
+        logger.info('No new data to append')
         return
+
+    logger.info(f'Found {len(append_data)} records to append...')
 
     # Cross-check header content
     existing_headers = io.get_header_df(file=file_path).reset_index()
@@ -1051,20 +1050,26 @@ def append_to_std_file(site: str) -> None:
 
 #------------------------------------------------------------------------------
 def merge_data(
-        files: list | dict, concat_files: bool=False, interval=None
+        files: list | dict, concat_files: bool=False, interval=None,
+        constrain_last_to_file=None
         ) -> pd.core.frame.DataFrame:
     """
     Merge and align data and headers from different files.
 
     Args:
-        files: the absolute path of the files to parse.
-        If a list, all variables returned; if a dict, file is value, and key
-            is passed to the file_handler. That key can be a list of variables, or
-            a dictionary mapping translation of variable names (see file handler
-                                                                documentation).
-        concat_files (optional): concat backup files to current.
-            Defaults to False
-        interval (optional): resample files to passed interval.
+        files: the absolute path of the files to parse. If a list, all
+            variables returned; if a dict, file is value, and key is passed to
+            the file_handler. That key can be a list of variables, or a
+            dictionary mapping translation of variable names (see file handler
+            documentation).
+        concat_files (optional): concat backup files to current. Defaults to
+            False.
+        interval (optional): resample files to passed interval. Defaults to
+            None.
+        constrain_last_to_file (optional): if a valid file is passed (i.e. one
+            that exists and is present in the passed files), its final
+            timestamp is used as the final timestamp of the concatenated
+            dataset.
 
     Returns:
         merged data.
@@ -1073,11 +1078,28 @@ def merge_data(
 
     data_list, header_list = [], []
     for file in files:
+
+        # If type is dict, use dict keys as variable map
         try:
             usecols = files[file]
         except TypeError:
             usecols = None
-        data_handler = fh.DataHandler(file=file, concat_files=concat_files)
+
+        # Get file type, and disable file concatenation for all EddyPro files
+        file_type = io.get_file_type(file=file)
+        do_concat = concat_files == True
+        if file_type == 'EddyPro':
+            do_concat = False
+
+        # Get the data handler
+        data_handler = fh.DataHandler(file=file, concat_files=do_concat)
+
+        # Get the last date of the file to which to constrain end dates of all
+        constrain_to_date = None
+        if file == constrain_last_to_file:
+            constrain_to_date = data_handler.data.index[-1]
+
+        # Append data and headers to lists
         data_list.append(
             data_handler.get_conditioned_data(
                 usecols=usecols,
@@ -1091,10 +1113,15 @@ def merge_data(
                 usecols=usecols, drop_non_numeric=True
                 )
             )
-    return {
-        'headers': pd.concat(header_list),
-        'data': pd.concat(data_list, axis=1)
-        }
+
+    # Concatenate lists
+    headers = pd.concat(header_list).fillna('')
+    data = pd.concat(data_list, axis=1)
+    if constrain_to_date is not None:
+        data = data.loc[: constrain_to_date]
+
+    # Return
+    return {'headers': headers, 'data': data}
 #------------------------------------------------------------------------------
 
 ###############################################################################

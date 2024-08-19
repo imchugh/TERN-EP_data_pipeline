@@ -8,6 +8,7 @@ Created on Thu Nov  9 11:52:46 2023
 
 import numpy as np
 import pandas as pd
+import pathlib
 
 import file_handling.file_io as io
 import file_handling.file_concatenators as fc
@@ -20,25 +21,22 @@ import file_handling.file_concatenators as fc
 class DataHandler():
 
     #--------------------------------------------------------------------------
-    def __init__(self, file, concat_files=False):
+    def __init__(
+            self, file: pathlib.Path | str, concat_files:bool=False
+            ) -> None:
         """
         Set attributes of handler.
 
-        Parameters
-        ----------
-        file : str or pathlib.Path
-            Absolute path to file for which to create the handler.
-        concat_files : Boolean or list, optional
-            If False, the content of the passed file is parsed in isolation.
-            If True, any available backup (TOA5) or string-matched EddyPro
-            files stored in the same directory are concatenated.
-            If list, the files contained therein will be concatenated with the
-            main file.
-            The default is False.
+        Args:
+            file: absolute path to file for which to create the handler.
+            concat_files (optional): if false, the content of the passed file
+                is parsed in isolation. If true, any available backup (TOA5)
+                or string-matched EddyPro files stored in the same directory
+                are concatenated. If list, the files contained therein will be
+                concatenated with the main file. Defaults to False.
 
-        Returns
-        -------
-        None.
+        Returns:
+            None.
 
         """
 
@@ -49,46 +47,37 @@ class DataHandler():
 
     #--------------------------------------------------------------------------
     def get_conditioned_data(self,
-            usecols=None, output_format=None, drop_non_numeric=False,
-            monotonic_index=False, resample_intvl=None,
-            raise_if_dupe_index=False
-            ):
+            usecols: list | dict=None, output_format: str=None,
+            drop_non_numeric: bool=False, monotonic_index: bool=False,
+            resample_intvl: int=None, raise_if_dupe_index: bool=False
+            ) -> pd.DataFrame:
         """
-        Generate a conditioned version of the data. Duplicate data are dropped.
+        Condition and output a copy of the underlying data.
 
-        Parameters
-        ----------
-        usecols : list or dict, optional
-            The columns to include in the output. If a dict is passed, then
-            the columns are renamed, with the mapping from existing to new
-            defined by the key (old name): value (new_name) pairs.
-            The default is None.
-        output_format : str, optional
-            The format for data output (None, TOA5 or EddyPro).
-            The default is None.
-        drop_non_numeric : bool, optional
-            Purge the non-numeric columns from the conditioned data. If false,
-            the non-numeric columns will be included even if excluded from
-            usecols. If true they will be dropped even if included in usecols.
-            The default is False.
-        monotonic_index : bool, optional
-            Align the data to a monotonic index. The default is False.
-        resample_intvl : date_offset, optional
-            The time interval to which the data should be resampled.
-            The default is None.
-        raise_if_dupe_index : bool, optional
-            Raise an error if duplicate indices are found with non-duplicate
-            data. The default is False.
+        Args:
+            usecols (optional): the list of columns to include in the output.
+                If a dict is passed, the columns are renamed, with the mapping
+                from existing to new defined by the key (old name): value
+                (new_name) pairs. Defaults to None.
+            output_format (optional): format for data output (None, TOA5 or
+                EddyPro).Defaults to None.
+            drop_non_numeric (optional): purge the non-numeric columns from the
+                conditioned data. If false, the non-numeric columns will be
+                included even if excluded from usecols. If true they will be
+                dropped even if included in usecols. Defaults to False.
+            monotonic_index (optional): align the data to a monotonic index.
+                Defaults to False.
+            resample_intvl (optional): time interval to which the data should
+                be resampled. Defaults to None.
+            raise_if_dupe_index (optional): raise an error if duplicate indices
+                are found with non-duplicate data. Defaults to False.
 
-        Raises
-        ------
-        RuntimeError
-            Raised if duplicate indices are found with non-duplicate data.
+        Raises:
+            RuntimeError: raised if duplicate indices are found with
+                non-duplicate data.
 
-        Returns
-        -------
-        pd.core.frame.DataFrame
-            Dataframe with altered data.
+        Returns:
+            Copy of underlying dataframe with altered data.
 
         """
 
@@ -134,6 +123,18 @@ class DataHandler():
     def get_conditioned_headers(
             self, usecols=None, output_format=None, drop_non_numeric=False
             ):
+        """
+
+
+        Args:
+            usecols (TYPE, optional): DESCRIPTION. Defaults to None.
+            output_format (TYPE, optional): DESCRIPTION. Defaults to None.
+            drop_non_numeric (TYPE, optional): DESCRIPTION. Defaults to False.
+
+        Returns:
+            TYPE: DESCRIPTION.
+
+        """
         """
 
 

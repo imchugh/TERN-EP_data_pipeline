@@ -1,4 +1,4 @@
-max# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Created on Fri Feb 24 14:05:44 2023
 
@@ -197,8 +197,7 @@ def convert_variable(variable):
         'Fco2': convert_CO2_flux,
         'Sig_IRGA': convert_CO2_signal,
         'RH': convert_RH,
-        'CO2': convert_CO2_density,
-        'CO2_density': convert_CO2_density,
+        'CO2c_IRGA': convert_CO2_density,
         'AH_IRGA': convert_H2O_density,
         'AH': convert_H2O_density,
         'Ta': convert_temperature,

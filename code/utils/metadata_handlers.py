@@ -14,6 +14,7 @@ Todo:
 
 """
 
+import numpy as np
 import pandas as pd
 
 import utils.configs_manager as cm
@@ -63,19 +64,8 @@ class MetaDataManager():
                 )
             )
 
-        # Create global standard variables table
-        self.standard_variables = (
-            pd.DataFrame(cm.get_global_configs(which='pfp_std_names'))
-            .T
-            .rename_axis('variable')
-            )
-
         # Create site-based variables table
-        self.site_variables = (
-            self._get_site_variable_map()
-            .pipe(self._test_variable_conformity)
-            .pipe(self._map_table_to_file)
-            )
+        self._parse_site_variables()
 
         # Get flux instrument types
         self.instruments = self._get_inst_type()
@@ -85,7 +75,7 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _get_site_variable_map(self) -> pd.DataFrame:
+    def _parse_site_variables(self) -> pd.DataFrame:
         """
         Get the site variable names / attributes.
 
@@ -94,7 +84,8 @@ class MetaDataManager():
 
         """
 
-        return (
+        # Get the variable map and check the conformity of all names
+        df = (
             pd.DataFrame(
                 cm.get_site_variable_configs(
                     site=self.site, which=self.variable_map
@@ -102,6 +93,21 @@ class MetaDataManager():
                 )
             .T
             .rename_axis('std_name')
+            .replace('', np.nan)
+            .pipe(self._test_variable_conformity)
+            )
+
+        # Assign missing variables
+        missing_variables = df.loc[pd.isnull(df.name)]
+        if len(missing_variables) == 0:
+            missing_variables = None
+        self.missing_variables = missing_variables
+
+        # Assign extant variables and ensure valid file names are either
+        # present or generated
+        self.site_variables = (
+            df.loc[~pd.isnull(df.name)]
+            .pipe(self._test_file_assignment)
             )
     #--------------------------------------------------------------------------
 
@@ -133,7 +139,7 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _map_table_to_file(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _test_file_assignment(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Generate standard file names based on site, logger and table names.
 
@@ -145,11 +151,43 @@ class MetaDataManager():
 
         """
 
-        df['file'] = list(map(
-            lambda x: f'{self.site}_{x[0]}_{x[1]}.dat',
-            zip(df.logger.tolist(), df.table.tolist())
-            ))
-        return df
+        file_list = []
+
+        if 'file' in df.columns:
+
+            if any(pd.isnull(df['file'])):
+                raise TypeError(
+                    'If configuration file contains file definitions, they '
+                    'must ALL be of type string!'
+                    )
+            file_list = df.file.tolist()
+
+        elif 'logger' and 'table' in df.columns:
+
+            if any(pd.isnull(df[['logger', 'table']]).any()):
+                raise TypeError(
+                    'If configuration file contains logger and table '
+                    'definitions, they  must ALL be of type string!'
+                    )
+            file_list = (
+                f'{self.site}_' +
+                df[['logger', 'table']].agg('_'.join, axis=1) +
+                '.dat'
+                )
+
+        else:
+
+            raise RuntimeError(
+                'Either logger and table, or the file name must be listed '
+                'in the configuration file!'
+                )
+
+        for file in np.unique(file_list):
+            if not (self.data_path / file).exists():
+                raise FileNotFoundError(
+                    f'File {file} does not exist in the data path'
+                    )
+        return df.assign(file=file_list).fillna('')
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -169,24 +207,21 @@ class MetaDataManager():
         for instrument in ['SONIC', 'IRGA']:
             var_list = [x for x in self.site_variables.index if instrument in x]
             inst_list = self.site_variables.loc[var_list].instrument.unique()
-            if not len(inst_list) == 1:
+            if len(inst_list) > 1:
                 raise RuntimeError(
                     'More than one instrument specified as instrument attribute '
                     f'for {instrument} device variable ({", ".join(inst_list)})'
                     )
-            rslt.update({instrument: inst_list[0]})
+            elif len(inst_list) == 0:
+                rslt.update({instrument: None})
+            else:
+                rslt.update({instrument: inst_list[0]})
         return rslt
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
     def get_site_details(self) -> pd.Series:
-        """
-        Get the non-variable site details.
-
-        Returns:
-            The details.
-
-        """
+        """ Get the non-variable site details."""
 
         return site_details().get_single_site_details(site=self.site)
     #--------------------------------------------------------------------------

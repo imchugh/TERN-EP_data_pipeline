@@ -23,8 +23,10 @@ nav:
   - Network architecture: network_architecture.md
   - Data visualisation: visualisation.md
   - Code:
-    - Raw data handling: file_handling.md
-    - Metadata handling: metadata.md
-    - Data merging / construction: reference.md
-    - Network status: status.md
+    - Overview: test.md
+    - Modules:
+      - Raw data handling: file_handling.md
+      - Metadata handling: metadata.md
+      - Data merging / construction: reference.md
+      - Network status: status.md
 

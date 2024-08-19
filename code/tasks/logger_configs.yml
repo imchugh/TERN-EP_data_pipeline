@@ -6,8 +6,9 @@ formatters:
 handlers:
   file:
     level: INFO
-    class: logging.FileHandler
+    class: logging.handlers.RotatingFileHandler
     formatter: default
+    maxBytes: 5242880
   console:
     level: INFO
     class: logging.StreamHandler

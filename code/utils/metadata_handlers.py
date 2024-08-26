@@ -19,8 +19,7 @@ import pandas as pd
 
 import utils.configs_manager as cm
 import file_handling.file_io as io
-from sparql_site_details import site_details
-
+from utils.site_details import SiteDetails
 
 paths = cm.PathsManager()
 SPLIT_CHAR = '_'
@@ -223,7 +222,7 @@ class MetaDataManager():
     def get_site_details(self) -> pd.Series:
         """ Get the non-variable site details."""
 
-        return site_details().get_single_site_details(site=self.site)
+        return SiteDetails().get_single_site_details(site=self.site)
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------

@@ -55,6 +55,7 @@ STATISTIC_ALIASES = {'average': 'Avg', 'variance': 'Vr', 'sum': 'Tot'}
 TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 MERGED_FILE_NAME = '<site>_merged_std.dat'
 CONSTRAIN_SITES_TO_FLUX = ['CumberlandPlain']
+paths = cm.PathsManager()
 logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
@@ -859,33 +860,33 @@ class StdDataConstructor():
         return output_headers
     #--------------------------------------------------------------------------
 
-    #--------------------------------------------------------------------------
-    def write_to_file(self, path_to_file: pathlib.Path | str=None) -> None:
-        """
-        Write data to file.
+    # #--------------------------------------------------------------------------
+    # def write_to_file(self, path_to_file: pathlib.Path | str=None) -> None:
+    #     """
+    #     Write data to file.
 
-        Args:
-            path_to_file (optional): output file path. If None, slow data path
-            and default name used. Defaults to None.
+    #     Args:
+    #         path_to_file (optional): output file path. If None, slow data path
+    #         and default name used. Defaults to None.
 
-        Returns:
-            None.
+    #     Returns:
+    #         None.
 
-        """
+    #     """
 
-        if not path_to_file:
-            path_to_file = (
-                self.md_mngr.data_path / f'{self.site}_merged.dat'
-                )
-        headers = self.parse_headers()
-        data = self.parse_data()
-        io.write_data_to_file(
-            headers=io.reformat_headers(headers=headers, output_format='TOA5'),
-            data=io.reformat_data(data=data, output_format='TOA5'),
-            abs_file_path=path_to_file,
-            output_format='TOA5'
-            )
-    #--------------------------------------------------------------------------
+    #     if not path_to_file:
+    #         path_to_file = (
+    #             self.md_mngr.data_path / f'{self.site}_merged.dat'
+    #             )
+    #     headers = self.parse_headers()
+    #     data = self.parse_data()
+    #     io.write_data_to_file(
+    #         headers=io.reformat_headers(headers=headers, output_format='TOA5'),
+    #         data=io.reformat_data(data=data, output_format='TOA5'),
+    #         abs_file_path=path_to_file,
+    #         output_format='TOA5'
+    #         )
+    # #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 
@@ -914,8 +915,6 @@ def write_to_std_file(site: str, concat_files: bool=True) -> None:
 
     """
 
-    logger.info(f'Merging data for site {site}...')
-
     # Get information for raw data
     data_const = StdDataConstructor(
         site=site,
@@ -924,13 +923,16 @@ def write_to_std_file(site: str, concat_files: bool=True) -> None:
         )
 
     # Get path information from the embedded metadata manager
-    file_path = pathlib.Path(f'E:/Scratch/{site}_merged_std.dat')
-    # file_path = data_const.md_mngr.data_path / MERGED_FILE_NAME
+    # Get path information
+    file_path = paths.get_local_stream_path(
+        resource='visualisation',
+        stream='standardised_data',
+        site=site
+        )
     if file_path.exists():
         raise FileExistsError('File already created!')
 
-    logger.info('... done!')
-    logger.info(f'Writing data to file {file_path.name}')
+    logger.info(f'Merging data for site {site}...')
 
     # Parse data and reformat to TOA5
     data = io.reformat_data(
@@ -945,16 +947,25 @@ def write_to_std_file(site: str, concat_files: bool=True) -> None:
             output_format='TOA5'
             )
         )
+    logger.info('... done!')
+
+    logger.info(f'Writing data to file {file_path.name}')
+
+    # Rewrite info line to reflect the fact that tables are merged
+    info = io.FILE_CONFIGS['TOA5']['dummy_info'][:-1]
+    info.append('merged')
+    info = dict(zip(io.INFO_FIELDS, info))
 
     # Write data to file
     io.write_data_to_file(
         headers=headers,
         data=data,
         abs_file_path=file_path,
-        output_format='TOA5'
+        output_format='TOA5',
+        info=info
         )
 
-    logger.info('Done')
+    logger.info('... done')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -973,8 +984,6 @@ def append_to_std_file(site: str) -> None:
 
     """
 
-    logger.info(f'Beginning append for site {site}!')
-
     # Get information for raw data
     data_const = StdDataConstructor(
         site=site,
@@ -982,11 +991,17 @@ def append_to_std_file(site: str) -> None:
         constrain_last_to_flux = site in CONSTRAIN_SITES_TO_FLUX
         )
 
-    # Get path information from the embedded metadata manager
-    file_path = pathlib.Path(f'E:/Scratch/{site}_merged_std.dat')
-    # file_path = data_const.md_mngr.data_path / MERGED_FILE_NAME
+    # Get path information
+    file_path = paths.get_local_stream_path(
+        resource='visualisation',
+        stream='standardised_data',
+        site=site
+        )
+
     if not file_path.exists():
         raise FileNotFoundError('No standard file exists to append to!')
+
+    logger.info(f'Beginning append for site {site}!')
 
     # Get the data and format as TOA5
     new_data = io.reformat_data(
@@ -1021,9 +1036,7 @@ def append_to_std_file(site: str) -> None:
         .reset_index()
         )
     for column in existing_headers:
-        try:
-            assert all(new_headers==existing_headers)
-        except AssertionError:
+        if not all(new_headers==existing_headers):
             raise RuntimeError(
                 f'header row {column} in new data does not match header row '
                 'in existing file!'
@@ -1036,6 +1049,25 @@ def append_to_std_file(site: str) -> None:
         na_rep=file_configs['na_values'], sep=file_configs['separator'],
         quoting=file_configs['quoting']
         )
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def generate_std_file(site):
+    """
+
+
+    Args:
+        site (TYPE): DESCRIPTION.
+
+    Returns:
+        None.
+
+    """
+
+    try:
+        append_to_std_file(site=site)
+    except FileNotFoundError:
+        write_to_std_file(site=site)
 #------------------------------------------------------------------------------
 
 ###############################################################################

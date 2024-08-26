@@ -20,8 +20,8 @@ import os
 #------------------------------------------------------------------------------
 # CUSTOM IMPORTS
 import utils.configs_manager as cm
-import file_handler as fh
-import file_io as io
+import file_handling.file_handler as fh
+import file_handling.file_io as io
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -67,7 +67,7 @@ def append_to_eddypro_file(site: str) -> None:
     # Get dates and log info
     master_dates = io.get_start_end_dates(file=data_path / master_file)
     logger.info(f'Found master EddyPro master file {master_file}')
-    logger.info('Last record in master file is {master_dates["end_date"]}')
+    logger.info(f'Last record in master file is {master_dates["end_date"]}')
 
     # Get the individual files and iterate over dates to find missing
     files = list(data_path.glob(f'*{EP_SEARCH_STR}*.txt'))
@@ -124,6 +124,15 @@ def write_to_eddypro_file(site: str) -> None:
     # Get the file handler and write to new master
     handler = fh.DataHandler(file=output_file, concat_files=files_to_append)
     handler.write_conditioned_data(data_path / output_file)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def update_eddypro_master(site):
+
+    try:
+        append_to_eddypro_file(site=site)
+    except FileNotFoundError:
+        write_to_eddypro_file(site=site)
 #------------------------------------------------------------------------------
 
 ###############################################################################

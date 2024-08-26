@@ -6,6 +6,7 @@ Created on Thu Jul 11 14:42:54 2024
 """
 
 import datetime as dt
+import geojson
 import logging
 import numpy as np
 import os
@@ -16,21 +17,22 @@ import file_handling.file_io as io
 import file_handling.file_handler as fh
 from utils.configs_manager import PathsManager
 import utils.metadata_handlers as mh
-from sparql_site_details import site_details
+from utils.site_details import SiteDetails as sd
 
 paths_mngr = PathsManager()
-sd_mngr = site_details()
-
+sd_mngr = sd()
+site_list = [
+    'AliceSpringsMulga', 'Boyagin', 'Calperum', 'Fletcherview', 'Gingin',
+    'GreatWesternWoodlands', 'HowardSprings', 'Litchfield', 'MyallValeA',
+    'MyallValeB', 'Ridgefield', 'SnowGum', 'SturtPlains', 'Wellington',
+    'Yanco'
+    ]
+SUBSET = ['Fco2', 'Fh', 'Fe', 'Fsd']
 logger = logging.getLogger(__name__)
 
 ###############################################################################
 ### BEGIN MAIN FUNCTIONS ###
 ###############################################################################
-
-def throw_error():
-
-    raise RuntimeError('Shes a biggun!')
-
 
 #------------------------------------------------------------------------------
 def write_status_xlsx() -> None:
@@ -38,12 +40,6 @@ def write_status_xlsx() -> None:
 
     # Inits
     output_path = 'E:/Scratch/status_test.xlsx'
-    site_list = [
-        'AliceSpringsMulga', 'Boyagin', 'Calperum', 'Fletcherview', 'Gingin',
-        'GreatWesternWoodlands', 'HowardSprings', 'Litchfield', 'MyallValeA',
-        'MyallValeB', 'Ridgefield', 'SnowGum', 'SturtPlains', 'Wellington',
-        'Yanco'
-        ]
     run_time = dt.datetime.now()
 
     slow_file_status_list = []
@@ -106,12 +102,87 @@ def write_status_xlsx() -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def write_status_json():
+def write_status_geojson():
 
-    DATA_SUBSET = ['Fco2', 'Fe', 'Fh', 'Fsd']
+    rslt_list = []
+    output_path = 'E:/Scratch/network_status.json'
 
-    input_path = ''
-    pass
+    logging.info('Scanning network: ')
+    for site in site_list:
+
+        logging.info(f'    - retrieving status for site {site}...')
+
+        file = (
+            paths_mngr.get_local_stream_path(
+                resource='data', stream='flux_slow', site=site
+                ) /
+            f'{site}_merged_std.dat'
+            )
+        df = slow_data_test(file=file, use_subset=SUBSET)
+        rslt = {'days_since_last_record': df.days_since_last_record.max()}
+        rslt.update(df.days_since_last_valid_record.to_dict())
+        rslt_list.append(
+            geojson.Feature(
+                id=site,
+                geometry=geojson.Point(coordinates=[
+                    sd_mngr.df.loc[site, 'latitude'],
+                    sd_mngr.df.loc[site, 'longitude']
+                    ]),
+                properties=rslt
+                )
+            )
+
+        logging.info('    ... done!')
+
+    logging.info('Scan complete - dumping to file...')
+
+    json_obj = geojson.FeatureCollection(rslt_list)
+    with open(file=output_path, mode='w', encoding='utf-8') as f:
+        geojson.dump(json_obj,f,indent=4)
+
+    logging.info('... done!')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def slow_data_test(file, use_subset=None):
+
+    dummy_dict = {
+        'last_valid_value': None,
+        'last_valid_record_datetime': None,
+        'last_24hr_pct_valid': 0,
+        'days_since_last_valid_record': 'N/A'
+        }
+    now = dt.datetime.now()
+    rslt_list = []
+
+    df = io.get_data(file=file, usecols=use_subset).drop('TIMESTAMP', axis=1)
+    dt_last_rec = (now - df.index[-1]).days
+    for var in SUBSET:
+        s = df[var].dropna()
+        if len(s) == 0:
+            rslt_list.append(dummy_dict)
+            continue
+
+        lvr = s.iloc[-1]
+        dt_lvr = s.index[-1]
+        how_old = (now - dt_lvr).days
+        pct_valid = 0
+        if not how_old > 0:
+            pct_valid = round(
+                len(s.loc[now - dt.timedelta(days=1): now]) /
+                len(df[var].loc[now - dt.timedelta(days=1): now]) *
+                100
+                )
+        rslt_list.append(
+            {
+                'days_since_last_record': dt_last_rec,
+                'last_valid_value': lvr,
+                'last_valid_record_datetime': dt_lvr,
+                'last_24hr_pct_valid': pct_valid,
+                'days_since_last_valid_record': how_old
+                }
+            )
+    return pd.DataFrame(rslt_list, index=SUBSET)
 #------------------------------------------------------------------------------
 
 ###############################################################################
@@ -185,7 +256,9 @@ def get_slow_file_status(
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def get_slow_data_status(site: str, md_mngr=None, run_time=None) -> pd.DataFrame:
+def get_slow_data_status(
+        site: str, md_mngr=None, run_time=None, use_subset=None
+        ) -> pd.DataFrame:
     """
     Get the status of variables mapped in the metadata manager.
 
@@ -196,6 +269,8 @@ def get_slow_data_status(site: str, md_mngr=None, run_time=None) -> pd.DataFrame
         run_time (optional): the time to use for calculation of time since
             valid variables reported. If not supplied, system time at runtime is
             used. Defaults to None.
+        use_subset (optional): the subset of columns to include when extracting
+            data from file. Defaults to None.
 
     Returns:
         Dataframe containing the status of all mapped variables.
@@ -219,7 +294,13 @@ def get_slow_data_status(site: str, md_mngr=None, run_time=None) -> pd.DataFrame
         )
     l = []
     now = dt.datetime.now()
-    for var in data_df.columns:
+
+    # Iterate over columns (or subset if passed)
+    if use_subset is not None:
+        var_list = use_subset
+    else:
+        var_list = data_df.columns
+    for var in var_list:
 
         # If the variable is constructed, it will not have any attributes
         try:
@@ -260,7 +341,7 @@ def get_slow_data_status(site: str, md_mngr=None, run_time=None) -> pd.DataFrame
     return (
         pd.DataFrame(
             data=l,
-            index=data_df.columns)
+            index=var_list)
         .rename_axis('variable')
         )
 #------------------------------------------------------------------------------
@@ -281,12 +362,9 @@ def get_fast_file_status(site: str, run_time: dt.datetime=None) -> dict:
 
     """
 
-    # Create dummy dictionary to pass if error
+    # INITS
     dummy_dict = {'file_name': 'No files', 'days_since_last_record': None}
-
-    # Use passed run time if exists, otherwise get current
-    if run_time is None:
-        run_time = dt.datetime.now()
+    run_time = dt.datetime.now()
 
     # Get data path to raw file
     try:

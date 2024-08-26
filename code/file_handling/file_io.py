@@ -23,19 +23,20 @@ import csv
 import datetime as dt
 import os
 from typing import Callable
+import yaml
 
 import numpy as np
 from numpy.typing import ArrayLike
 import pandas as pd
 import pathlib
 
-import utils.configs_manager as cm
-
 ###############################################################################
 ### CONSTANTS ###
 ###############################################################################
 
-FILE_CONFIGS = cm.get_global_configs(which='file_formats')
+configs_path = pathlib.Path(__file__).parent / 'file_configs.yml'
+with open(configs_path) as f:
+    FILE_CONFIGS = yaml.safe_load(stream=f)
 
 INFO_FIELDS = [
     'format', 'station_name', 'logger_type', 'serial_num', 'OS_version',

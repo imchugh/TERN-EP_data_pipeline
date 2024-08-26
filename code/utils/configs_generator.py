@@ -15,9 +15,9 @@ import pathlib
 import yaml
 from configobj import ConfigObj
 
-import file_handling.file_io as io
-from utils.configs_manager import PathsManager
-from sparql_site_details import site_details
+import io
+from .configs_manager import PathsManager
+from .site_details import SiteDetails
 
 GLOBAL_ATTRS = [
     'Conventions', 'acknowledgement', 'altitude',  'canopy_height', 'comment',
@@ -52,7 +52,7 @@ ALIAS_DICT = {'elevation': 'altitude'}
 DEVICES = ['modem', 'logger', 'camera']
 
 paths_mngr = PathsManager()
-Details = site_details()
+Details = SiteDetails()
 
 ###############################################################################
 ### BEGIN MULTI-SITE CONFIGURATION GENERATOR SECTION ###
@@ -564,6 +564,7 @@ class PFPL1CntlToXl():
 
 #------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
 def pfp_std_names_to_yml():
     """
     Write yml configuration file of pfp naming conventions.
@@ -589,12 +590,15 @@ def pfp_std_names_to_yml():
         )
     with open(file=file_path / 'pfp_std_names.yml', mode='w', encoding='utf-8') as f:
         yaml.dump(data=data, stream=f, sort_keys=False)
+#------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
 def _selective_strip(df):
 
     for this_col in df.select_dtypes(include='object').columns:
-        df[this_col] = df[this_col].str.strip()
+        df[this_col] = df[this_col].astype(str).str.strip()
     return df
+#------------------------------------------------------------------------------
 
 def PFPL1XlToYml(site: str):
     """

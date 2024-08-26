@@ -21,8 +21,12 @@ import yaml
 ### CONSTANTS ###
 #------------------------------------------------------------------------------
 
-LOCAL_CONFIG_PATH_FILE = pathlib.Path('E:/Config_files/Paths/local_paths.yml')
-REMOTE_CONFIG_PATH_FILE = pathlib.Path('E:/Config_files/Paths/remote_paths.yml')
+LOCAL_CONFIG_PATH_FILE = pathlib.Path(
+    'E:/Config_files/Global/Paths/local_paths.yml'
+    )
+REMOTE_CONFIG_PATH_FILE = pathlib.Path(
+    'E:/Config_files/Global/Paths/remote_paths.yml'
+    )
 REMOTE_ALIAS_DICT = {
     'AliceSpringsMulga': 'AliceMulga', 'Longreach': 'MitchellGrassRangeland'
     }
@@ -421,7 +425,7 @@ class GlobalConfigsManager():
         """
 
         return [key for key, value in self.paths.items()
-                if value.parts[2] == 'Globals'
+                if value.parts[2] == 'Global'
                 ]
     #--------------------------------------------------------------------------
 
@@ -444,6 +448,27 @@ class GlobalConfigsManager():
                 f'"which" must be one of {", ".join(allowed_list)}'
                 )
         return _get_generic_configs(file=self.paths[which])
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_task_configs(self):
+        """Get the task configuration information."""
+
+        return _get_generic_configs(file=self.paths['tasks'])
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_network_task_configs(self):
+        """Get the network-based task configuration information."""
+
+        return self.get_task_configs()['network_tasks']
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_all_site_task_configs(self):
+        """Get the site-based task configuration information for all sites."""
+
+        return self.get_task_configs()['site_tasks']
     #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -515,6 +540,20 @@ class SiteConfigsManager(GlobalConfigsManager):
         return _get_generic_configs(file=self.paths[f'variables_{which}'])
     #--------------------------------------------------------------------------
 
+    #--------------------------------------------------------------------------
+    def get_site_task_configs(self):
+        """Get the task configurations for the site."""
+
+        return self.get_task_configs()['site_tasks'][self.site]
+    #--------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_site_details_configs(from_file):
+
+
+    pass
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -591,10 +630,10 @@ def get_global_configs(which):
         Dictionary of configuration elements.
 
     """
-
     return GlobalConfigsManager().get_global_configs(which=which)
 #------------------------------------------------------------------------------
 
 ###############################################################################
 ### END CONFIG GETTER FUNCTIONS ###
 ###############################################################################
+

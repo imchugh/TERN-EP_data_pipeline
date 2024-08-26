@@ -230,6 +230,13 @@ def calculate_AH_from_RH(Ta: pd.Series, RH: pd.Series, ps: pd.Series):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+def calculate_dew_point(Ta: pd.Series, RH: pd.Series) -> pd.Series:
+
+    b = (np.log(RH / 100) + ((17.27 * Ta) / (237.3 + Ta))) / 17.27
+    return (237.3 * b) / (1 - b)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
 def calculate_CO2_density(
         CO2: pd.Series, Ta: pd.Series, ps: pd.Series
         ) -> pd.Series:
@@ -288,6 +295,7 @@ def get_function(variable, with_params=True):
         'es': calculate_es,
         'e': calculate_e,
         'AH': calculate_AH_from_RH,
+        'Td': calculate_dew_point,
         'molar_density': calculate_molar_density,
         'CO2': calculate_CO2_mole_fraction,
         'CO2_IRGA': calculate_CO2_mole_fraction,

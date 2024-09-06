@@ -254,7 +254,7 @@ class DataHandler():
         n_missing = len(complete_index) - len(data)
         return {
             'n_missing': n_missing,
-            '%_missing': round(n_missing / len(complete_index) * 100, 2),
+            'pct_missing': round(n_missing / len(complete_index) * 100, 2),
             }
     #--------------------------------------------------------------------------
 

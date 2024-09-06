@@ -38,7 +38,7 @@ configs_path = pathlib.Path(__file__).parent / 'file_configs.yml'
 with open(configs_path) as f:
     FILE_CONFIGS = yaml.safe_load(stream=f)
 
-INFO_FIELDS = [
+INFO_FIELD_NAMES = [
     'format', 'station_name', 'logger_type', 'serial_num', 'OS_version',
     'program_name', 'program_sig', 'table_name'
     ]
@@ -238,11 +238,11 @@ def get_file_info(
     # If dummy override (or EddyPro, which has no file info) requested,
     # return dummy info
     if dummy_override or file_type == 'EddyPro':
-        return dict(zip(INFO_FIELDS, FILE_CONFIGS[file_type]['dummy_info']))
+        return dict(zip(INFO_FIELD_NAMES, FILE_CONFIGS[file_type]['dummy_info']))
 
     # Otherwise get the TOA5 file info from the file
     return dict(zip(
-        INFO_FIELDS,
+        INFO_FIELD_NAMES,
         get_file_headers(
             file=file,
             begin=FILE_CONFIGS['TOA5']['info_line'],
@@ -351,7 +351,7 @@ def write_data_to_file(
     if output_format == 'TOA5':
         if info is None:
             info = dict(zip(
-                INFO_FIELDS,
+                INFO_FIELD_NAMES,
                 FILE_CONFIGS[output_format]['dummy_info']
                 ))
         row_list.append(list(info.values()))
@@ -437,11 +437,27 @@ def read_excel(
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def get_file_n_lines(file):
+def read_yml(file: str | pathlib.Path):
+    """Read yml file"""
 
-    with open(file, 'rb') as f:
-        return sum(1 for _ in f)
+    with open(file) as f:
+        return yaml.safe_load(stream=f)
 #------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def write_yml(file: str | pathlib.Path, data: dict) -> None:
+    """Write yml file"""
+
+    with open(file=file, mode='w', encoding='utf-8') as f:
+        return yaml.dump(data=data, stream=f, sort_keys=False)
+#------------------------------------------------------------------------------
+
+# #------------------------------------------------------------------------------
+# def get_file_n_lines(file):
+
+#     with open(file, 'rb') as f:
+#         return sum(1 for _ in f)
+# #------------------------------------------------------------------------------
 
 
 ###############################################################################

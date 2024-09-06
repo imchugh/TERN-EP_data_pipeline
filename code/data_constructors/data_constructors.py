@@ -37,7 +37,8 @@ import pathlib
 import xarray as xr
 
 import data_constructors.convert_calc_filter as ccf
-import utils.configs_manager as cm
+from utils.paths_manager import PathsManager
+import utils.configs_getters as cg
 import file_handling.file_io as io
 import file_handling.file_handler as fh
 import utils.metadata_handlers as mh
@@ -55,7 +56,7 @@ STATISTIC_ALIASES = {'average': 'Avg', 'variance': 'Vr', 'sum': 'Tot'}
 TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 MERGED_FILE_NAME = '<site>_merged_std.dat'
 CONSTRAIN_SITES_TO_FLUX = ['CumberlandPlain']
-paths = cm.PathsManager()
+paths = PathsManager()
 logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
@@ -116,7 +117,7 @@ class L1DataConstructor():
 
         """
 
-        global_attrs = cm.get_global_configs(which='nc_generic_attrs')
+        global_attrs = cg.get_global_configs(which='nc_generic_attrs')
         new_dict = {
             'metadata_link':
                 global_attrs['metadata_link'].replace('<site>', self.site),
@@ -336,7 +337,7 @@ class L1DataConstructor():
 
         """
 
-        dim_attrs = cm.get_global_configs(which='nc_dim_attrs')
+        dim_attrs = cg.get_global_configs(which='nc_dim_attrs')
         for dim in ds.dims:
             ds[dim].attrs = dim_attrs[dim]
     #--------------------------------------------------------------------------
@@ -392,7 +393,7 @@ class L1DataConstructor():
 
         """
 
-        dim_attrs = cm.get_global_configs(which='nc_dim_attrs')
+        dim_attrs = cg.get_global_configs(which='nc_dim_attrs')
         ds['crs'] = (
             ['time', 'latitude', 'longitude'],
             np.tile(np.nan, (len(ds.time), 1, 1)),
@@ -925,8 +926,8 @@ def write_to_std_file(site: str, concat_files: bool=True) -> None:
     # Get path information from the embedded metadata manager
     # Get path information
     file_path = paths.get_local_stream_path(
-        resource='visualisation',
-        stream='standardised_data',
+        resource='homogenised_data',
+        stream='TOA5',
         site=site
         )
     if file_path.exists():
@@ -993,8 +994,8 @@ def append_to_std_file(site: str) -> None:
 
     # Get path information
     file_path = paths.get_local_stream_path(
-        resource='visualisation',
-        stream='standardised_data',
+        resource='homogenised_data',
+        stream='TOA5',
         site=site
         )
 
@@ -1043,7 +1044,7 @@ def append_to_std_file(site: str) -> None:
                 )
 
     # Append to existing
-    file_configs = cm.get_global_configs(which='file_formats')['TOA5']
+    file_configs = io.FILE_CONFIGS['TOA5']
     append_data.to_csv(
         path_or_buf=file_path, mode='a', header=False, index=False,
         na_rep=file_configs['na_values'], sep=file_configs['separator'],

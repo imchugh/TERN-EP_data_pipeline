@@ -4,23 +4,24 @@ Created on Mon Sep 12 12:34:58 2022
 
 @author: jcutern-imchugh
 
-This script fetches flux stations from TERN's SPARQL endpoint
+This script fetches flux station details from TERN's SPARQL endpoint
 """
 
 #------------------------------------------------------------------------------
 ### STANDARD IMPORTS ###
 import datetime as dt
-import ephem
 import numpy as np
 import pandas as pd
 from pytz import timezone
 import requests
 from timezonefinder import TimezoneFinder
+import yaml
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # CUSTOM IMPORTS #
-from utils.configs_manager import PathsManager
+from utils.paths_manager import PathsManager
+from utils import configs_getters as cg
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -291,139 +292,60 @@ class SiteDetails():
         return self.df.loc[site, field]
     #--------------------------------------------------------------------------
 
-    #--------------------------------------------------------------------------
-    def _get_sunrise_sunset(
-            self, site, date, state, which='next', utc=False, default_elev=100
-            ):
-        """
-        Retrieve sunrise and sunset times from ephem.
-
-        Parameters
-        ----------
-        site : str
-            Site name.
-        date : pydatetime
-            The datetime for which to generate sunrise / sunset.
-        state : str
-            Determines whether to retrieve sunrise or sunset.
-        which : str, optional
-            Determines whether to retrieve previous or next sunrise or sunset.
-        utc : bool, optional
-            Determines whether to retrieve utc or local time. The default is
-            False.
-        default_elev : float or int, optional
-            Elevation to use if the documented site elevation is absent. The
-            default is 100.
-
-        Raises
-        ------
-        KeyError
-            Raised if 'state' parameter is not either sunrise or sunset, or
-            'which' parameter is not either previous or next.
-        TypeError
-            Raised if documented latitude or longitude is absent.
-
-        Returns
-        -------
-        pydatetime
-            Requested sunrise or sunset time.
-
-        """
-
-        if not state in ['sunrise', 'sunset']:
-            raise KeyError('"state" arg must be either sunrise or sunset')
-        if not which in ['previous', 'next']:
-            raise KeyError('"which" arg must be either last or next')
-
-        obs = ephem.Observer()
-        obs.lat = str(self.df.loc[site, 'latitude'])
-        if np.isnan(obs.lat):
-            raise TypeError('Site latitude is empty!')
-        obs.long = str(self.df.loc[site, 'longitude'])
-        if np.isnan(obs.lon):
-            raise TypeError('Site latitude is empty!')
-        obs.elev = self.df.loc[site, 'elevation']
-        if np.isnan(obs.elev):
-            print('Site latitude is empty!')
-            obs.elev = default_elev
-        obs.date = date
-        sun = ephem.Sun()
-        sun.compute(obs)
-        utc_offset = dt.timedelta(hours=self.df.loc[site, 'UTC_offset'])
-
-        if state == 'sunrise':
-            if which == 'next':
-                out_date = obs.next_rising(sun).datetime()
-            else:
-                out_date = obs.previous_rising(sun).datetime()
-        else:
-            if which == 'next':
-                out_date = obs.next_setting(sun).datetime()
-            else:
-                out_date = obs.previous_setting(sun).datetime()
-        if utc:
-            return out_date
-        return out_date + utc_offset
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_sunrise(self, site, date, which='previous', utc=False):
-        """
-        Get sunrise for the site and date.
-
-        Parameters
-        ----------
-        site : str
-            Site name.
-        date : pydatetime
-            The datetime for which to generate sunrise.
-        which : str, optional
-            Determines whether to retrieve previous or next sunrise.
-
-        Returns
-        -------
-        pydatetime
-            Requested sunrise.
-
-        """
-
-        return self._get_sunrise_sunset(
-            site=site, date=date, state='sunrise', which=which, utc=utc
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_sunset(self, site, date, which='next', utc=False):
-        """
-        Get sunset for the site and date.
-
-        Parameters
-        ----------
-        site : str
-            Site name.
-        date : pydatetime
-            The datetime for which to generate sunset.
-        which : str, optional
-            Determines whether to retrieve previous or next sunset.
-
-        Returns
-        -------
-        pydatetime
-            Requested sunset.
-
-        """
-        return self._get_sunrise_sunset(
-            site=site, date=date, state='sunset', which=which, utc=utc
-            )
-    #--------------------------------------------------------------------------
-
 #------------------------------------------------------------------------------
 
-def get_acquired_sites():
+def write_site_details_to_configs(site=None):
 
-    path =  paths.get_local_stream_path(resource='configs', stream='tasks')
-    return path
+    # Set the output path
+    out_path = paths.get_local_stream_path(
+        resource='configs', stream='site_details'
+        )
 
-def write_details_configs(site):
+    # Get the data
+    df = make_df()
 
-    pass
+    # Get the site list
+    if not site is None:
+        site_list = (cg.get_task_configs()['site_tasks']).keys()
+    else:
+        site_list = [site]
+
+    # Iterate over site list
+    for site in site_list:
+
+        try:
+
+            site_data = _format_site_data(site_data=df.loc[site].fillna(''))
+
+            file = out_path / f'{site}_details.yml'
+
+            # Output
+            with open(file=file, mode='w', encoding='utf-8') as f:
+                yaml.dump(data=site_data.to_dict(), stream=f, sort_keys=False)
+
+        except KeyError:
+
+            continue
+
+
+def _format_site_data(site_data):
+
+    for entry in ['date_commissioned', 'date_decommissioned']:
+        try:
+            site_data[entry] = site_data[entry].strftime('%Y-%m-%d')
+        except AttributeError:
+            site_data[entry] = None
+    for entry in ['freq_hz', 'time_step']:
+        try:
+            site_data[entry] = int(site_data[entry])
+        except ValueError:
+            pass
+    dtypes_dict = {
+        'latitude': 'float64',
+        'longitude': 'float64',
+        'elevation': 'float64',
+        'UTC_offset': 'float64'
+        }
+    for key, value in dtypes_dict.items():
+        site_data[key] = site_data[key].astype(value)
+    return site_data

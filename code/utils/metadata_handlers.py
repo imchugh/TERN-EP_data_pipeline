@@ -15,13 +15,15 @@ Todo:
 """
 
 import numpy as np
+import os
 import pandas as pd
 
-import utils.configs_manager as cm
+from utils.paths_manager import PathsManager
+import utils.configs_getters as cg
 import file_handling.file_io as io
 from utils.site_details import SiteDetails
 
-paths = cm.PathsManager()
+paths = PathsManager()
 SPLIT_CHAR = '_'
 VALID_INSTRUMENTS = ['SONIC', 'IRGA', 'RAD']
 VALID_LOC_UNITS = ['cm', 'm']
@@ -86,7 +88,7 @@ class MetaDataManager():
         # Get the variable map and check the conformity of all names
         df = (
             pd.DataFrame(
-                cm.get_site_variable_configs(
+                cg.get_site_variable_configs(
                     site=self.site, which=self.variable_map
                     )
                 )
@@ -631,7 +633,7 @@ class PFPNameParser():
         """
 
         self.variables = (
-            pd.DataFrame(cm.get_global_configs(which='pfp_std_names'))
+            pd.DataFrame(cg.get_global_configs(which='pfp_std_names'))
             .T
             .rename_axis('quantity')
             )
@@ -852,6 +854,30 @@ class PFPNameParser():
             )
     #--------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_last_10Hz_file(site):
+
+    dummy_response = 'No files'
+
+    # Get data path to raw file
+    try:
+        data_path = paths.get_local_stream_path(
+            resource='data',
+            stream='flux_fast',
+            site=site,
+            subdirs=['TOB3'],
+            check_exists=True
+            )
+    except FileNotFoundError:
+        return dummy_response
+
+    # Get file and age in days
+    try:
+        return max(data_path.rglob('TOB3*.dat'), key=os.path.getctime).name
+    except ValueError:
+        return dummy_response
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

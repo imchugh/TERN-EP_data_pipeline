@@ -8,31 +8,35 @@ SmartFlux systems into a single accumulation file. It consists of two functions:
     * write_to_eddypro_file - merge individual summary files and write as
         single master file.
     * append_to_eddypro_file - append new files to existing master file.
-
+Note that this script calls the file_handler to deal with concatenation to the
+existing file, rather than the more efficent option - just opening the file in
+append mode and tacking on the data. This is because we do not have central
+control of the content of the incoming EddyPro files. If the content of those
+files changes and a naive concatenation runs, column assignment will be
+corrupted. The file_handler does legality checks on the merge to ensure this
+does not happen.
 """
 
 #------------------------------------------------------------------------------
-# STANDARD IMPORTS
+# STANDARD IMPORTS #
 import logging
 import os
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# CUSTOM IMPORTS
-import utils.configs_manager as cm
+# CUSTOM IMPORTS #
 import file_handling.file_handler as fh
 import file_handling.file_io as io
+from utils.paths_manager import PathsManager
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# INITS
-paths = cm.PathsManager()
+# INITS #
+paths = PathsManager()
 EP_SEARCH_STR = 'EP-Summary'
 EP_MASTER_FILE = 'EddyPro_master.txt'
 logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
-
-
 
 ###############################################################################
 ### BEGIN EDDYPRO WRITE / APPEND FUNCTIONS ###

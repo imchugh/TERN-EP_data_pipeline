@@ -9,24 +9,17 @@ import datetime as dt
 import geojson
 import logging
 import numpy as np
-import os
 import pandas as pd
 import time
 
 import file_handling.file_io as io
 import file_handling.file_handler as fh
-from utils.configs_manager import PathsManager
+from utils.paths_manager import PathsManager
 import utils.metadata_handlers as mh
 from utils.site_details import SiteDetails as sd
 
-paths_mngr = PathsManager()
+paths = PathsManager()
 sd_mngr = sd()
-site_list = [
-    'AliceSpringsMulga', 'Boyagin', 'Calperum', 'Fletcherview', 'Gingin',
-    'GreatWesternWoodlands', 'HowardSprings', 'Litchfield', 'MyallValeA',
-    'MyallValeB', 'Ridgefield', 'SnowGum', 'SturtPlains', 'Wellington',
-    'Yanco'
-    ]
 SUBSET = ['Fco2', 'Fh', 'Fe', 'Fsd']
 logger = logging.getLogger(__name__)
 
@@ -35,7 +28,7 @@ logger = logging.getLogger(__name__)
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def write_status_xlsx() -> None:
+def write_status_xlsx(site_list) -> None:
     """Evaluate status of all sites and write to xlsx. Returns None."""
 
     # Inits
@@ -102,7 +95,7 @@ def write_status_xlsx() -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def write_status_geojson():
+def write_status_geojson(site_list):
 
     rslt_list = []
     output_path = 'E:/Scratch/network_status.json'
@@ -113,7 +106,7 @@ def write_status_geojson():
         logging.info(f'    - retrieving status for site {site}...')
 
         file = (
-            paths_mngr.get_local_stream_path(
+            paths.get_local_stream_path(
                 resource='data', stream='flux_slow', site=site
                 ) /
             f'{site}_merged_std.dat'
@@ -287,9 +280,13 @@ def get_slow_data_status(
         'last_24hr_pct_valid': 0,
         'days_since_last_valid_record': 'N/A'
         }
-
+    data_file = paths.get_local_stream_path(
+        resource='homogenised_data',
+        stream='TOA5',
+        site=site
+        )
     data_df = (
-        io.get_data(file=f'E:/Scratch/{site}_merged_std.dat')
+        io.get_data(file=data_file)
         .drop('TIMESTAMP', axis=1)
         )
     l = []
@@ -347,15 +344,12 @@ def get_slow_data_status(
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def get_fast_file_status(site: str, run_time: dt.datetime=None) -> dict:
+def get_fast_file_status(site: str) -> dict:
     """
     Get the newest fast file.
 
     Args:
         site: name of site.
-        run_time (optional): the time to use for calculation of time since
-            valid variables reported. If not supplied, system time at runtime is
-            used. Defaults to None.
 
     Returns:
         Dictionary containing file name and age in days.
@@ -366,33 +360,22 @@ def get_fast_file_status(site: str, run_time: dt.datetime=None) -> dict:
     dummy_dict = {'file_name': 'No files', 'days_since_last_record': None}
     run_time = dt.datetime.now()
 
-    # Get data path to raw file
-    try:
-        data_path = paths_mngr.get_local_stream_path(
-            resource='data',
-            stream='flux_fast',
-            site=site,
-            subdirs=['TOB3'],
-            check_exists=True
-            )
-    except FileNotFoundError:
+    # Get file
+    rslt = mh.get_last_10Hz_file(site=site)
+    if rslt == 'No files':
         return dummy_dict
 
     # Get file and age in days
-    try:
-        file = max(data_path.rglob('TOB3*.dat'), key=os.path.getctime).name
-        days = (
-            (
-                run_time - dt.datetime.strptime(
-                    '-'.join(file.replace('.dat', '').split('_')[-3:]),
-                    '%Y-%m-%d'
-                    )
+    days = (
+        (
+            run_time - dt.datetime.strptime(
+                '-'.join(rslt.replace('.dat', '').split('_')[-3:]),
+                '%Y-%m-%d'
                 )
-            .days - 1
             )
-        return {'file_name': file, 'days_since_last_record': days}
-    except ValueError:
-        return dummy_dict
+        .days - 1
+        )
+    return {'file_name': rslt, 'days_since_last_record': days}
 #------------------------------------------------------------------------------
 
 ###############################################################################
@@ -689,7 +672,3 @@ def _write_time_frame(
 ###############################################################################
 ### END EXCEL FORMATTER FUNCTIONS ###
 ###############################################################################
-
-if __name__=='__main__':
-
-    write_status_xlsx()

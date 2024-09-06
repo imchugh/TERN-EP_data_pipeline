@@ -7,4 +7,7 @@ Modules exported by this package:
 
 """
 
+import utils.site_details as site_details
+from utils.paths_manager import PathsManager
 
+BAR = 'Hello world'

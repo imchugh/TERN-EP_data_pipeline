@@ -13,16 +13,15 @@ import pathlib
 #------------------------------------------------------------------------------
 # CUSTOM IMPORTS #
 from file_handling.file_io import read_yml
-from .paths_manager import PathsManager
+from paths import paths_manager as pm
 # import PathsManager
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # INITS #
-paths = PathsManager()
 config_paths = {
-    stream: paths.get_local_stream_path(resource='configs', stream=stream)
-    for stream in paths.list_local_streams(resource='configs')
+    stream: pm.get_local_stream_path(resource='configs', stream=stream)
+    for stream in pm.list_local_streams(resource='configs')
     }
 #------------------------------------------------------------------------------
 
@@ -108,7 +107,7 @@ def get_site_details_configs(site: str) -> dict:
 #------------------------------------------------------------------------------
 def _insert_site(file_path: pathlib.Path | str, site: str) -> pathlib.Path:
 
-    return pathlib.Path(str(file_path).replace(paths.placeholder, site))
+    return pathlib.Path(str(file_path).replace(pm.PLACEHOLDER, site))
 #------------------------------------------------------------------------------
 
 ###############################################################################

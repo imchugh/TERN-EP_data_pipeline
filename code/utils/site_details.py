@@ -20,7 +20,7 @@ import yaml
 
 #------------------------------------------------------------------------------
 # CUSTOM IMPORTS #
-from utils.paths_manager import PathsManager
+from paths import paths_manager as pm
 from utils import configs_getters as cg
 #------------------------------------------------------------------------------
 
@@ -28,6 +28,8 @@ from utils import configs_getters as cg
 ### CONSTANTS ###
 #------------------------------------------------------------------------------
 
+USERNAME = 'site-query'
+PASSWORD = 'password123'
 SPARQL_ENDPOINT = "https://graphdb.tern.org.au/repositories/knowledge_graph_core"
 SPARQL_QUERY = """
 PREFIX tern: <https://w3id.org/tern/ontologies/tern/>
@@ -38,7 +40,7 @@ PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX tern-loc: <https://w3id.org/tern/ontologies/loc/>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 
-SELECT ?id ?label ?fluxnet_id ?date_commissioned ?date_decommissioned ?latitude ?longitude ?elevation ?time_step ?freq_hz
+SELECT ?id ?label ?fluxnet_id ?date_commissioned ?date_decommissioned ?latitude ?longitude ?elevation ?time_step ?freq_hz ?canopy_height ?soil ?tower_height ?vegetation
 WHERE {
     ?id a tern:FluxTower ;
         rdfs:label ?label ;
@@ -68,6 +70,28 @@ WHERE {
         ?freq_hz_attr tern:attribute <http://linked.data.gov.au/def/tern-cv/ce39d9fd-ef90-4540-881d-5b9e779d9842> ;
             tern:hasSimpleValue ?freq_hz .
     }
+    OPTIONAL {
+        ?id tern:hasAttribute ?canopy_height_attr .
+        ?canopy_height_attr tern:attribute <http://linked.data.gov.au/def/tern-cv/c1920aed1295ee17a2aa05a9616e9b11d35e05b56f72ccc9a3748eb31c913551> ;
+            tern:hasSimpleValue ?canopy_height .
+    }
+    OPTIONAL {
+        ?id tern:hasAttribute ?soil_attr .
+        ?soil_attr tern:attribute <http://linked.data.gov.au/def/tern-cv/ed2ebb7c-561a-4892-9662-3b3aaa9ec768> ;
+            tern:hasSimpleValue ?soil .
+    }
+    OPTIONAL {
+        ?id tern:hasAttribute ?tower_height_attr .
+        ?tower_height_attr tern:attribute <http://linked.data.gov.au/def/tern-cv/d54e6e12-b9a6-42ac-ad2f-c56fb0d3e5d6> ;
+            tern:hasSimpleValue ?tower_height_double .
+    }
+    OPTIONAL {
+        ?id tern:hasAttribute ?vegetation_attr .
+        ?vegetation_attr tern:attribute <http://linked.data.gov.au/def/tern-cv/1338fc29-53ef-4b27-8903-b824e973807a> ;
+            tern:hasSimpleValue ?vegetation .
+    }
+
+    BIND(xsd:decimal(?tower_height_double) AS ?tower_height)
 
 }
 ORDER BY ?label
@@ -89,7 +113,6 @@ HEADERS = {
     "accept": "application/sparql-results+json"
     }
 
-paths = PathsManager()
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -199,7 +222,10 @@ def make_df():
                   'elevation': _parse_floats,
                   'time_step': _parse_floats}
 
-    response = requests.post(SPARQL_ENDPOINT, data=SPARQL_QUERY, headers=HEADERS)
+    response = requests.post(
+        SPARQL_ENDPOINT, data=SPARQL_QUERY, headers=HEADERS,
+        auth=(USERNAME, PASSWORD)
+        )
     if response.status_code != 200:
         raise RuntimeError(response.text)
     json_dict = response.json()
@@ -297,7 +323,7 @@ class SiteDetails():
 def write_site_details_to_configs(site=None):
 
     # Set the output path
-    out_path = paths.get_local_stream_path(
+    out_path = pm.get_local_stream_path(
         resource='configs', stream='site_details'
         )
 

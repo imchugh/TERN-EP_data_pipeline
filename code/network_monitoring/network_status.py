@@ -14,11 +14,10 @@ import time
 
 import file_handling.file_io as io
 import file_handling.file_handler as fh
-from utils.paths_manager import PathsManager
+from paths import paths_manager as pm
 import utils.metadata_handlers as mh
 from utils.site_details import SiteDetails as sd
 
-paths = PathsManager()
 sd_mngr = sd()
 SUBSET = ['Fco2', 'Fh', 'Fe', 'Fsd']
 logger = logging.getLogger(__name__)
@@ -106,7 +105,7 @@ def write_status_geojson(site_list):
         logging.info(f'    - retrieving status for site {site}...')
 
         file = (
-            paths.get_local_stream_path(
+            pm.get_local_stream_path(
                 resource='data', stream='flux_slow', site=site
                 ) /
             f'{site}_merged_std.dat'
@@ -280,7 +279,7 @@ def get_slow_data_status(
         'last_24hr_pct_valid': 0,
         'days_since_last_valid_record': 'N/A'
         }
-    data_file = paths.get_local_stream_path(
+    data_file = pm.get_local_stream_path(
         resource='homogenised_data',
         stream='TOA5',
         site=site

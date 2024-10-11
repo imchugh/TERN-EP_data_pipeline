@@ -27,12 +27,11 @@ import os
 # CUSTOM IMPORTS #
 import file_handling.file_handler as fh
 import file_handling.file_io as io
-from utils.paths_manager import PathsManager
+from paths import paths_manager as pm
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # INITS #
-paths = PathsManager()
 EP_SEARCH_STR = 'EP-Summary'
 EP_MASTER_FILE = 'EddyPro_master.txt'
 logger = logging.getLogger(__name__)
@@ -60,7 +59,7 @@ def append_to_eddypro_file(site: str) -> None:
 
     # Get the master file (raise error if missing)
     data_path = (
-        paths.get_local_stream_path(
+        pm.get_local_stream_path(
             resource='data', stream='flux_slow', site=site
             )
         )
@@ -113,7 +112,7 @@ def write_to_eddypro_file(site: str) -> None:
 
     # Get the file list
     data_path = (
-        paths.get_local_stream_path(
+        pm.get_local_stream_path(
             resource='data', stream='flux_slow', site=site
             )
         )

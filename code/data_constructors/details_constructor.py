@@ -15,12 +15,11 @@ import utils.metadata_handlers as mh
 import file_handling.file_handler as fh
 from data_constructors.convert_calc_filter import TimeFunctions
 from file_handling import file_io as io
-from utils.paths_manager import PathsManager
+import paths.paths_manager as paths
 
 #------------------------------------------------------------------------------
 # INITS #
 logger = logging.getLogger(__name__)
-paths = PathsManager()
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -124,8 +123,11 @@ def write_site_info(site: str) -> None:
     info.update({'station_name': site, 'table_name': 'site_details'})
 
     # Set the output path
-    output_path = paths.get_local_stream_path(
-        resource='visualisation', stream='site_details', site=site
+    output_path = (
+        paths.get_local_stream_path(
+            resource='network', stream='site_metadata', site=site
+            ) / 
+        f'{site}_details.dat'
         )
 
     # Write to file

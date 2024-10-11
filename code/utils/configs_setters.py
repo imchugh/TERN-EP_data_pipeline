@@ -303,13 +303,13 @@ class SiteConfigsGenerator():
         """
 
         self.site=site
-        self._xl = pd.ExcelFile(
-            paths_mngr.get_local_stream_path(
-                resource='configs',
-                stream='site_xl',
-                file_name=f'{self.site}.xlsx',
-                check_exists=True
-                )
+        self._xl = pd.ExcelFile('/store/Network/Documents/site_variable_map.xlsx'
+            # paths_mngr.get_local_stream_path(
+                # resource='configs',
+                # stream='site_xl',
+                # file_name=f'{self.site}.xlsx',
+                # check_exists=True
+                # )
             )
     #--------------------------------------------------------------------------
 

@@ -37,8 +37,7 @@ import pathlib
 import xarray as xr
 
 import data_constructors.convert_calc_filter as ccf
-from utils.paths_manager import PathsManager
-import utils.configs_getters as cg
+from paths import paths_manager as pm
 import file_handling.file_io as io
 import file_handling.file_handler as fh
 import utils.metadata_handlers as mh
@@ -56,7 +55,6 @@ STATISTIC_ALIASES = {'average': 'Avg', 'variance': 'Vr', 'sum': 'Tot'}
 TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 MERGED_FILE_NAME = '<site>_merged_std.dat'
 CONSTRAIN_SITES_TO_FLUX = ['CumberlandPlain']
-paths = PathsManager()
 logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
@@ -117,7 +115,12 @@ class L1DataConstructor():
 
         """
 
-        global_attrs = cg.get_global_configs(which='nc_generic_attrs')
+        global_attrs = io.read_yml(
+            file=pm.get_local_stream_path(
+                resource='configs', 
+                stream='nc_generic_attrs'
+                )
+            )
         new_dict = {
             'metadata_link':
                 global_attrs['metadata_link'].replace('<site>', self.site),
@@ -337,7 +340,12 @@ class L1DataConstructor():
 
         """
 
-        dim_attrs = cg.get_global_configs(which='nc_dim_attrs')
+        dim_attrs = io.read_yml(
+            file=pm.get_local_stream_path(
+                resource='configs', 
+                stream='nc_dim_attrs'
+                )
+            )
         for dim in ds.dims:
             ds[dim].attrs = dim_attrs[dim]
     #--------------------------------------------------------------------------
@@ -393,7 +401,12 @@ class L1DataConstructor():
 
         """
 
-        dim_attrs = cg.get_global_configs(which='nc_dim_attrs')
+        dim_attrs = io.read_yml(
+            file=pm.get_local_stream_path(
+                resource='configs', 
+                stream='nc_dim_attrs'
+                )
+            )
         ds['crs'] = (
             ['time', 'latitude', 'longitude'],
             np.tile(np.nan, (len(ds.time), 1, 1)),
@@ -452,12 +465,12 @@ def make_nc_file(site: str, split_by_year: bool=True):
     data_builder = L1DataConstructor(site=site, concat_files=True)
     if not split_by_year:
         ds = data_builder.build_xarray_dataset_complete()
-        output_path = data_builder.md_mngr.data_path / f'{site}_L1.nc'
+        output_path = data_builder.md_mngr.io_paths['NetCDF'] / f'{site}_L1.nc'
         ds.to_netcdf(path=output_path, mode='w')
         return
     for year in data_builder.data_years:
         ds = data_builder.build_xarray_dataset_by_year(year=year)
-        output_path = data_builder.md_mngr.data_path / f'{site}_{year}_L1.nc'
+        output_path = data_builder.md_mngr.io_paths['NetCDF'] / f'{site}_{year}_L1.nc'
         ds.to_netcdf(path=output_path, mode='w')
 #------------------------------------------------------------------------------
 
@@ -482,7 +495,7 @@ def make_nc_year_file(site: str, year: int):
     if not year in data_builder.data_years:
         raise IndexError('No data available for current data year!')
     ds = data_builder.build_xarray_dataset_by_year(year=year)
-    output_path = data_builder.md_mngr.data_path / f'{site}_{year}_L1.nc'
+    output_path = data_builder.md_mngr.io_paths['NetCDF'] / f'{site}_{year}_L1.nc'
     ds.to_netcdf(path=output_path, mode='w')
 #------------------------------------------------------------------------------
 
@@ -501,7 +514,7 @@ def append_to_current_nc_file(site: str):
 
     md_mngr = mh.MetaDataManager(site=site)
     expected_year = dt.datetime.now().year
-    expected_file = md_mngr.data_path / f'{site}_{expected_year}_L1.nc'
+    expected_file = md_mngr.io_paths['NetCDF'] / f'{site}_{expected_year}_L1.nc'
     if not expected_file.exists():
         make_nc_year_file(site=site, year=expected_year)
     else:
@@ -711,7 +724,7 @@ class StdDataConstructor():
         constrain_last_to_file = None
         if constrain_last_to_flux:
             constrain_last_to_file = (
-                self.md_mngr.data_path /
+                self.md_mngr.io_paths['raw_data'] /
                 self.md_mngr.get_variable_attributes(
                     variable='Fco2', return_field='file'
                     )
@@ -925,7 +938,7 @@ def write_to_std_file(site: str, concat_files: bool=True) -> None:
 
     # Get path information from the embedded metadata manager
     # Get path information
-    file_path = paths.get_local_stream_path(
+    file_path = pm.get_local_stream_path(
         resource='homogenised_data',
         stream='TOA5',
         site=site
@@ -955,7 +968,7 @@ def write_to_std_file(site: str, concat_files: bool=True) -> None:
     # Rewrite info line to reflect the fact that tables are merged
     info = io.FILE_CONFIGS['TOA5']['dummy_info'][:-1]
     info.append('merged')
-    info = dict(zip(io.INFO_FIELDS, info))
+    info = dict(zip(io.INFO_FIELD_NAMES, info))
 
     # Write data to file
     io.write_data_to_file(
@@ -993,7 +1006,7 @@ def append_to_std_file(site: str) -> None:
         )
 
     # Get path information
-    file_path = paths.get_local_stream_path(
+    file_path = pm.get_local_stream_path(
         resource='homogenised_data',
         stream='TOA5',
         site=site
@@ -1119,6 +1132,7 @@ def merge_data(
             usecols = None
 
         # Get file type, and disable file concatenation for all EddyPro files
+        breakpoint()
         file_type = io.get_file_type(file=file)
         do_concat = concat_files == True
         if file_type == 'EddyPro':

@@ -95,11 +95,14 @@ class FileConcatenator():
                 .rename(self.alias_maps[file], axis=1)
                 )
         ordered_vars = self.get_concatenated_headers().index.tolist()
-        return (
-            pd.concat(df_list)
-            [ordered_vars]
-            .sort_index()
-            )
+        try:
+            return (
+                pd.concat(df_list)
+                [ordered_vars]
+                .sort_index()
+                )
+        except KeyError:
+            breakpoint()
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------

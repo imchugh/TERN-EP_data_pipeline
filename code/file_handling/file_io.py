@@ -102,23 +102,33 @@ def get_data(
             )
 
     # Now import data
-    return (
-        pd.read_csv(
-            file,
-            skiprows=rows_to_skip,
-            usecols=thecols,
-            parse_dates={'DATETIME': REQ_TIME_VARS},
-            keep_date_col=True,
-            na_values=MASTER_DICT['na_values'],
-            sep=MASTER_DICT['separator'],
-            engine='c',
-            on_bad_lines='warn',
-            low_memory=False
-            )
-        .set_index(keys='DATETIME')
-        .astype({x: object for x in REQ_TIME_VARS})
-        .pipe(_integrity_checks, non_numeric=CRITICAL_FILE_VARS)
+    df = pd.read_csv(
+        file,
+        skiprows=rows_to_skip,
+        usecols=thecols,
+        na_values=MASTER_DICT['na_values'],
+        sep=MASTER_DICT['separator'],
+        engine='c',
+        on_bad_lines='warn',
+        low_memory=False
         )
+    
+    # Set the index and drop the time variables
+    df.index = _parse_dates(df[REQ_TIME_VARS])
+    
+    # Check integrity and return
+    return df.pipe(_integrity_checks, non_numeric=CRITICAL_FILE_VARS)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def _parse_dates(date_df):
+    
+    cols = date_df.columns.tolist()
+    s = date_df[cols[0]]
+    cols.remove(cols[0])
+    for col in cols:
+        s += ' ' + date_df[col]
+    return pd.Index(pd.to_datetime(s), name='DATETIME')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -816,7 +826,7 @@ def _TOA5ify_headers(headers: pd.DataFrame) -> pd.DataFrame:
     # Add the sampling header line if it doesn't exist
     if not 'sampling' in headers.columns:
         headers = headers.assign(sampling='')
-    headers.sampling.fillna('', inplace=True)
+    headers = headers.sampling.fillna('')
 
     # Concatenate and return
     return pd.concat([add_df, headers])
@@ -866,17 +876,10 @@ def get_dates(file: str | pathlib.Path, file_type: str=None) -> list:
         file,
         usecols=time_vars,
         skiprows=rows_to_skip,
-        parse_dates={'DATETIME': time_vars},
         sep=separator,
         )
-
-    # Check the date parser worked - if not, fix it
-    if df.DATETIME.dtype == 'object':
-        df.DATETIME = pd.to_datetime(df.DATETIME, errors='coerce')
-        df.dropna(inplace=True)
-
-    # Return the dates as pydatetimes
-    return pd.DatetimeIndex(df.DATETIME).to_pydatetime()
+    
+    return _parse_dates(date_df=df[time_vars]).to_pydatetime()
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

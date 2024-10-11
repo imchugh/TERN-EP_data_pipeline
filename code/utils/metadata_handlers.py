@@ -18,12 +18,10 @@ import numpy as np
 import os
 import pandas as pd
 
-from utils.paths_manager import PathsManager
-import utils.configs_getters as cg
+from paths import paths_manager as pm
 import file_handling.file_io as io
 from utils.site_details import SiteDetails
 
-paths = PathsManager()
 SPLIT_CHAR = '_'
 VALID_INSTRUMENTS = ['SONIC', 'IRGA', 'RAD']
 VALID_LOC_UNITS = ['cm', 'm']
@@ -60,10 +58,21 @@ class MetaDataManager():
         self.site = site
         self.variable_map = variable_map
         self.data_path = (
-            paths.get_local_stream_path(
-                site=site, resource='data', stream='flux_slow'
+            pm.get_local_stream_path(
+                site=site, resource='raw_data', stream='flux_slow'
                 )
             )
+        self.io_paths = {
+            'raw_data': pm.get_local_stream_path(
+                resource='raw_data', stream='flux_slow', site=site,
+                ),
+            'TOA5_homogenised': pm.get_local_stream_path(
+                resource='homogenised_data', stream='TOA5', site=site
+                ),
+            'nc_L1': pm.get_local_stream_path(
+                resource='homogenised_data', stream='NetCDF', site=site
+                )
+            }
 
         # Create site-based variables table
         self._parse_site_variables()
@@ -88,18 +97,22 @@ class MetaDataManager():
         # Get the variable map and check the conformity of all names
         df = (
             pd.DataFrame(
-                cg.get_site_variable_configs(
-                    site=self.site, which=self.variable_map
+                io.read_yml(
+                    file=pm.get_local_stream_path(
+                        resource='configs',
+                        stream=f'variables_{self.variable_map}',
+                        site=self.site
+                        )
                     )
                 )
             .T
             .rename_axis('std_name')
-            .replace('', np.nan)
             .pipe(self._test_variable_conformity)
             )
 
         # Assign missing variables
         missing_variables = df.loc[pd.isnull(df.name)]
+        breakpoint()
         if len(missing_variables) == 0:
             missing_variables = None
         self.missing_variables = missing_variables
@@ -125,8 +138,9 @@ class MetaDataManager():
 
         """
 
+        # Get the name parser, check all names and preserve additional properties
         name_parser = PFPNameParser()
-        test = (
+        props_df = (
             pd.DataFrame(
                 [
                     name_parser.parse_variable_name(variable_name=variable_name)
@@ -136,7 +150,13 @@ class MetaDataManager():
             .set_index(df.index)
             .fillna('')
             )
-        return pd.concat([df, test], axis=1)
+        
+        # Convert minima and maxima columns to numeric
+        numeric_cols = ['plausible_min', 'plausible_max']
+        for col in numeric_cols:
+            props_df[col] = pd.to_numeric(props_df[col])
+        
+        return pd.concat([df, props_df], axis=1)
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -156,23 +176,27 @@ class MetaDataManager():
 
         if 'file' in df.columns:
 
-            if any(pd.isnull(df['file'])):
-                raise TypeError(
-                    'If configuration file contains file definitions, they '
-                    'must ALL be of type string!'
-                    )
-            file_list = df.file.tolist()
+            # if any(pd.isnull(df['file'])):
+            #     raise TypeError(
+            #         'If configuration file contains file definitions, they '
+            #         'must ALL be of type string!'
+            #         )
+            file_list = df.loc[~(df.file==''), 'file'].tolist()
 
         elif 'logger' and 'table' in df.columns:
 
-            if any(pd.isnull(df[['logger', 'table']]).any()):
-                raise TypeError(
-                    'If configuration file contains logger and table '
-                    'definitions, they  must ALL be of type string!'
-                    )
+            # if any(pd.isnull(df[['logger', 'table']]).any()):
+            #     raise TypeError(
+            #         'If configuration file contains logger and table '
+            #         'definitions, they  must ALL be of type string!'
+            #         )
+            sub_df = df.loc[
+                (~(df.logger=='')) | (~(df.table=='')), 
+                ['logger', 'table']
+                ]
             file_list = (
                 f'{self.site}_' +
-                df[['logger', 'table']].agg('_'.join, axis=1) +
+                sub_df.agg('_'.join, axis=1) +
                 '.dat'
                 )
 
@@ -633,7 +657,14 @@ class PFPNameParser():
         """
 
         self.variables = (
-            pd.DataFrame(cg.get_global_configs(which='pfp_std_names'))
+            pd.DataFrame(
+                io.read_yml(
+                    file=pm.get_local_stream_path(
+                        resource='configs', 
+                        stream='pfp_std_names'
+                        )
+                    )
+                )
             .T
             .rename_axis('quantity')
             )
@@ -863,8 +894,8 @@ def get_last_10Hz_file(site):
 
     # Get data path to raw file
     try:
-        data_path = paths.get_local_stream_path(
-            resource='data',
+        data_path = pm.get_local_stream_path(
+            resource='raw_data',
             stream='flux_fast',
             site=site,
             subdirs=['TOB3'],
@@ -892,4 +923,8 @@ def convert_units_to_variance(units):
         }
 
     return ref_dict[units]
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+
 #------------------------------------------------------------------------------

@@ -9,9 +9,11 @@ Created on Fri Aug  2 09:43:07 2024
 
 #------------------------------------------------------------------------------
 # STANDARD IMPORTS
+import inspect
 import logging.config
 import pandas as pd
 import pathlib
+import sys
 import yaml
 #------------------------------------------------------------------------------
 
@@ -21,13 +23,11 @@ import data_constructors.data_constructors as datacon
 import data_constructors.details_constructor as deetcon
 import network_monitoring.network_status as ns
 import file_handling.eddypro_concatenator as epc
-from utils.paths_manager import PathsManager
+from paths import paths_manager as pm
 #------------------------------------------------------------------------------
 
-
-
 ###############################################################################
-### START TASK MANAGER ###
+### BEGIN TASK MANAGER ###
 ###############################################################################
 
 #------------------------------------------------------------------------------
@@ -36,7 +36,7 @@ class TasksManager():
     #--------------------------------------------------------------------------
     def __init__(self):
 
-        with open('E:/Config_files/Tasks/tasks_alt.yml') as f:
+        with open('/home/imchugh/Config_files/Tasks/tasks.yml') as f:
             self.configs=yaml.safe_load(f)
         self.site_master_list = self.configs['site_master_list']
         self.master_tasks = list(self.configs['tasks'].keys())
@@ -71,7 +71,7 @@ class TasksManager():
     #--------------------------------------------------------------------------
     def _make_frequency_lists(self):
 
-        self.cron_dict = {
+        self.task_frequencies = {
             'daily': [
                 key for key, value in self.configs['tasks'].items()
                 if value['frequency'] == 'daily'
@@ -92,7 +92,7 @@ class TasksManager():
     #--------------------------------------------------------------------------
     def get_task_list_for_site(self, site):
 
-        return self.df.loc['Calperum'][self.df.loc['Calperum']].index.tolist()
+        return self.df.loc[site][self.df.loc[site]].index.tolist()
     #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -105,8 +105,7 @@ class TasksManager():
 
 #------------------------------------------------------------------------------
 # INITS #
-paths = PathsManager()
-tasks = TasksManager()
+tasks_mngr = TasksManager()
 with open(pathlib.Path(__file__).parent / 'logger_configs.yml') as f:
     LOGGER_CONFIGS = yaml.safe_load(stream=f)
 logger = logging.getLogger(__name__)
@@ -115,18 +114,8 @@ logger = logging.getLogger(__name__)
 
 
 ###############################################################################
-### START TASK MANAGEMENT FUNCTIONS ###
+### BEGIN TASK DEFINITION FUNCTIONS ###
 ###############################################################################
-
-#------------------------------------------------------------------------------
-def configure_logger_path(log_path):
-
-    if logger.hasHandlers():
-        logger.handlers.clear()
-    new_configs = LOGGER_CONFIGS.copy()
-    new_configs['handlers']['file']['filename'] = str(log_path)
-    logging.config.dictConfig(new_configs)
-#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def generate_merged_file(site: str) -> None:
@@ -138,8 +127,29 @@ def generate_merged_file(site: str) -> None:
         datacon.write_to_std_file(site=site)
 #------------------------------------------------------------------------------
 
+###############################################################################
+### END TASK DEFINITION FUNCTIONS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN TASK MANAGEMENT FUNCTIONS ###
+###############################################################################
+
 #------------------------------------------------------------------------------
-def retrieve_function(function):
+def configure_logger(log_path):
+    """Configure the logger for the task (inclduing setting output path)."""
+    
+    if logger.hasHandlers():
+        logger.handlers.clear()
+    new_configs = LOGGER_CONFIGS.copy()
+    new_configs['handlers']['file']['filename'] = str(log_path)
+    logging.config.dictConfig(new_configs)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def retrieve_task_function(function=None):
     """Map task function to string."""
 
     funcs_dict = {
@@ -148,33 +158,45 @@ def retrieve_function(function):
         'update_EddyPro_master': epc.update_eddypro_master,
         'generate_status_xlsx': ns.write_status_xlsx,
         'generate_status_geojson': ns.write_status_geojson,
-        'generate_all_site_details': deetcon.write_all_site_info
+        'generate_site_details_file': deetcon.write_site_info
 
         }
 
-    return funcs_dict[function]
+    if function is not None:
+        return funcs_dict[function]
+    return list(funcs_dict.keys())
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def run_site_task(task, site):
+def run_site_task(task: str, site:str) -> None:
+    """
+    Run a task for a single site (and log to single site log file).
 
-    # Get the requested function
-    function = retrieve_function(function=task)
+    Args:
+        task (TYPE): DESCRIPTION.
+        site (TYPE): DESCRIPTION.
+
+    Returns:
+        None.
+
+    """
+
 
     # Get the log output path and configure the logger
     log_path = (
-        paths.get_local_stream_path(
+        pm.get_local_stream_path(
             resource='logs',
             stream='site_logs',
             site=site
             ) /
-        f'{site}_{task}_b.log'
+        f'{site}_{task}.log'
         )
-    configure_logger_path(log_path=log_path)
+    configure_logger(log_path=log_path)      
 
-    # Run the task
+    # Retrieve the function and run the task
     logger.info(f'Running task {task}...')
     try:
+        function = retrieve_task_function(function=task)
         function(**{'site': site})
         logger.info('Task completed without error\n')
     except Exception:
@@ -184,18 +206,18 @@ def run_site_task(task, site):
 #------------------------------------------------------------------------------
 def run_network_task(task, site_list):
 
-    # Get the requested function
-    function = retrieve_function(function=task)
-
     # Get the log output path and configure the logger
     log_path = (
-        paths.get_local_stream_path(
+        pm.get_local_stream_path(
             resource='logs',
             stream='network_logs',
             ) /
         f'{task}.log'
         )
-    configure_logger_path(log_path=log_path)
+    configure_logger(log_path=log_path)
+
+    # Get the requested function
+    function = retrieve_task_function(function=task)
 
     # Run the task
     logger.info(f'Running task {task}...')
@@ -209,23 +231,53 @@ def run_network_task(task, site_list):
 #------------------------------------------------------------------------------
 def run_task_from_list(task):
 
-    site_list = tasks.get_site_list_for_task(task=task)
-    if task in tasks.site_tasks:
+    site_list = tasks_mngr.get_site_list_for_task(task=task)
+    if task in tasks_mngr.site_tasks:
         for site in site_list:
             run_site_task(site=site, task=task)
-    elif task in tasks.network_tasks:
+    elif task in tasks_mngr.network_tasks:
         run_network_task(task=task, site_list=site_list)
-    else:
-        raise RuntimeError(f'Task {task} not recognised!')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def run_tasks_by_cron(frequency):
+def run_tasks_by_frequency(frequency):
 
-    for task in tasks.cron_dict[frequency]:
+    for task in tasks_mngr.task_frequencies[frequency]:
         run_task_from_list(task=task)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def main():
+    
+    input_arg = sys.argv[1]
+    
+    if input_arg not in tasks_mngr.master_tasks:
+        raise KeyError(
+            f'Task "{input_arg}" not defined in configuration file!'
+            )
+    
+    if input_arg not in retrieve_task_function():
+        raise NotImplementedError(
+            f'Function for task "{input_arg}" not implemented!'
+            )
+
+    if input_arg in tasks_mngr.task_frequencies.keys():
+        run_tasks_by_frequency(frequency=input_arg)
+    else:
+        run_task_from_list(task=input_arg)
+    
+    
+    # except KeyError:
+    #     raise NotImplementedError(f'Task "{input_arg}" not yet implemented!')
+    # site_list = tasks_mngr.get_site_list_for_task()
+    # args = list(inspect.signature(retrieve_task_function(task)).parameters.keys())
 #------------------------------------------------------------------------------
 
 ###############################################################################
 ### END TASK MANAGEMENT FUNCTIONS ###
 ###############################################################################
+
+if __name__=="__main__":
+    
+    main()
+    # main()    

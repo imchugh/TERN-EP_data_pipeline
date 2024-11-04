@@ -14,10 +14,10 @@ import yaml
 #------------------------------------------------------------------------------
 ### INITS ###
 LOCAL_CONFIG_PATH_FILE = pathlib.Path(
-    '/home/imchugh/Config_files/Global/Paths/local_paths.yml'
+    '/store/Config_files/Network/Paths/local_paths.yml'
     )
 REMOTE_CONFIG_PATH_FILE = pathlib.Path(
-    '/home/imchugh/Config_files/Global/Paths/remote_paths.yml'
+    '/store/Config_files/Network/Paths/remote_paths.yml'
     )
 REMOTE_ALIAS_DICT = {
     'AliceSpringsMulga': 'AliceMulga', 'Longreach': 'MitchellGrassRangeland'
@@ -115,6 +115,17 @@ def get_local_stream_path(
     _kill_kwargs(kwargs=kwargs, kill_list=no_args)
     return get_path(
         location='local', resource=resource, stream=stream, **kwargs
+        )
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_local_config_file(config_stream: str, **kwargs: dict) -> dict:
+    
+    return _read_yml(
+        get_path(
+            location='local', resource='configs', stream=config_stream, 
+            **kwargs
+            )
         )
 #------------------------------------------------------------------------------
 

@@ -30,14 +30,16 @@ from numpy.typing import ArrayLike
 import pandas as pd
 import pathlib
 
+from paths import paths_manager as pm
+
 ###############################################################################
 ### CONSTANTS ###
 ###############################################################################
 
-configs_path = pathlib.Path(__file__).parent / 'file_configs.yml'
-with open(configs_path) as f:
-    FILE_CONFIGS = yaml.safe_load(stream=f)
-
+# configs_path = pathlib.Path(__file__).parent / 'file_configs.yml'
+# with open(configs_path) as f:
+#     FILE_CONFIGS = yaml.safe_load(stream=f)
+FILE_CONFIGS = pm.get_local_config_file(config_stream='raw_file_configs')
 INFO_FIELD_NAMES = [
     'format', 'station_name', 'logger_type', 'serial_num', 'OS_version',
     'program_name', 'program_sig', 'table_name'
@@ -109,7 +111,7 @@ def get_data(
         na_values=MASTER_DICT['na_values'],
         sep=MASTER_DICT['separator'],
         engine='c',
-        on_bad_lines='warn',
+        on_bad_lines='skip',
         low_memory=False
         )
     
@@ -128,8 +130,8 @@ def _parse_dates(date_df):
     cols.remove(cols[0])
     for col in cols:
         s += ' ' + date_df[col]
-    return pd.Index(pd.to_datetime(s), name='DATETIME')
-#------------------------------------------------------------------------------
+    return pd.Index(pd.to_datetime(s, errors='coerce'), name='DATETIME')
+ #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def _integrity_checks(df: pd.core.frame.DataFrame, non_numeric: list):
@@ -147,10 +149,13 @@ def _integrity_checks(df: pd.core.frame.DataFrame, non_numeric: list):
         if col in non_numeric: continue
         df[col] = pd.to_numeric(non_nums[col], errors='coerce')
 
-    # Check the index type, and if bad time data exists, dump the record
-    if not df.index.dtype == '<M8[ns]':
-        df.index = pd.to_datetime(df.index, errors='coerce')
-        df = df[~pd.isnull(df.index)]
+    # Dump bad time data
+    df = df.loc[~pd.isnull(df.index)]
+        
+    # # Check the index type, and if bad time data exists, dump the record
+    # if not df.index.dtype == '<M8[ns]':
+    #     df.index = pd.to_datetime(df.index, errors='coerce')
+    #     df = df[~pd.isnull(df.index)]
 
     # Sort the index
     return df.sort_index()
@@ -826,7 +831,7 @@ def _TOA5ify_headers(headers: pd.DataFrame) -> pd.DataFrame:
     # Add the sampling header line if it doesn't exist
     if not 'sampling' in headers.columns:
         headers = headers.assign(sampling='')
-    headers = headers.sampling.fillna('')
+        headers = headers.fillna('')
 
     # Concatenate and return
     return pd.concat([add_df, headers])

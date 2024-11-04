@@ -10,47 +10,48 @@ import logging
 import pandas as pd
 
 #------------------------------------------------------------------------------
-import utils.configs_getters as cg
 import utils.metadata_handlers as mh
 import file_handling.file_handler as fh
 from data_constructors.convert_calc_filter import TimeFunctions
 from file_handling import file_io as io
-import paths.paths_manager as paths
+from paths import paths_manager as pm
 
 #------------------------------------------------------------------------------
 # INITS #
 logger = logging.getLogger(__name__)
+DETAILS_SUBSET = []
+LOGGER_SUBSET = [
+    'format', 'station_name', 'logger_type', 'serial_num', 'OS_version',
+    'program_name'
+    ]
 #------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-def write_all_site_info() -> None:
+# #------------------------------------------------------------------------------
+# def write_all_site_info() -> None:
 
-    site_list = (cg.get_task_configs()['site_tasks']).keys()
-    for site in site_list:
-        logger.info(f'Writing info TOA5 file for site {site}')
-        try:
-            write_site_info(site=site)
-            logger.info('... done')
-        except FileNotFoundError:
-            logger.error(
-                f'Write of details file for site {site} failed with the '
-                'following error: ',
-                exc_info=True
-                )
-            continue
-#------------------------------------------------------------------------------
+#     site_list = (cg.get_task_configs()['site_tasks']).keys()
+#     for site in site_list:
+#         logger.info(f'Writing info TOA5 file for site {site}')
+#         try:
+#             write_site_info(site=site)
+#             logger.info('... done')
+#         except FileNotFoundError:
+#             logger.error(
+#                 f'Write of details file for site {site} failed with the '
+#                 'following error: ',
+#                 exc_info=True
+#                 )
+#             continue
+# #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def write_site_info(site: str) -> None:
 
-    LOGGER_SUBSET = [
-        'format', 'station_name', 'logger_type', 'serial_num', 'OS_version',
-        'program_name'
-        ]
-
     # Get site info
     logger.info('Getting site information...')
-    site_info = cg.get_site_details_configs(site=site)
+    site_info = (
+        pm.get_local_config_file(config_stream='all_site_metadata')[site]
+        )
     site_info['start_year'] = str(
         dt.datetime.strptime(site_info['date_commissioned'], '%Y-%m-%d').year
         )
@@ -124,8 +125,8 @@ def write_site_info(site: str) -> None:
 
     # Set the output path
     output_path = (
-        paths.get_local_stream_path(
-            resource='network', stream='site_metadata', site=site
+        pm.get_local_stream_path(
+            resource='homogenised_data', stream='TOA5', site=site
             ) / 
         f'{site}_details.dat'
         )

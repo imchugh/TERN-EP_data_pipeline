@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 def generic_move(
         local_location, remote_location, which_way='to_remote',
-        exclude_dirs=None, timeout=600
+        exclude_dirs=None, mod_time=True, timeout=600
         ):
 
     # Check direction is valid
@@ -65,10 +65,16 @@ def generic_move(
         from_location = remote_location
         to_location = local_location
 
-    # Do the transfer
+    # Add any arguments to the Rclone execution string
     run_args = ARGS_LIST.copy()
     if exclude_dirs:
         run_args += _add_rclone_exclude(exclude_dirs=exclude_dirs)
+        
+    # This is required to copy to the DSA web-sites directory and subs
+    if not mod_time:
+        run_args.append('--sftp-set-modtime=false')
+        
+    # Do the transfer
     logger.info('Copying now...')
     run_list =  [APP_PATH] + run_args + [from_location, to_location]
     try:
@@ -85,7 +91,7 @@ def generic_move(
 def pull_slow_flux(site):
 
     logger.info(f'Begin retrieval of {site} slow data from UQRDM')
-    _move_site_data_stream(
+    move_data_stream(
         site=site, stream='flux_slow', which_way='from_remote'
         )
     logger.info('Done')
@@ -107,7 +113,7 @@ def push_status_files():
 def push_fast_flux(site):
 
     logger.info(f'Begin move of {site} fast data to UQRDM flux archive')
-    _move_site_data_stream(
+    move_data_stream(
         site=site, stream='flux_fast', exclude_dirs=['TMP'], timeout=1200
         )
     logger.info('Done.')
@@ -117,23 +123,70 @@ def push_fast_flux(site):
 def push_slow_flux(site):
 
     logger.info(f'Begin move of {site} slow flux data to UQRDM')
-    _move_site_data_stream(site=site, stream='flux_slow')
+    move_data_stream(site=site, stream='flux_slow')
+    logger.info('Done.')
+#------------------------------------------------------------------------------
+
+# #------------------------------------------------------------------------------
+# def push_profile_processed(site):
+
+#     logger.info(f'Begin move of {site} processed profile data to UQRDM')
+#     _move_site_data_stream(site=site, stream='profile_proc')
+#     logger.info('Done.')
+# #------------------------------------------------------------------------------
+
+# #------------------------------------------------------------------------------
+# def push_rtmc(site):
+
+#     logger.info(f'Begin move of {site} RTMC images to Windows machine')
+#     _move_data_stream(site=site, stream='rtmc')
+#     logger.info('Done.')
+# #------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def pull_RTMC_images():
+    
+    logger.info('Begin retrieval of RTMC images from Windows machine')
+    generic_move(
+        local_location=(
+            pm.get_local_stream_path(
+                resource='network', 
+                stream='RTMC_images'
+                )
+            ), 
+            remote_location=(
+                pm.get_remote_stream_path(
+                    resource='network', 
+                    stream='RTMC_image_source'
+                )
+            ),
+        which_way='from_remote',
+        timeout=180
+        )
     logger.info('Done.')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def push_profile_processed(site):
-
-    logger.info(f'Begin move of {site} processed profile data to UQRDM')
-    _move_site_data_stream(site=site, stream='profile_proc')
-    logger.info('Done.')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def push_rtmc(site):
-
-    logger.info(f'Begin move of {site} RTMC images to UQRDM')
-    _move_site_data_stream(site=site, stream='rtmc')
+def push_RTMC_images():
+    
+    logger.info('Begin transfer of RTMC images to DSA')
+    generic_move(
+        local_location=(
+            pm.get_local_stream_path(
+                resource='network', 
+                stream='RTMC_images'
+                )
+            ), 
+            remote_location=(
+                pm.get_remote_stream_path(
+                    resource='network', 
+                    stream='RTMC_image_dest'
+                )
+            ),
+        which_way='to_remote',
+        mod_time=False,
+        timeout=180
+        )
     logger.info('Done.')
 #------------------------------------------------------------------------------
 
@@ -160,15 +213,19 @@ def push_homogenised_TOA5():
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def _move_site_data_stream(
+def move_data_stream(
         site, stream, exclude_dirs=None, which_way='to_remote', timeout=600
         ):
 
     local_path = _reformat_path_str(
-        pm.get_local_data_path(site=site, data_stream=stream, as_str=True)
+        pm.get_local_stream_path(
+            resource='raw_data', stream=stream, site=site, as_str=True
+            )
         )
     remote_path = _reformat_path_str(
-        pm.get_remote_data_path(site=site, data_stream=stream, as_str=True)
+        pm.get_remote_stream_path(
+            resource='raw_data', stream=stream, site=site, as_str=True
+            )
         )
     generic_move(
         local_location=local_path, remote_location=remote_path,

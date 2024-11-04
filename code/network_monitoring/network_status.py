@@ -31,7 +31,11 @@ def write_status_xlsx(site_list) -> None:
     """Evaluate status of all sites and write to xlsx. Returns None."""
 
     # Inits
-    output_path = 'E:/Scratch/status_test.xlsx'
+    output_path = pm.get_local_stream_path(
+        resource='network', 
+        stream='status',
+        file_name='network_status.xlsx'
+        )
     run_time = dt.datetime.now()
 
     slow_file_status_list = []
@@ -97,7 +101,11 @@ def write_status_xlsx(site_list) -> None:
 def write_status_geojson(site_list):
 
     rslt_list = []
-    output_path = 'E:/Scratch/network_status.json'
+    output_path = pm.get_local_stream_path(
+        resource='network', 
+        stream='status',
+        file_name='network_status.json'
+        )
 
     logging.info('Scanning network: ')
     for site in site_list:
@@ -106,7 +114,7 @@ def write_status_geojson(site_list):
 
         file = (
             pm.get_local_stream_path(
-                resource='data', stream='flux_slow', site=site
+                resource='homogenised_data', stream='TOA5', site=site
                 ) /
             f'{site}_merged_std.dat'
             )
@@ -208,12 +216,21 @@ def get_slow_file_status(
         md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
     site_time = _get_site_time(site=site, run_time=run_time)
 
-    # Get the logger / file particulars
-    files_df = (
-        md_mngr.site_variables[['logger', 'table', 'file']]
-        .drop_duplicates()
-        .reset_index(drop=True)
-        )
+    # Get the logger / file particulars (currently must handle sites with no 
+    # logger or table)
+    try:
+        files_df = (
+            md_mngr.site_variables[['logger', 'table', 'file']]
+            .drop_duplicates()
+            .reset_index(drop=True)
+            )
+    except KeyError:
+        files_df = (
+            md_mngr.site_variables[['file']]
+            .assign(logger='', table='')
+            [['logger','table','file']]
+            .reset_index(drop=True)
+            )
 
     # Get the file attributes
     attrs_df = (
@@ -226,13 +243,21 @@ def get_slow_file_status(
         )
 
     # Get the percentage missing data for each file
-    missing_df = pd.DataFrame(
-        [
-            fh.DataHandler(file=file, concat_files=True).get_missing_records()
-            for file in md_mngr.list_files(abs_path=True)
-            ]
-        )
-
+    # Note that here, we DONT try to concatenate if the file is an EP master 
+    # file because the concatenation is already handled
+    missing_list = []
+    do_concat = False
+    for file in md_mngr.list_files(abs_path=True):
+        if md_mngr.get_file_attributes(file.name)['format'] == 'TOA5':
+            do_concat = True
+        else:
+            do_concat = False
+        missing_list.append(
+            fh.DataHandler(file=file, concat_files=do_concat)
+            .get_missing_records()
+            )
+    missing_df = pd.DataFrame(missing_list)
+    
     # Combine all and return
     combined_df = pd.concat([files_df, attrs_df, missing_df], axis=1)
     return (
@@ -282,7 +307,9 @@ def get_slow_data_status(
     data_file = pm.get_local_stream_path(
         resource='homogenised_data',
         stream='TOA5',
-        site=site
+        site=site,
+        file_name=f'{site}_merged_std.dat',
+        check_exists=True
         )
     data_df = (
         io.get_data(file=data_file)

@@ -60,10 +60,10 @@ def append_to_eddypro_file(site: str) -> None:
     # Get the master file (raise error if missing)
     data_path = (
         pm.get_local_stream_path(
-            resource='data', stream='flux_slow', site=site
+            resource='raw_data', stream='flux_slow', site=site
             )
         )
-    master_file = 'test.txt' # Change this to site-based naming
+    master_file = f'{site}_EP_MASTER.txt'
     if not (data_path / master_file).exists():
         raise FileNotFoundError('Concatenated EddyPro file does not exist!')
 
@@ -113,11 +113,11 @@ def write_to_eddypro_file(site: str) -> None:
     # Get the file list
     data_path = (
         pm.get_local_stream_path(
-            resource='data', stream='flux_slow', site=site
+            resource='raw_data', stream='flux_slow', site=site
             )
         )
-    output_file = 'test.txt' # Change this to site-based naming
-    files_to_append = list(data_path.parent.glob(f'*{EP_SEARCH_STR}*.txt'))
+    output_file = f'{site}_EP_MASTER.dat'
+    files_to_append = list(data_path.glob(f'*{EP_SEARCH_STR}*.txt'))
 
     # Use the newest file as master, and previous files as append list
     master_file = max(files_to_append, key=os.path.getctime)
@@ -125,7 +125,7 @@ def write_to_eddypro_file(site: str) -> None:
     files_to_append = files_to_append[: master_idx]
 
     # Get the file handler and write to new master
-    handler = fh.DataHandler(file=output_file, concat_files=files_to_append)
+    handler = fh.DataHandler(file=master_file, concat_files=files_to_append)
     handler.write_conditioned_data(data_path / output_file)
 #------------------------------------------------------------------------------
 

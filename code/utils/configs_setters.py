@@ -16,7 +16,7 @@ import yaml
 from configobj import ConfigObj
 
 import io
-from .configs_manager import PathsManager
+from paths import paths_manager as pm
 from .site_details import SiteDetails
 
 GLOBAL_ATTRS = [
@@ -51,7 +51,6 @@ ALIAS_DICT = {'elevation': 'altitude'}
 
 DEVICES = ['modem', 'logger', 'camera']
 
-paths_mngr = PathsManager()
 Details = SiteDetails()
 
 ###############################################################################
@@ -303,7 +302,7 @@ class SiteConfigsGenerator():
         """
 
         self.site=site
-        self._xl = pd.ExcelFile('/store/Network/Documents/site_variable_map.xlsx'
+        self._xl = pd.ExcelFile(f'/store/Config_files/Site_based/xl_configs/{site}.xlsx'
             # paths_mngr.get_local_stream_path(
                 # resource='configs',
                 # stream='site_xl',
@@ -469,9 +468,8 @@ class SiteConfigsGenerator():
 
         """
 
-        out_path=paths_mngr.get_local_resource_path(
-            resource='configs', subdirs=subdir,
-            file_name=f'{self.site}_{file_name_elem}_variables.yml'
+        out_path=pm.get_local_stream_path(
+            resource='configs', stream='variables_vis', site=self.site
             )
         with open(file=out_path, mode='w', encoding='utf-8') as f:
             yaml.dump(data=rslt, stream=f, sort_keys=False)
@@ -574,7 +572,7 @@ def pfp_std_names_to_yml():
 
     """
 
-    file_path = paths_mngr.get_local_resource_path(
+    file_path = pm.get_local_resource_path(
         resource='configs', subdirs=['Globals']
         )
     data = (
@@ -613,7 +611,7 @@ def PFPL1XlToYml(site: str):
 
     """
 
-    variable_path = PathsManager.get_local_resource_path(
+    variable_path = pm.get_local_resource_path(
         resource='config_files', subdirs=['Variables']
         )
 
@@ -677,7 +675,7 @@ def _get_generic_globals_file() -> str | pathlib.Path:
     """
 
     return (
-        paths_mngr.get_local_resource_path(
+        pm.get_local_resource_path(
             resource='configs', subdirs=['Globals']
             ) /
         'generic_global_attrs.yml'

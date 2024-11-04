@@ -21,7 +21,6 @@ import yaml
 #------------------------------------------------------------------------------
 # CUSTOM IMPORTS #
 from paths import paths_manager as pm
-from utils import configs_getters as cg
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -264,7 +263,7 @@ class SiteDetails():
         self.df = make_df()
 
     #--------------------------------------------------------------------------
-    def export_to_excel(self, path, operational_sites_only=True):
+    def export_to_excel(self, output_path, operational_sites_only=True):
 
         """
 
@@ -285,7 +284,7 @@ class SiteDetails():
             df = self.get_operational_sites()
         else:
             df = self.df
-        df.to_excel(path, index_label='Site')
+        df.to_excel(output_path, index_label='Site')
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -318,40 +317,85 @@ class SiteDetails():
         return self.df.loc[site, field]
     #--------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
+    #--------------------------------------------------------------------------
+    def export_site_details_to_yml(self, site, output_path=None):
+        
+        # Set the output path
+        if output_path is None:
+            output_path = (
+                pm.get_local_stream_path(
+                    resource='network', stream='site_metadata'
+                    ) / 
+                f'{site}_details.yml'
+                )
 
-def write_site_details_to_configs(site=None):
+        # Format the data
+        site_data = (
+            _format_site_data(site_data=self.df.loc[site].fillna('')).to_dict()
+            )
 
-    # Set the output path
-    out_path = pm.get_local_stream_path(
-        resource='configs', stream='site_details'
-        )
+        # Output the data
+        with open(file=output_path, mode='w', encoding='utf-8') as f:
+            yaml.dump(data=site_data.to_dict(), stream=f, sort_keys=False)
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def export_all_details_to_yml(self, output_path, operational_sites_only=True):
+        
+        # Set the output path
+        if output_path is None:
+            output_path = (
+                pm.get_local_stream_path(
+                    resource='network', stream='site_metadata'
+                    ) / 
+                'site_details.yml'
+                )
+            
+        if operational_sites_only:
+            site_list = self.get_operational_sites(site_name_only=True)
+        else:
+            site_list = self.df.index.tolist()
+        site_data = {
+            site: _format_site_data(site_data=self.df.loc[site].fillna('')).to_dict()
+            for site in site_list
+            }
+        with open(file=output_path, mode='w', encoding='utf-8') as f:
+            yaml.dump(data=site_data, stream=f, sort_keys=False)
+    #--------------------------------------------------------------------------
 
-    # Get the data
-    df = make_df()
+# #------------------------------------------------------------------------------
+# def write_site_details_to_configs(site):
 
-    # Get the site list
-    if not site is None:
-        site_list = (cg.get_task_configs()['site_tasks']).keys()
-    else:
-        site_list = [site]
+#     # Set the output path
+#     out_path = pm.get_local_stream_path(
+#         resource='network', stream='site_metadata'
+#         )
 
-    # Iterate over site list
-    for site in site_list:
+#     # Get the data
+#     df = make_df()
 
-        try:
+#     # Get the site list
+#     if site is None:
+#         site_list = (cg.get_task_configs()['site_tasks']).keys()
+#     else:
+#         site_list = [site]
 
-            site_data = _format_site_data(site_data=df.loc[site].fillna(''))
+#     # Iterate over site list
+#     for site in site_list:
 
-            file = out_path / f'{site}_details.yml'
+#         try:
 
-            # Output
-            with open(file=file, mode='w', encoding='utf-8') as f:
-                yaml.dump(data=site_data.to_dict(), stream=f, sort_keys=False)
+#             site_data = _format_site_data(site_data=df.loc[site].fillna(''))
 
-        except KeyError:
+#             file = out_path / f'{site}_details.yml'
 
-            continue
+#             # Output
+#             with open(file=file, mode='w', encoding='utf-8') as f:
+#                 yaml.dump(data=site_data.to_dict(), stream=f, sort_keys=False)
+
+#         except KeyError:
+
+#             continue
 
 
 def _format_site_data(site_data):

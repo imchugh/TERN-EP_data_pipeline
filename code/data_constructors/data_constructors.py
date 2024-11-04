@@ -724,7 +724,7 @@ class StdDataConstructor():
         constrain_last_to_file = None
         if constrain_last_to_flux:
             constrain_last_to_file = (
-                self.md_mngr.io_paths['raw_data'] /
+                self.md_mngr.data_path /
                 self.md_mngr.get_variable_attributes(
                     variable='Fco2', return_field='file'
                     )
@@ -735,7 +735,7 @@ class StdDataConstructor():
         rslt = merge_data(
             files=merge_dict,
             concat_files=concat_files,
-            interval=f'{int(self.md_mngr.get_site_details().time_step)}T',
+            interval=f'{int(self.md_mngr.get_site_details().time_step)}min',
             constrain_last_to_file=constrain_last_to_file
             )
         self.data = rslt['data']
@@ -874,36 +874,6 @@ class StdDataConstructor():
         return output_headers
     #--------------------------------------------------------------------------
 
-    # #--------------------------------------------------------------------------
-    # def write_to_file(self, path_to_file: pathlib.Path | str=None) -> None:
-    #     """
-    #     Write data to file.
-
-    #     Args:
-    #         path_to_file (optional): output file path. If None, slow data path
-    #         and default name used. Defaults to None.
-
-    #     Returns:
-    #         None.
-
-    #     """
-
-    #     if not path_to_file:
-    #         path_to_file = (
-    #             self.md_mngr.data_path / f'{self.site}_merged.dat'
-    #             )
-    #     headers = self.parse_headers()
-    #     data = self.parse_data()
-    #     io.write_data_to_file(
-    #         headers=io.reformat_headers(headers=headers, output_format='TOA5'),
-    #         data=io.reformat_data(data=data, output_format='TOA5'),
-    #         abs_file_path=path_to_file,
-    #         output_format='TOA5'
-    #         )
-    # #--------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-
 ###############################################################################
 ### END VISUALISATION DATA BUILDER CLASS ###
 ###############################################################################
@@ -936,13 +906,8 @@ def write_to_std_file(site: str, concat_files: bool=True) -> None:
         constrain_last_to_flux=site in CONSTRAIN_SITES_TO_FLUX
         )
 
-    # Get path information from the embedded metadata manager
     # Get path information
-    file_path = pm.get_local_stream_path(
-        resource='homogenised_data',
-        stream='TOA5',
-        site=site
-        )
+    file_path = _get_std_file_path(site=site)
     if file_path.exists():
         raise FileExistsError('File already created!')
 
@@ -1006,12 +971,7 @@ def append_to_std_file(site: str) -> None:
         )
 
     # Get path information
-    file_path = pm.get_local_stream_path(
-        resource='homogenised_data',
-        stream='TOA5',
-        site=site
-        )
-
+    file_path = _get_std_file_path(site=site)
     if not file_path.exists():
         raise FileNotFoundError('No standard file exists to append to!')
 
@@ -1084,6 +1044,19 @@ def generate_std_file(site):
         write_to_std_file(site=site)
 #------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+def _get_std_file_path(site):
+    
+    return (
+        pm.get_local_stream_path(
+            resource='homogenised_data',
+            stream='TOA5',
+            site=site
+            ) / 
+        f'{site}_merged_std.dat'
+        )
+#------------------------------------------------------------------------------
+
 ###############################################################################
 ### END VISUALISATION FILE WRITE FUNCTIONS ###
 ###############################################################################
@@ -1124,7 +1097,7 @@ def merge_data(
 
     data_list, header_list = [], []
     for file in files:
-
+       
         # If type is dict, use dict keys as variable map
         try:
             usecols = files[file]
@@ -1132,7 +1105,6 @@ def merge_data(
             usecols = None
 
         # Get file type, and disable file concatenation for all EddyPro files
-        breakpoint()
         file_type = io.get_file_type(file=file)
         do_concat = concat_files == True
         if file_type == 'EddyPro':
@@ -1160,7 +1132,7 @@ def merge_data(
                 usecols=usecols, drop_non_numeric=True
                 )
             )
-
+        
     # Concatenate lists
     headers = pd.concat(header_list).fillna('')
     data = pd.concat(data_list, axis=1)

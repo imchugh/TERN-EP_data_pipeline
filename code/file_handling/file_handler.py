@@ -97,7 +97,7 @@ class DataHandler():
 
         # Do the resampling
         if monotonic_index and not resample_intvl:
-            resample_intvl = f'{self.interval}T'
+            resample_intvl = f'{self.interval}min'
         if resample_intvl:
             output_data = output_data.resample(resample_intvl).asfreq()
 
@@ -249,7 +249,7 @@ class DataHandler():
         complete_index = pd.date_range(
             start=data.index[0],
             end=data.index[-1],
-            freq=f'{self.interval}T'
+            freq=f'{self.interval}min'
             )
         n_missing = len(complete_index) - len(data)
         return {

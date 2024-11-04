@@ -14,7 +14,6 @@ Todo:
 
 """
 
-import numpy as np
 import os
 import pandas as pd
 
@@ -28,6 +27,7 @@ VALID_LOC_UNITS = ['cm', 'm']
 VALID_SUFFIXES = {
     'Av': 'average', 'Sd': 'standard deviation', 'Vr': 'variance', 'Sum': 'Sum'
     }
+_NAME_MAP = {'site_name': 'name', 'std_name': 'std_name'}
 
 ###############################################################################
 ### BEGIN SINGLE SITE CONFIGURATION READER SECTION ###
@@ -62,26 +62,21 @@ class MetaDataManager():
                 site=site, resource='raw_data', stream='flux_slow'
                 )
             )
-        self.io_paths = {
-            'raw_data': pm.get_local_stream_path(
-                resource='raw_data', stream='flux_slow', site=site,
-                ),
-            'TOA5_homogenised': pm.get_local_stream_path(
-                resource='homogenised_data', stream='TOA5', site=site
-                ),
-            'nc_L1': pm.get_local_stream_path(
-                resource='homogenised_data', stream='NetCDF', site=site
+        
+        # Save the basic configs from the yml file
+        self.configs = io.read_yml(
+            file=pm.get_local_stream_path(
+                resource='configs',
+                stream=f'variables_{self.variable_map}',
+                site=self.site
                 )
-            }
+            )
 
         # Create site-based variables table
         self._parse_site_variables()
-
+       
         # Get flux instrument types
         self.instruments = self._get_inst_type()
-
-        # Private inits
-        self._NAME_MAP = {'site_name': 'name', 'std_name': 'std_name'}
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -96,33 +91,15 @@ class MetaDataManager():
 
         # Get the variable map and check the conformity of all names
         df = (
-            pd.DataFrame(
-                io.read_yml(
-                    file=pm.get_local_stream_path(
-                        resource='configs',
-                        stream=f'variables_{self.variable_map}',
-                        site=self.site
-                        )
-                    )
-                )
+            pd.DataFrame(self.configs)
             .T
             .rename_axis('std_name')
             .pipe(self._test_variable_conformity)
-            )
-
-        # Assign missing variables
-        missing_variables = df.loc[pd.isnull(df.name)]
-        breakpoint()
-        if len(missing_variables) == 0:
-            missing_variables = None
-        self.missing_variables = missing_variables
-
-        # Assign extant variables and ensure valid file names are either
-        # present or generated
-        self.site_variables = (
-            df.loc[~pd.isnull(df.name)]
             .pipe(self._test_file_assignment)
             )
+        
+        self.site_variables = df[~df.missing]
+        self.missing_variables = df[df.missing]
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -152,8 +129,7 @@ class MetaDataManager():
             )
         
         # Convert minima and maxima columns to numeric
-        numeric_cols = ['plausible_min', 'plausible_max']
-        for col in numeric_cols:
+        for col in ['plausible_min', 'plausible_max']:
             props_df[col] = pd.to_numeric(props_df[col])
         
         return pd.concat([df, props_df], axis=1)
@@ -173,33 +149,23 @@ class MetaDataManager():
         """
 
         file_list = []
-
+        df = df.assign(missing=df.name.str.len()==0)
+        
+        # If 'file' keyword is in the configuration, override logger / table 
+        # filename construction
         if 'file' in df.columns:
+            file_list = df.loc[~df.missing, 'file']
 
-            # if any(pd.isnull(df['file'])):
-            #     raise TypeError(
-            #         'If configuration file contains file definitions, they '
-            #         'must ALL be of type string!'
-            #         )
-            file_list = df.loc[~(df.file==''), 'file'].tolist()
-
+        # Otherwise use site, logger and table name to construct filename 
         elif 'logger' and 'table' in df.columns:
 
-            # if any(pd.isnull(df[['logger', 'table']]).any()):
-            #     raise TypeError(
-            #         'If configuration file contains logger and table '
-            #         'definitions, they  must ALL be of type string!'
-            #         )
-            sub_df = df.loc[
-                (~(df.logger=='')) | (~(df.table=='')), 
-                ['logger', 'table']
-                ]
             file_list = (
                 f'{self.site}_' +
-                sub_df.agg('_'.join, axis=1) +
-                '.dat'
+                df.loc[~df.missing, ['logger', 'table']]
+                .agg('_'.join, axis=1) + '.dat'
                 )
 
+        # Raise error if none of the requisite fields are available
         else:
 
             raise RuntimeError(
@@ -207,12 +173,16 @@ class MetaDataManager():
                 'in the configuration file!'
                 )
 
-        for file in np.unique(file_list):
+        # Check file paths are valid
+        for file in file_list.unique():
             if not (self.data_path / file).exists():
                 raise FileNotFoundError(
                     f'File {file} does not exist in the data path'
                     )
-        return df.assign(file=file_list).fillna('')
+        
+        # Assign and return
+        df['file'] = file_list
+        return df.fillna('')
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -245,10 +215,10 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_site_details(self) -> pd.Series:
+    def get_site_details(self, field=None) -> pd.Series:
         """ Get the non-variable site details."""
 
-        return SiteDetails().get_single_site_details(site=self.site)
+        return SiteDetails().get_single_site_details(site=self.site, field=field)
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -322,7 +292,11 @@ class MetaDataManager():
 
         """
 
-        return self.site_variables.index.tolist()
+        return (
+            self._index_translator(use_index='std_name', include_missing=True)
+            .index
+            .tolist()
+            )
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -431,7 +405,10 @@ class MetaDataManager():
 
         """
 
-        df = self._index_translator(use_index=source_field)
+        df = self._index_translator(
+            use_index=source_field,
+            include_missing=True
+            )
         if return_field is None:
             return df.loc[variable]
         return df.loc[variable, return_field]
@@ -593,13 +570,15 @@ class MetaDataManager():
 
         """
 
-        translate_to = self._NAME_MAP.copy()
+        translate_to = _NAME_MAP.copy()
         translate_to.pop(source_field)
         return list(translate_to.values())[0]
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _index_translator(self, use_index: str) -> pd.core.frame.DataFrame:
+    def _index_translator(
+            self, use_index: str, include_missing=False
+            ) -> pd.core.frame.DataFrame:
         """
         Reindex the variable lookup table on the desired index.
 
@@ -611,10 +590,13 @@ class MetaDataManager():
 
         """
 
+        df = self.site_variables.copy()
+        if include_missing:
+            df = pd.concat([df, self.missing_variables])
         return (
-            self.site_variables
+            df
             .reset_index()
-            .set_index(keys=self._NAME_MAP[use_index])
+            .set_index(keys=_NAME_MAP[use_index])
             )
     #--------------------------------------------------------------------------
 
@@ -730,8 +712,9 @@ class PFPNameParser():
         # Raise error if list element remains
         if len(elems) > 0:
             raise RuntimeError(
-                'Unrecognised element remains: checks failed with the '
-                f'following messages: {errors}'
+                'Unrecognised element remains: checks failed for variable '
+                f'name {variable_name} with the following messages: {errors}'
+                
                 )
 
         # Get properties
@@ -817,10 +800,17 @@ class PFPNameParser():
             return {}
 
         elem = parse_list[0]
-        if len(elem) == 1:
-            if elem.isdigit() or elem.isalpha():
-                parse_list.remove(elem)
-                return {'replicate': elem}
+        
+        valid = False
+        if elem.isdigit():
+            valid = True
+        if elem.isalpha():
+            valid = True
+            
+        if valid:
+            parse_list.remove(elem)
+            return {'replicate': elem}
+            
         raise TypeError(
             'Replicate identifier must be a single alphanumeric character! '
             f'You passed "{elem}"!'
@@ -898,7 +888,6 @@ def get_last_10Hz_file(site):
             resource='raw_data',
             stream='flux_fast',
             site=site,
-            subdirs=['TOB3'],
             check_exists=True
             )
     except FileNotFoundError:

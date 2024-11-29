@@ -478,7 +478,7 @@ class SiteConfigsGenerator():
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-class PFPL1CntlToXl():
+class PFPL1CntlParser():
     """Class to convert L1 control files to excel workbooks (one sheet contains
     the global fields, one sheet contains the variable fields). The 'Variables'
     sheet then needs to be manually amended so that the 'sheet' field is
@@ -680,3 +680,51 @@ def _get_generic_globals_file() -> str | pathlib.Path:
             ) /
         'generic_global_attrs.yml'
         )
+
+def convert_xl_variables_to_yml(site):
+    
+    input_path = (
+        pm.get_local_stream_path(resource='configs', stream='site_xl') /
+        f'{site}.xlsx'
+        )
+    output_path = (
+        pm.get_local_stream_path(
+            resource='configs', stream='variables_vis', site='Whroo'
+            )
+        )
+    
+    data = (
+        pd.read_excel(input_path)
+        .set_index('variable')
+        .pipe(_listify, 'tables')
+        .fillna('')
+        .squeeze()
+        .T
+        .to_dict()
+        )
+        
+    _write_yml(file=output_path, data=data)
+
+def _listify(data: pd.DataFrame, series_name) -> pd.DataFrame:
+    """
+    Convert comma-separated string to list.
+
+    Args:
+        data: the data containing the comma-separated table string.
+        series_name: the name of the series for which elements will be listified.
+
+    Returns:
+        data: the data with listified series.
+
+    """
+
+    try:
+        data[series_name] = data[series_name].apply(lambda x: x.split(','))
+        return data
+    except KeyError:
+        return data
+    
+def _write_yml(file: pathlib.Path | str, data: dict) -> None:
+    
+    with open(file, mode='w', encoding='utf-8') as f:
+        yaml.dump(data=data, stream=f, sort_keys=False)

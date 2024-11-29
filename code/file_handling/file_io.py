@@ -30,16 +30,14 @@ from numpy.typing import ArrayLike
 import pandas as pd
 import pathlib
 
-from paths import paths_manager as pm
+# from paths import paths_manager as pm
+from utils import configs_getters as cg
 
 ###############################################################################
 ### CONSTANTS ###
 ###############################################################################
 
-# configs_path = pathlib.Path(__file__).parent / 'file_configs.yml'
-# with open(configs_path) as f:
-#     FILE_CONFIGS = yaml.safe_load(stream=f)
-FILE_CONFIGS = pm.get_local_config_file(config_stream='raw_file_configs')
+FILE_CONFIGS = cg.get_configs(config_name='raw_file_format')
 INFO_FIELD_NAMES = [
     'format', 'station_name', 'logger_type', 'serial_num', 'OS_version',
     'program_name', 'program_sig', 'table_name'
@@ -48,8 +46,6 @@ INFO_FIELD_NAMES = [
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 EDDYPRO_SEARCH_STR = 'EP-Summary'
-
-
 
 ###############################################################################
 ### FUNCTIONS ###

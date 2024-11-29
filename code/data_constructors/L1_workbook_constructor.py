@@ -22,7 +22,7 @@ def construct_L1_xlsx(site):
     time_step = str(int(md_mngr.get_site_details().time_step)) + 'min'
     output_path = pm.get_local_stream_path(
         resource='homogenised_data', 
-        stream='xl', 
+        stream='xlsx', 
         file_name=f'{site}_L1.xlsx'
         )
     
@@ -36,7 +36,16 @@ def construct_L1_xlsx(site):
             input_path = md_mngr.data_path / file
             sheet_name = input_path.stem
             
-            handler = fh.DataHandler(file=input_path, concat_files=True)
+            # Get file type, and disable file concatenation for all EddyPro files
+            do_concat = True
+            file_type = (
+                md_mngr.get_file_attributes(file=file, return_field='format')
+                )
+            if file_type == 'EddyPro':
+                do_concat = False
+            
+            # Get the handler
+            handler = fh.DataHandler(file=input_path, concat_files=do_concat)
             
             # Write info line
             logger.info('Writing info line')

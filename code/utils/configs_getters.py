@@ -8,6 +8,7 @@ Created on Tue Aug 27 15:45:33 2024
 #------------------------------------------------------------------------------
 # STANDARD IMPORTS #
 import pathlib
+import yaml
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -114,3 +115,19 @@ def _insert_site(file_path: pathlib.Path | str, site: str) -> pathlib.Path:
 ### END SITE-BASED CONFIGURATION RETRIEVAL FUNCTIONS ###
 ###############################################################################
 
+def list_available_config_names():
+    
+    return [
+        file.stem for file in
+        (pathlib.Path(__file__).resolve().parents[1] / 'configs').glob('*.yml')
+        ]
+    
+def get_configs(config_name):
+    
+    path = (
+        pathlib.Path(__file__).resolve().parents[1] / 
+        'configs' / 
+        f'{config_name}.yml'
+        )
+    with open(path) as f:
+        return yaml.safe_load(stream=f)

@@ -45,7 +45,8 @@ import utils.metadata_handlers as mh
 #------------------------------------------------------------------------------
 SITE_DETAIL_ALIASES = {'elevation': 'altitude'}
 SITE_DETAIL_SUBSET = [
-    'fluxnet_id', 'latitude', 'longitude', 'elevation', 'time_step', 'time_zone'
+    'fluxnet_id', 'latitude', 'longitude', 'elevation', 'time_step', 
+    'time_zone', 'canopy_height', 'tower_height', 'soil', 'vegetation'
     ]
 VAR_METADATA_SUBSET = [
     'height', 'instrument', 'long_name', 'standard_name', 'statistic_type',
@@ -54,7 +55,7 @@ VAR_METADATA_SUBSET = [
 STATISTIC_ALIASES = {'average': 'Avg', 'variance': 'Vr', 'sum': 'Tot'}
 TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 MERGED_FILE_NAME = '<site>_merged_std.dat'
-CONSTRAIN_SITES_TO_FLUX = ['CumberlandPlain']
+# CONSTRAIN_SITES_TO_FLUX = ['CumberlandPlain']
 logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
@@ -95,13 +96,14 @@ class L1DataConstructor():
             for table, file in self.md_mngr.map_tables_to_files(abs_path=True).items()
             }
         self.data = (
-            merge_data(
-                files=merge_dict, concat_files=concat_files
-                )
+            merge_data(files=merge_dict, concat_files=concat_files)
             ['data']
             )
         self.data_years = self.data.index.year.unique().tolist()
         self.global_attrs = self._get_site_global_attrs()
+        self.io_path = pm.get_local_stream_path(
+            resource='homogenised_data', stream='nc', subdirs=[site]
+            )
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -449,7 +451,7 @@ class L1DataConstructor():
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def make_nc_file(site: str, split_by_year: bool=True):
+def write_nc_file(site: str, split_by_year: bool=True):
     """
     Merge all data and metadata sources to create a netcdf file.
 
@@ -465,17 +467,21 @@ def make_nc_file(site: str, split_by_year: bool=True):
     data_builder = L1DataConstructor(site=site, concat_files=True)
     if not split_by_year:
         ds = data_builder.build_xarray_dataset_complete()
-        output_path = data_builder.md_mngr.io_paths['NetCDF'] / f'{site}_L1.nc'
-        ds.to_netcdf(path=output_path, mode='w')
+        file_out_path = data_builder.io_path / f'{site}_L1.nc'
+        if file_out_path.exists():
+            raise FileExistsError('File already created!')
+        ds.to_netcdf(path=file_out_path, mode='w')
         return
     for year in data_builder.data_years:
         ds = data_builder.build_xarray_dataset_by_year(year=year)
-        output_path = data_builder.md_mngr.io_paths['NetCDF'] / f'{site}_{year}_L1.nc'
-        ds.to_netcdf(path=output_path, mode='w')
+        file_out_path = data_builder.io_path / f'{site}_{year}_L1.nc'
+        if file_out_path.exists():
+            raise FileExistsError('File already created for year {year}!')
+        ds.to_netcdf(path=data_builder.io_path / f'{site}_{year}_L1.nc', mode='w')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def make_nc_year_file(site: str, year: int):
+def write_nc_year_file(site: str, year: int=None, overwrite: bool=False) -> None:
     """
     Merge all data and metadata sources to create a single year netcdf file.
 
@@ -490,12 +496,25 @@ def make_nc_year_file(site: str, year: int):
         None.
 
     """
-
+    
+    if year is None:
+        year=dt.datetime.now().year
+    expected_file = pm.get_local_stream_path(
+        resource='homogenised_data', stream='nc', subdirs=[site], 
+        file_name=f'{site}_{year}_L1.nc'
+        )
+    if expected_file.exists():
+        if not overwrite:
+            raise FileExistsError(
+                f'File with name {expected_file} exists! '
+                'If you wish to overwrite, set overwrite=True'
+                )
     data_builder = L1DataConstructor(site=site, concat_files=True)
     if not year in data_builder.data_years:
         raise IndexError('No data available for current data year!')
+    output_path = data_builder.io_path / f'{site}_{year}_L1.nc'
     ds = data_builder.build_xarray_dataset_by_year(year=year)
-    output_path = data_builder.md_mngr.io_paths['NetCDF'] / f'{site}_{year}_L1.nc'
+    output_path = data_builder.io_path / f'{site}_{year}_L1.nc'
     ds.to_netcdf(path=output_path, mode='w')
 #------------------------------------------------------------------------------
 
@@ -512,17 +531,20 @@ def append_to_current_nc_file(site: str):
 
     """
 
-    md_mngr = mh.MetaDataManager(site=site)
-    expected_year = dt.datetime.now().year
-    expected_file = md_mngr.io_paths['NetCDF'] / f'{site}_{expected_year}_L1.nc'
+    year = dt.datetime.now().year
+    expected_file = pm.get_local_stream_path(
+        resource='homogenised_data', stream='nc', subdirs=[site], 
+        file_name=f'{site}_{year}_L1.nc'
+        )
     if not expected_file.exists():
-        make_nc_year_file(site=site, year=expected_year)
-    else:
-        append_to_nc(site=site, nc_file=expected_file)
+        raise FileNotFoundError(
+            f'File with name {expected_file} does not exist!'
+            )
+    append_to_nc_file(site=site, nc_file=expected_file)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def append_to_nc(site: str, nc_file: pathlib.Path | str):
+def append_to_nc_file(site: str, nc_file: pathlib.Path | str):
     """
     Generic append function. Only appends new data.
 
@@ -539,10 +561,13 @@ def append_to_nc(site: str, nc_file: pathlib.Path | str):
     last_nc_date = pd.Timestamp(ds.time.values[-1]).to_pydatetime()
     md_mngr = mh.MetaDataManager(site=site)
     last_raw_date = min(
-        [md_mngr.get_file_attrs(x)['end_date'] for x in md_mngr.list_files()]
+        [
+            md_mngr.get_file_attributes(file=file, return_field='end_date') 
+            for file in md_mngr.list_files()
+            ]
         )
     if not last_raw_date > last_nc_date:
-        print('No new data to append!')
+        logger.info('No new data to append!')
         return
     data_builder = L1DataConstructor(site=site, md_mngr=md_mngr)
     date_iloc = data_builder.data.index.get_loc(last_nc_date) + 1
@@ -699,7 +724,7 @@ class StdDataConstructor():
     #--------------------------------------------------------------------------
     def __init__(
             self, site: str, concat_files: bool=True, error_on_missing=True,
-            constrain_last_to_flux=False
+            constrain_last_to_flux=True
             ) -> None:
         """
         Assign metadata manager, missing variables and raw data and headers.
@@ -903,7 +928,7 @@ def write_to_std_file(site: str, concat_files: bool=True) -> None:
     data_const = StdDataConstructor(
         site=site,
         concat_files=concat_files,
-        constrain_last_to_flux=site in CONSTRAIN_SITES_TO_FLUX
+        constrain_last_to_flux=True #site in CONSTRAIN_SITES_TO_FLUX
         )
 
     # Get path information
@@ -967,7 +992,7 @@ def append_to_std_file(site: str) -> None:
     data_const = StdDataConstructor(
         site=site,
         concat_files=False,
-        constrain_last_to_flux = site in CONSTRAIN_SITES_TO_FLUX
+        constrain_last_to_flux=True #site in CONSTRAIN_SITES_TO_FLUX
         )
 
     # Get path information

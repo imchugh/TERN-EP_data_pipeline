@@ -107,10 +107,10 @@ def write_status_geojson(site_list):
         file_name='network_status.json'
         )
 
-    logging.info('Scanning network: ')
+    logger.info('Scanning network: ')
     for site in site_list:
 
-        logging.info(f'    - retrieving status for site {site}...')
+        logger.info(f'    - retrieving status for site {site}...')
 
         file = (
             pm.get_local_stream_path(
@@ -132,15 +132,20 @@ def write_status_geojson(site_list):
                 )
             )
 
-        logging.info('    ... done!')
+        logger.info('    ... done!')
 
-    logging.info('Scan complete - dumping to file...')
+    logger.info('Scan complete - dumping to file...')
 
     json_obj = geojson.FeatureCollection(rslt_list)
+    json_obj['metadata'] = {
+        'rundatetime': dt.datetime.strftime(
+            dt.datetime.now(), '%Y-%m-%d %H:%M:%S'
+            )
+        }
     with open(file=output_path, mode='w', encoding='utf-8') as f:
         geojson.dump(json_obj,f,indent=4)
 
-    logging.info('... done!')
+    logger.info('... done!')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

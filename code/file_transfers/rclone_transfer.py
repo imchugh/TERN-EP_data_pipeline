@@ -21,8 +21,7 @@ from paths import paths_manager as pm
 # INITS
 APP_PATH = 'rclone'
 ARGS_LIST = [
-    'copy', '--transfers', '36', '--progress', '--checksum', '--checkers',
-    '48', '--timeout', '0'
+    'copy', '--transfers', '10', '--progress', '--checksum', '--timeout', '0'
     ]
 logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
@@ -110,11 +109,21 @@ def push_status_files():
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def push_fast_flux(site):
+def push_main_fast_flux(site):
 
     logger.info(f'Begin move of {site} fast data to UQRDM flux archive')
     move_data_stream(
         site=site, stream='flux_fast', exclude_dirs=['TMP'], timeout=1200
+        )
+    logger.info('Done.')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_aux_fast_flux(site):
+
+    logger.info(f'Begin move of {site} fast data to UQRDM flux archive')
+    move_data_stream(
+        site=site, stream='flux_fast_aux', exclude_dirs=['TMP'], timeout=1200
         )
     logger.info('Done.')
 #------------------------------------------------------------------------------
@@ -135,13 +144,37 @@ def push_slow_flux(site):
 #     logger.info('Done.')
 # #------------------------------------------------------------------------------
 
-# #------------------------------------------------------------------------------
-# def push_rtmc(site):
+#------------------------------------------------------------------------------
+def push_status_geojson() -> None:
+    """Use Rclone to push data to rdm"""
 
-#     logger.info(f'Begin move of {site} RTMC images to Windows machine')
-#     _move_data_stream(site=site, stream='rtmc')
-#     logger.info('Done.')
-# #------------------------------------------------------------------------------
+    _push_status_file(which='geojson')    
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_status_xlsx() -> None:
+    """Use Rclone to push data to rdm"""
+    
+    _push_status_file(which='xlsx')    
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def _push_status_file(which) -> None:
+    """Helper function"""
+    
+    resource = 'network'
+    stream = f'status_{which}'
+    generic_move(
+        local_location=pm.get_local_stream_path(
+            resource=resource, stream=stream, as_str=True
+            ),
+        remote_location=pm.get_remote_stream_path(
+            resource=resource, stream=stream, as_str=True
+            ),
+        which_way='to_remote',
+        mod_time=False
+        )
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def pull_RTMC_images():
@@ -185,7 +218,7 @@ def push_RTMC_images():
             ),
         which_way='to_remote',
         mod_time=False,
-        timeout=180
+        timeout=600
         )
     logger.info('Done.')
 #------------------------------------------------------------------------------
@@ -193,19 +226,42 @@ def push_RTMC_images():
 #------------------------------------------------------------------------------
 def push_homogenised_TOA5():
 
-    logger.info('Begin move of homogenised data')
+    _push_homogenised(stream='TOA5')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_TOA5():
+
+    _push_homogenised(stream='TOA5')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_L1_xlsx():
+    
+    _push_homogenised(stream='xlsx')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_L1_nc():
+    
+    _push_homogenised(stream='nc')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def _push_homogenised(stream):
+    
+    allowed_streams = pm.list_local_streams(resource='homogenised_data')
+    if not stream in allowed_streams:
+        raise KeyError(f'`stream` must be one of {allowed_streams}')
+    logger.info(f'Begin move of homogenised data {stream}')
+    resource = 'homogenised_data'
+    stream = stream
     generic_move(
         local_location=(
-            pm.get_local_stream_path(
-                resource='homogenised_data', 
-                stream='TOA5'
-                )
+            pm.get_local_stream_path(resource=resource, stream=stream)
             ),
         remote_location=(
-            pm.get_remote_stream_path(
-                resource='homogenised_data', 
-                stream='TOA5'
-                )
+            pm.get_remote_stream_path(resource=resource, stream=stream)
             ),
         timeout=180
         )

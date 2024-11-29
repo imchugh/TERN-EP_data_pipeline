@@ -1,0 +1,212 @@
+# Master site list 
+
+sites:
+  - AliceSpringsMulga
+  - Boyagin
+  - Calperum
+  - CowBay
+  - CumberlandPlain
+  - Fletcherview
+  - Gingin
+  - GreatWesternWoodlands
+  - HowardSprings
+  - Litchfield
+  - MyallValeA
+  - MyallValeB
+  - Ridgefield
+  - RobsonCreek
+  - SnowGum
+  - SturtPlains
+  - Tumbarumba
+  - Wellington
+  - Whroo
+  - WombatStateForest
+  - Yanco
+
+# Task list with sublists for sites to process 
+# (note that tasks with empty lists are either not site-specific, or default to master site list)
+  
+tasks:
+
+  # Data constructors
+  
+  construct_homogenised_TOA5:
+    - AliceSpringsMulga
+    - Boyagin
+    - Calperum
+    - CumberlandPlain
+    - Fletcherview
+    - Gingin
+    - GreatWesternWoodlands
+    - HowardSprings
+    - Litchfield
+    - MyallValeA
+    - MyallValeB
+    - Ridgefield
+    - SnowGum
+    - SturtPlains
+    - Wellington
+    - Whroo
+    - WombatStateForest
+    - Yanco
+
+  construct_L1_xlsx:
+    - AliceSpringsMulga
+    - Boyagin
+    - Calperum
+    - CowBay
+    - CumberlandPlain
+    - Fletcherview
+    - Gingin
+    - GreatWesternWoodlands
+    - HowardSprings
+    - Litchfield
+    - MyallValeA
+    - MyallValeB
+    - Ridgefield
+    - RobsonCreek
+    - SnowGum
+    - SturtPlains
+    - Wellington
+    - Whroo
+    - WombatStateForest
+    - Yanco
+
+  construct_L1_nc:
+    - Calperum
+
+  update_EddyPro_master:
+    - CumberlandPlain
+
+  # Data processing
+
+  process_profile_data:
+    - Boyagin
+    - CumberlandPlain
+
+  # Local data moving
+  
+  file_main_fast_data:
+    - Boyagin
+    - Calperum
+    - Gingin
+    - GreatWesternWoodlands
+    - HowardSprings
+    - Whroo
+    
+  file_aux_fast_data:
+    - Boyagin
+    
+  # Network status constructors
+  
+  construct_status_xlsx:
+    - AliceSpringsMulga
+    - Boyagin
+    - Calperum
+    - CowBay
+    - CumberlandPlain
+    - Fletcherview
+    - Gingin
+    - GreatWesternWoodlands
+    - HowardSprings
+    - Litchfield
+    - MyallValeA
+    - MyallValeB
+    - Ridgefield
+    - RobsonCreek
+    - SnowGum
+    - SturtPlains
+    - Tumbarumba
+    - Wellington
+    - Whroo
+    - WombatStateForest
+    - Yanco
+    
+  construct_status_geojson:
+    - AliceSpringsMulga
+    - Boyagin
+    - Calperum
+    - CowBay
+    - CumberlandPlain
+    - Fletcherview
+    - Gingin
+    - GreatWesternWoodlands
+    - HowardSprings
+    - Litchfield
+    - MyallValeA
+    - MyallValeB
+    - Ridgefield
+    - RobsonCreek
+    - SnowGum
+    - SturtPlains
+    - Tumbarumba 
+    - Wellington
+    - Whroo
+    - WombatStateForest
+    - Yanco
+
+  # Metadata constructors  
+
+  construct_site_details_file: []
+
+  # Rclone transfers - pull tasks
+
+  pull_profile_raw_rdm:
+    - CumberlandPlain
+    
+  pull_slow_rdm:
+    - CowBay
+    - CumberlandPlain
+    - RobsonCreek  
+ 
+  pull_RTMC_images: []  
+
+  # Rclone transfers - push tasks
+
+  push_fast_rdm:
+    - Boyagin
+    - Calperum
+    - Gingin
+    - GreatWesternWoodlands
+    - HowardSprings
+    - Whroo
+    - WombatStateForest
+    
+  push_profile_raw_rdm:
+    - Boyagin
+
+  push_profile_proc_rdm:
+    - Boyagin
+    - CumberlandPlain
+    
+  push_slow_rdm:
+    - AliceSpringsMulga
+    - Boyagin
+    - Calperum
+    - Fletcherview
+    - Gingin
+    - GreatWesternWoodlands
+    - HowardSprings
+    - Litchfield
+    - MyallValeA
+    - MyallValeB
+    - Ridgefield
+    - SnowGum
+    - SturtPlains
+    - Tumbarumba
+    - Wellington
+    - Whroo
+    - WombatStateForest
+    - Yanco
+
+  push_RTMC_images: []
+
+  push_status_geojson: []
+  
+  push_status_xlsx: []
+
+  # s/ftp - push tasks
+  
+  push_cosmoz:
+    - Fletcherview
+    - AliceSpringsMulga

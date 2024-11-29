@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = 'empty-project-type'
-recent_files = ['file_handling/file_io.py', 'file_handling/file_handler.py', 'file_handling/file_concatenators.py', 'file_transfers/rclone_transfer.py', 'data_constructors/details_constructor.py', 'utils/metadata_handlers.py', 'paths/paths_manager.py', 'tasks/tasks.py', 'file_handling/eddypro_concatenator.py', 'data_constructors/data_constructors.py', 'utils/site_details.py', '__init__.py', 'run.py', 'utils/configs_setters.py']
+recent_files = ['profile_processing/profile_data_processor.py', 'profile_processing/Boyagin_data_prep.py', 'file_handling/file_handler.py', 'file_handling/file_concatenators.py', 'tasks/tasks.py']
 
 [main]
 version = 0.2.0

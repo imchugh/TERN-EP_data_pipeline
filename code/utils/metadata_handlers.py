@@ -223,7 +223,7 @@ class MetaDataManager():
 
     #--------------------------------------------------------------------------
     def get_file_attributes(
-            self, file: str, include_extended=False
+            self, file: str, include_extended=False, return_field=None
             ) -> pd.Series:
         """
         Get file attributes from file header.
@@ -245,6 +245,8 @@ class MetaDataManager():
                 {'interval': io.get_file_interval(self.data_path / file)} |
                 {'backups': io.get_eligible_concat_files(self.data_path / file)}
                 )
+        if return_field:
+            return rslt[return_field]
         return pd.Series(rslt)
     #--------------------------------------------------------------------------
 
@@ -895,8 +897,9 @@ def get_last_10Hz_file(site):
 
     # Get file and age in days
     try:
-        return max(data_path.rglob('TOB3*.dat'), key=os.path.getctime).name
-    except ValueError:
+        #return max(data_path.rglob('TOB3*.dat'), key=os.path.getctime).name
+        return sorted([file.name for file in data_path.rglob('TOB3*.dat')])[-1]
+    except IndexError:
         return dummy_response
 #------------------------------------------------------------------------------
 

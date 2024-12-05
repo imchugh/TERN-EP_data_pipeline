@@ -10,6 +10,7 @@ web-based UI where the PI can enter the requisite info.
 @author: jcutern-imchugh
 """
 
+import ast
 import pandas as pd
 import pathlib
 import yaml
@@ -390,7 +391,7 @@ class SiteConfigsGenerator():
         return (
             self._xl.parse(sheet_name)
             .set_index('name')
-            .pipe(self._listify, 'tables')
+            .pipe(self._listify_old, 'tables')
             .fillna('')
             .squeeze()
             .T
@@ -431,7 +432,7 @@ class SiteConfigsGenerator():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _listify(
+    def _listify_old(
             self, data: pd.core.frame.DataFrame, series_name
             ) -> pd.core.frame.DataFrame:
         """
@@ -487,9 +488,9 @@ class PFPL1CntlParser():
     """
 
     #--------------------------------------------------------------------------
-    def __init__(self, filename):
+    def __init__(self, file_name):
 
-        self.config=ConfigObj(filename)
+        self.config=ConfigObj(file_name)
         self.site = self.config['Global']['site_name']
     #--------------------------------------------------------------------------
 
@@ -503,7 +504,7 @@ class PFPL1CntlParser():
 
         """
 
-        return (
+        df = (
             pd.concat(
                 [
                     pd.DataFrame(
@@ -519,7 +520,10 @@ class PFPL1CntlParser():
                 )
             .set_index(key for key in self.config['Variables'].keys())
             .rename({'sheet': 'table'}, axis=1)
+            .fillna('')
             )
+        df['instrument'] = df['instrument'].apply(_stringify_list)
+        return df
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -541,7 +545,9 @@ class PFPL1CntlParser():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def write_variables_to_excel(self, xl_write_path: pathlib.Path | str):
+    def write_variables_to_excel(
+            self, xl_write_path: pathlib.Path | str, dump_req_only=True
+            ) -> None:
         """
         Generate an excel file containing the global and variable configs.
 
@@ -553,11 +559,13 @@ class PFPL1CntlParser():
 
         """
 
-        vars_df = self.get_variable_table()
-        globals_series = self.get_globals_series()
         with pd.ExcelWriter(path=xl_write_path) as writer:
-            globals_series.to_excel(writer, sheet_name='Global_attrs')
-            vars_df.to_excel(writer, sheet_name='Variable_attrs')
+            self.get_globals_series().to_excel(
+                writer, sheet_name='Global_attrs', header=False
+                )
+            self.get_variable_table().to_excel(
+                writer, sheet_name='Variable_attrs', index_label='pfp_name'
+                )
     #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -598,7 +606,45 @@ def _selective_strip(df):
     return df
 #------------------------------------------------------------------------------
 
-def PFPL1XlToYml(site: str):
+def PFPL1XlToYml(
+        file_name_xl: pathlib.Path | str, 
+        file_name_yml: pathlib.Path | str=None
+        ) -> None:
+    """
+    Read the excel file containing the variable configurations and generate
+    a yaml file.
+
+    Args:
+        site: name of site.
+
+    Returns:
+        None.
+
+    """
+
+    output_vars = [
+        'height', 'instrument', 'statistic_type', 'units', 'name', 'logger',
+        'table'
+        ]
+
+    df = (
+        pd.read_excel(io=file_name_xl, sheet_name='Variable_attrs')
+        .set_index(keys='pfp_name')
+        [output_vars]
+        .fillna('')
+        )
+    # df['instrument'] = df['instrument'].apply(_delistify)
+
+    if file_name_yml is None:
+        file_name_xl = pathlib.Path(file_name_xl)
+        file_name_yml = file_name_xl.parent / f'{file_name_xl.stem}.yml'
+
+    with open(file=file_name_yml, mode='w', encoding='utf-8') as f:
+        yaml.dump(data=df.T.to_dict(), stream=f, sort_keys=False)
+
+
+
+def PFPL1XlToYml_old(site: str):
     """
     Read the excel file containing the variable configurations and generate
     a yaml file.
@@ -624,6 +670,7 @@ def PFPL1XlToYml(site: str):
         .drop(['long_name', 'standard_name'], axis=1)
         )
 
+    breakpoint()
     with open(
             file=variable_path / f'{site}_variables.yml', mode='w',
             encoding='utf-8'
@@ -696,7 +743,7 @@ def convert_xl_variables_to_yml(site):
     data = (
         pd.read_excel(input_path)
         .set_index('variable')
-        .pipe(_listify, 'tables')
+        .pipe(_listify_old, 'tables')
         .fillna('')
         .squeeze()
         .T
@@ -705,7 +752,7 @@ def convert_xl_variables_to_yml(site):
         
     _write_yml(file=output_path, data=data)
 
-def _listify(data: pd.DataFrame, series_name) -> pd.DataFrame:
+def _listify_old(data: pd.DataFrame, series_name) -> pd.DataFrame:
     """
     Convert comma-separated string to list.
 
@@ -728,3 +775,22 @@ def _write_yml(file: pathlib.Path | str, data: dict) -> None:
     
     with open(file, mode='w', encoding='utf-8') as f:
         yaml.dump(data=data, stream=f, sort_keys=False)
+        
+def _delistify(elem: str | list) -> str:
+    
+    try:
+        literal_elem = ast.literal_eval(elem)
+        if isinstance(literal_elem, list):
+            return ', '.join(literal_elem)
+        return elem
+    except (ValueError, SyntaxError):
+        return elem
+    raise TypeError('`elem` must be of type list or str!')
+
+def _stringify_list(elem: str | list) -> str:
+
+    if isinstance(elem, str):
+        return elem                    
+    elif isinstance(elem, list):
+        return ','.join(elem)
+    raise TypeError('`elem` must be of type list or str!')

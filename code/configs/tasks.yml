@@ -163,7 +163,7 @@ tasks:
 
   # Rclone transfers - push tasks
 
-  push_fast_rdm:
+  push_main_fast_rdm:
     - Boyagin
     - Calperum
     - Gingin
@@ -171,6 +171,9 @@ tasks:
     - HowardSprings
     - Whroo
     - WombatStateForest
+
+  push_aux_fast_rdm:
+    - Boyagin
     
   push_profile_raw_rdm:
     - Boyagin

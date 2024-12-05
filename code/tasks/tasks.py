@@ -18,14 +18,12 @@ from importlib import import_module
 import inspect
 import logging.config
 import pandas as pd
-import pathlib
-import yaml
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 ### CUSTOM IMPORTS ###
 # from data_constructors import data_constructors as datacon
-from data_constructors import details_constructor as deetcon
+# from data_constructors import details_constructor as deetcon
 from data_constructors import L1_workbook_constructor as xlcon
 from file_handling import eddypro_concatenator as epc
 from file_transfers import rclone_transfer as rt
@@ -105,8 +103,6 @@ class TaskManager():
     #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-     
-    
 
 ###############################################################################
 ### END TASK MANAGER ###
@@ -157,6 +153,14 @@ def construct_L1_nc(site: str) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+def construct_site_details(site: str) -> None:
+    """Construct the details file for the RTMC plotting"""
+    
+    deetcon = import_module(module_strs['details_constructor'])
+    deetcon.write_site_info(site=site)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
 def construct_status_xlsx() -> None:
     """Construct the status xlsx seeded with site list"""
     
@@ -181,12 +185,12 @@ def construct_status_geojson() -> None:
 #------------------------------------------------------------------------------
 def process_profile_data(site: str) -> None:
     
+    pdp = import_module(module_strs['profile_processing'])
     output_path = pm.get_local_stream_path(
         resource='processed_data', 
         stream='profile', 
         site=site,
         )
-    pdp = import_module(module_strs['profile_processing'])
     processor = pdp.load_site_profile_processor(site=site)
     processor.write_to_csv(file_name=output_path / 'storage_data.csv')
     processor.plot_diel_storage_mean(
@@ -233,6 +237,34 @@ def _file_fast_data(site: str, which: str) -> None:
 #------------------------------------------------------------------------------
 
 ### RCLONE TRANSFERS - PULL TASKS
+
+#------------------------------------------------------------------------------
+def get_rclone_transfer_func(func: str):
+    
+    rt = import_module('file_transfers.rclone_transfer')
+    funcs_dict = {
+        
+        # Pull tasks
+        'pull_slow_rdm': rt.pull_slow_flux,
+        'pull_RTMC_images': rt.pull_RTMC_images,
+        'pull_profile_raw_rdm': rt.pull_profile_raw,
+        'push_profile_raw_rdm': rt.push_profile_raw,
+        
+        # Push tasks
+        'push_slow_rdm': rt.push_slow_flux,
+        'push_main_fast_rdm': rt.push_main_fast_flux,
+        'push_aux_fast_rdm': rt.push_aux_fast_flux,
+        'push_RTMC_images': rt.push_RTMC_images,
+        'push_homogenised_TOA5': rt.push_homogenised_TOA5,
+        'push_L1_nc': rt.push_L1_nc,
+        'push_L1_xlsx': rt.push_L1_xlsx,
+        'push_status_geojson': rt.push_status_geojson,
+        'push_status_xlsx': rt.push_status_xlsx,
+        
+        }
+    
+    return funcs_dict[func]
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def pull_profile_raw(site: str) -> None:
@@ -292,11 +324,11 @@ task_funcs = {
     'construct_status_geojson': construct_status_geojson,    
     
     # Metadata constructors
-    'construct_site_details_file': deetcon.write_site_info,
+    'construct_site_details_file': construct_site_details,
    
     # Rclone transfers - pull tasks
-    'pull_slow_rdm': rt.pull_slow_flux,
-    'pull_RTMC_images': rt.pull_RTMC_images,
+    'pull_slow_rdm': get_rclone_transfer_func(func='pull_slow_rdm'), #rt.pull_slow_flux,
+    'pull_RTMC_images': get_rclone_transfer_func(func='pull_RTMC_images'),
     'pull_profile_raw_rdm': pull_profile_raw,
     
     # Rclone transfers - push tasks
@@ -319,6 +351,7 @@ module_strs = {
     
     'profile_processing': 'profile_processing.profile_data_processor',
     'data_constructors': 'data_constructors.data_constructors',
+    'details_constructors': 'data_constructors.details_constructor',
     'network_status': 'network_monitoring.network_status',
     'file_fast_data': 'file_handling.fast_data_filer',
     'rclone_transfers': 'file_transfers.rclone_transfer',

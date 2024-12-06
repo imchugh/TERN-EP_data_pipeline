@@ -538,3 +538,15 @@ Uz_SONIC_Vr:
   standard_name: nan
   plausible_min: ''
   plausible_max: ''
+FAPAR:
+  standard_units: frac
+  long_name: Fraction of incident photosynthetically active radiation absorbed
+  standard_name: nan
+  plausible_min: ''
+  plausible_max: ''
+APAR:
+  standard_units: umol/m^2/s
+  long_name: Incident photosynthetically active radiation absorbed
+  standard_name: nan
+  plausible_min: ''
+  plausible_max: ''

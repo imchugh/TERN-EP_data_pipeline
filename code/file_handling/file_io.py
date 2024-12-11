@@ -770,7 +770,7 @@ def reformat_headers(headers: pd.DataFrame, output_format: str) -> pd.DataFrame:
 
     # Remove all format-specific header columns to make header format-agnostic.
     for fmt in FILE_CONFIGS.keys():
-        for var in FILE_CONFIGS[fmt]['non_numeric_cols']:
+        for var in FILE_CONFIGS[fmt]['time_variables']:
             try:
                 df.drop(var, inplace=True)
             except KeyError:

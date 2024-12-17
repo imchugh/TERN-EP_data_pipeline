@@ -1157,7 +1157,7 @@ def merge_data(
                 usecols=usecols, drop_non_numeric=True
                 )
             )
-        
+    
     # Concatenate lists
     headers = pd.concat(header_list).fillna('')
     data = pd.concat(data_list, axis=1)

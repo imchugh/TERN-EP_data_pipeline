@@ -116,11 +116,11 @@ def write_to_eddypro_file(site: str) -> None:
             resource='raw_data', stream='flux_slow', site=site
             )
         )
-    output_file = f'{site}_EP_MASTER.dat'
-    files_to_append = list(data_path.glob(f'*{EP_SEARCH_STR}*.txt'))
+    output_file = f'{site}_EP_MASTER_temp.dat'
+    files_to_append = sorted(data_path.glob(f'*{EP_SEARCH_STR}*.txt'))
 
     # Use the newest file as master, and previous files as append list
-    master_file = max(files_to_append, key=os.path.getctime)
+    master_file = max(files_to_append) #, key=os.path.getctime)
     master_idx = files_to_append.index(master_file)
     files_to_append = files_to_append[: master_idx]
 

@@ -104,6 +104,7 @@ ALIAS_DICT = {'Alpine Peatland': 'Alpine Peat',
               'Longreach Mitchell Grass Rangeland': 'Longreach',
               'Nimmo High Plains': 'Nimmo',
               'Samford Ecological Research Facility': 'Samford',
+              'Silver Plain': 'SilverPlains',
               'Wellington Research Station Flux Tower': 'Wellington'
               }
 

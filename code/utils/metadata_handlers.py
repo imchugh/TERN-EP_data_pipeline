@@ -251,6 +251,20 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
+    def get_file_dates(self, file: str, include_backups: bool=False):
+        
+        file_list = [self.data_path / file]
+        start_dates, end_dates = [], []
+        if include_backups:
+            file_list += io.get_eligible_concat_files(self.data_path / file)
+        for file in file_list:
+            dates = io.get_start_end_dates(file=file)
+            start_dates.append(dates['start_date'])
+            end_dates.append(dates['end_date'])
+        return {'start_date': min(start_dates), 'end_date': max(end_dates)}
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
     def list_loggers(self) -> list:
 
         return self.site_variables.logger.unique().tolist()

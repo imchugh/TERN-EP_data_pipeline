@@ -245,9 +245,12 @@ class MetaDataManager():
                 {'interval': io.get_file_interval(self.data_path / file)} |
                 {'backups': io.get_eligible_concat_files(self.data_path / file)}
                 )
-        if return_field:
+        if return_field is None:
+            return pd.Series(rslt)    
+        if isinstance(return_field, str):
             return rslt[return_field]
-        return pd.Series(rslt)
+        if isinstance(return_field, list):
+            return pd.Series(rslt).loc[return_field]
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------

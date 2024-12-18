@@ -724,7 +724,8 @@ class StdDataConstructor():
     #--------------------------------------------------------------------------
     def __init__(
             self, site: str, concat_files: bool=True, error_on_missing=True,
-            constrain_last_to_flux=True
+            constrain_start_to_flux: bool=False, 
+            constrain_end_to_flux: bool=True
             ) -> None:
         """
         Assign metadata manager, missing variables and raw data and headers.
@@ -745,23 +746,27 @@ class StdDataConstructor():
         self.error_on_missing = error_on_missing
         self.md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
 
-        # Use the file allocation of Fco2 as flux file
-        constrain_last_to_file = None
-        if constrain_last_to_flux:
-            constrain_last_to_file = (
-                self.md_mngr.data_path /
+        # If requested, set flux file date constraints on merged file
+        constrainer=None
+        if constrain_start_to_flux or constrain_end_to_flux:
+            constrainer = {
+                'constrain_by_file': self.md_mngr.data_path /
                 self.md_mngr.get_variable_attributes(
                     variable='Fco2', return_field='file'
-                    )
-                )
-
-        # Merge the raw data
+                    ),
+                'constrain_start': constrain_start_to_flux,
+                'constrain_end': constrain_end_to_flux
+                }
+            
+        # Merge the raw data to the principle data frequency
         merge_dict = self.md_mngr.translate_variables_by_file(abs_path=True)
+        merge_to_int = f'{int(self.md_mngr.get_site_details().time_step)}min'
         rslt = merge_data(
             files=merge_dict,
             concat_files=concat_files,
-            interval=f'{int(self.md_mngr.get_site_details().time_step)}min',
-            constrain_last_to_file=constrain_last_to_file
+            interval=merge_to_int,
+            start_date_constraint=start_date_constraint,
+            end_date_constraint=end_date_constraint
             )
         self.data = rslt['data']
         self.headers = rslt['headers']
@@ -1095,7 +1100,7 @@ def _get_std_file_path(site):
 #------------------------------------------------------------------------------
 def merge_data(
         files: list | dict, concat_files: bool=False, interval=None,
-        constrain_last_to_file=None
+        file_date_constraints=None,
         ) -> pd.core.frame.DataFrame:
     """
     Merge and align data and headers from different files.
@@ -1110,7 +1115,7 @@ def merge_data(
             False.
         interval (optional): resample files to passed interval. Defaults to
             None.
-        constrain_last_to_file (optional): if a valid file is passed (i.e. one
+        constrain_to_file (optional): if a valid file is passed (i.e. one
             that exists and is present in the passed files), its final
             timestamp is used as the final timestamp of the concatenated
             dataset.
@@ -1138,11 +1143,6 @@ def merge_data(
         # Get the data handler
         data_handler = fh.DataHandler(file=file, concat_files=do_concat)
 
-        # Get the last date of the file to which to constrain end dates of all
-        constrain_to_date = None
-        if file == constrain_last_to_file:
-            constrain_to_date = data_handler.data.index[-1]
-
         # Append data and headers to lists
         data_list.append(
             data_handler.get_conditioned_data(
@@ -1161,8 +1161,12 @@ def merge_data(
     # Concatenate lists
     headers = pd.concat(header_list).fillna('')
     data = pd.concat(data_list, axis=1)
-    if constrain_to_date is not None:
-        data = data.loc[: constrain_to_date]
+    
+    # Apply date constraints
+    if start_date_constraint is not None:
+        data = data.loc[start_date_constraint:]
+    if end_date_constraint is not None:
+        data = data.loc[: end_date_constraint]
 
     # Return
     return {'headers': headers, 'data': data}

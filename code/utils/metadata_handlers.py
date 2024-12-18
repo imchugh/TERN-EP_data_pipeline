@@ -223,7 +223,8 @@ class MetaDataManager():
 
     #--------------------------------------------------------------------------
     def get_file_attributes(
-            self, file: str, include_extended=False, return_field=None
+            self, file: str, include_backups=False, include_extended=False, 
+            return_field=None
             ) -> pd.Series:
         """
         Get file attributes from file header.
@@ -238,7 +239,8 @@ class MetaDataManager():
 
         rslt = (
             io.get_file_info(file=self.data_path / file) |
-            io.get_start_end_dates(file=self.data_path / file)
+            self._get_file_dates(file=file, include_backups=include_backups)
+            # io.get_start_end_dates(file=self.data_path / file)
             )
         if include_extended:
             rslt.update(
@@ -254,7 +256,7 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_file_dates(self, file: str, include_backups: bool=False):
+    def _get_file_dates(self, file: str, include_backups: bool=False):
         
         file_list = [self.data_path / file]
         start_dates, end_dates = [], []

@@ -747,17 +747,25 @@ class StdDataConstructor():
         self.md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
 
         # If requested, set flux file date constraints on merged file
-        constrainer=None
+        start_date, end_date = None, None
         if constrain_start_to_flux or constrain_end_to_flux:
-            constrainer = {
-                'constrain_by_file': self.md_mngr.data_path /
+            flux_file = (
+                self.md_mngr.data_path /
                 self.md_mngr.get_variable_attributes(
                     variable='Fco2', return_field='file'
-                    ),
-                'constrain_start': constrain_start_to_flux,
-                'constrain_end': constrain_end_to_flux
-                }
-            
+                    )
+                )
+            if constrain_start_to_flux:
+                start_date = self.md_mngr.get_file_attributes(
+                    file=flux_file, include_backups=concat_files, 
+                    return_field='start_date'
+                    )
+            if constrain_end_to_flux:
+                end_date = self.md_mngr.get_file_attributes(
+                    file=flux_file, include_backups=concat_files, 
+                    return_field='end_date'
+                    )                
+                      
         # Merge the raw data to the principle data frequency
         merge_dict = self.md_mngr.translate_variables_by_file(abs_path=True)
         merge_to_int = f'{int(self.md_mngr.get_site_details().time_step)}min'
@@ -765,8 +773,8 @@ class StdDataConstructor():
             files=merge_dict,
             concat_files=concat_files,
             interval=merge_to_int,
-            start_date_constraint=start_date_constraint,
-            end_date_constraint=end_date_constraint
+            start_date=start_date,
+            end_date=end_date
             )
         self.data = rslt['data']
         self.headers = rslt['headers']
@@ -933,7 +941,8 @@ def write_to_std_file(site: str, concat_files: bool=True) -> None:
     data_const = StdDataConstructor(
         site=site,
         concat_files=concat_files,
-        constrain_last_to_flux=True #site in CONSTRAIN_SITES_TO_FLUX
+        constrain_start_to_flux=True,
+        constrain_end_to_flux=True #site in CONSTRAIN_SITES_TO_FLUX
         )
 
     # Get path information
@@ -997,7 +1006,7 @@ def append_to_std_file(site: str) -> None:
     data_const = StdDataConstructor(
         site=site,
         concat_files=False,
-        constrain_last_to_flux=True #site in CONSTRAIN_SITES_TO_FLUX
+        constrain_end_to_flux=True #site in CONSTRAIN_SITES_TO_FLUX
         )
 
     # Get path information
@@ -1100,7 +1109,7 @@ def _get_std_file_path(site):
 #------------------------------------------------------------------------------
 def merge_data(
         files: list | dict, concat_files: bool=False, interval=None,
-        file_date_constraints: dict={'file': None, 'start': None, 'end': None},
+        start_date: dt.datetime | str=None, end_date: dt.datetime | str=None,
         ) -> pd.core.frame.DataFrame:
     """
     Merge and align data and headers from different files.
@@ -1124,17 +1133,6 @@ def merge_data(
         merged data.
 
     """
-
-    if file_date_constraints is not None:
-        constraint_file = file_date_constraints['file']
-        try:
-            start_date_constraint = file_date_constraints['constrain_start']
-        except KeyError:
-            pass
-        try:
-            start_date_constraint = file_date_constraints['constrain_start']
-        except KeyError:
-            pass
         
     data_list, header_list = [], []
     for file in files:
@@ -1167,21 +1165,17 @@ def merge_data(
             data_handler.get_conditioned_headers(
                 usecols=usecols, drop_non_numeric=True
                 )
-            )
-        
-        if file == file_date_constraints['file']:
-            file=
-            
+            )         
     
     # Concatenate lists
     headers = pd.concat(header_list).fillna('')
     data = pd.concat(data_list, axis=1)
-    
+
     # Apply date constraints
-    if start_date_constraint is not None:
-        data = data.loc[start_date_constraint:]
-    if end_date_constraint is not None:
-        data = data.loc[: end_date_constraint]
+    if start_date is not None:
+        data = data.loc[start_date:]
+    if end_date is not None:
+        data = data.loc[: end_date]
 
     # Return
     return {'headers': headers, 'data': data}

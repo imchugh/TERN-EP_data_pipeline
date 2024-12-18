@@ -1100,7 +1100,7 @@ def _get_std_file_path(site):
 #------------------------------------------------------------------------------
 def merge_data(
         files: list | dict, concat_files: bool=False, interval=None,
-        file_date_constraints=None,
+        file_date_constraints: dict={'file': None, 'start': None, 'end': None},
         ) -> pd.core.frame.DataFrame:
     """
     Merge and align data and headers from different files.
@@ -1125,6 +1125,17 @@ def merge_data(
 
     """
 
+    if file_date_constraints is not None:
+        constraint_file = file_date_constraints['file']
+        try:
+            start_date_constraint = file_date_constraints['constrain_start']
+        except KeyError:
+            pass
+        try:
+            start_date_constraint = file_date_constraints['constrain_start']
+        except KeyError:
+            pass
+        
     data_list, header_list = [], []
     for file in files:
        
@@ -1157,6 +1168,10 @@ def merge_data(
                 usecols=usecols, drop_non_numeric=True
                 )
             )
+        
+        if file == file_date_constraints['file']:
+            file=
+            
     
     # Concatenate lists
     headers = pd.concat(header_list).fillna('')

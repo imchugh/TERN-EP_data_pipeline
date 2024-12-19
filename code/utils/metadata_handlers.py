@@ -14,7 +14,6 @@ Todo:
 
 """
 
-import os
 import pandas as pd
 
 from paths import paths_manager as pm

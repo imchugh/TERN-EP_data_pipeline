@@ -20,7 +20,6 @@ does not happen.
 #------------------------------------------------------------------------------
 # STANDARD IMPORTS #
 import logging
-import os
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -116,7 +115,7 @@ def write_to_eddypro_file(site: str) -> None:
             resource='raw_data', stream='flux_slow', site=site
             )
         )
-    output_file = f'{site}_EP_MASTER_temp.dat'
+    output_file = f'{site}_EP_MASTER.txt'
     files_to_append = sorted(data_path.glob(f'*{EP_SEARCH_STR}*.txt'))
 
     # Use the newest file as master, and previous files as append list

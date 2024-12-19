@@ -798,12 +798,21 @@ def _EPify_headers(headers: pd.DataFrame) -> pd.DataFrame:
         index=pd.Index(['DATAH', 'filename', 'date', 'time'], name='variable'),
         )
 
+    # In here need to add a check to see if the fields already exist in the 
+    # headers
+    for i, var in enumerate(add_df.index):
+        if var in headers.index:
+            continue
+        headers = pd.concat(
+            [headers.iloc[:i], add_df.loc[[var]], headers.iloc[i:]]
+            )
+        
     # Drop the sampling header line if it exists
     if 'sampling' in headers.columns:
         headers.drop('sampling', axis=1, inplace=True)
 
     # Concatenate and return
-    return pd.concat([add_df, headers])
+    return headers
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

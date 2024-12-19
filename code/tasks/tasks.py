@@ -156,7 +156,7 @@ def construct_L1_nc(site: str) -> None:
 def construct_site_details(site: str) -> None:
     """Construct the details file for the RTMC plotting"""
     
-    deetcon = import_module(module_strs['details_constructor'])
+    deetcon = import_module(module_strs['details_constructors'])
     deetcon.write_site_info(site=site)
 #------------------------------------------------------------------------------
 

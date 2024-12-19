@@ -227,7 +227,8 @@ class MetaDataManager():
 
     #--------------------------------------------------------------------------
     def get_file_attributes(
-            self, file: str, include_extended=False, return_field=None
+            self, file: str, include_backups=False, include_extended=False, 
+            return_field=None
             ) -> pd.Series:
         """
         Get file attributes from file header.
@@ -242,16 +243,34 @@ class MetaDataManager():
 
         rslt = (
             io.get_file_info(file=self.data_path / file) |
-            io.get_start_end_dates(file=self.data_path / file)
+            self._get_file_dates(file=file, include_backups=include_backups)
+            # io.get_start_end_dates(file=self.data_path / file)
             )
         if include_extended:
             rslt.update(
                 {'interval': io.get_file_interval(self.data_path / file)} |
                 {'backups': io.get_eligible_concat_files(self.data_path / file)}
                 )
-        if return_field:
+        if return_field is None:
+            return pd.Series(rslt)    
+        if isinstance(return_field, str):
             return rslt[return_field]
-        return pd.Series(rslt)
+        if isinstance(return_field, list):
+            return pd.Series(rslt).loc[return_field]
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _get_file_dates(self, file: str, include_backups: bool=False):
+        
+        file_list = [self.data_path / file]
+        start_dates, end_dates = [], []
+        if include_backups:
+            file_list += io.get_eligible_concat_files(self.data_path / file)
+        for file in file_list:
+            dates = io.get_start_end_dates(file=file)
+            start_dates.append(dates['start_date'])
+            end_dates.append(dates['end_date'])
+        return {'start_date': min(start_dates), 'end_date': max(end_dates)}
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -712,7 +731,6 @@ class PFPNameParser():
 
         # Check how many elements remain. If more than one, throw an error
         if len(elems) > 1:
-            breakpoint()
             raise RuntimeError('Too many elements!')
 
         # Check if next element is a replicate

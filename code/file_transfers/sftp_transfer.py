@@ -13,12 +13,8 @@ Created on Mon Nov 25 10:58:21 2024
 #------------------------------------------------------------------------------
 ### STANDARD IMPORTS ###
 import logging
+import pathlib
 import subprocess as spc
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-### CUSTOM IMPORTS ###
-from paths import paths_manager as pm
 #------------------------------------------------------------------------------
 
 ###############################################################################
@@ -31,6 +27,7 @@ from paths import paths_manager as pm
 ### BEGIN INITS ###
 ###############################################################################
 
+SCRIPT_PATH = pathlib.Path(__file__).parents[1] / 'shell/send_cosmoz_data.sh'
 csiro_aliases = {'AliceSpringsMulga': 'AliceMulga'}
 logger = logging.getLogger(__name__)
 
@@ -46,11 +43,7 @@ logger = logging.getLogger(__name__)
 
 #------------------------------------------------------------------------------
 def send_cosmoz(site):
-    
-    file_path = pm.get_local_stream_path(
-        resource='shell_scripts', stream='push_cosmoz'
-        )
-    
+      
     try:
         remote_alias = csiro_aliases[site]
     except KeyError:
@@ -58,7 +51,7 @@ def send_cosmoz(site):
     
     # Do the transfer
     logger.info('Copying now...')
-    run_list =  [file_path, site, remote_alias]
+    run_list =  [SCRIPT_PATH, site, remote_alias]
     try:
         rslt = _run_subprocess(run_list=run_list)
         logger.info(rslt.stdout.decode())

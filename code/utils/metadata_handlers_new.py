@@ -15,6 +15,7 @@ Todo:
 """
 
 import pandas as pd
+import pathlib
 
 from paths import paths_manager as pm
 import file_handling.file_io as io
@@ -26,7 +27,7 @@ VALID_INSTRUMENTS = ['SONIC', 'IRGA', 'RAD']
 VALID_FLUX_SUFFIXES = ['EF']
 VALID_LOC_UNITS = ['cm', 'm']
 VALID_SUFFIXES = {
-    'Av': 'average', 'Sd': 'standard deviation', 'Vr': 'variance', 
+    'Av': 'average', 'Sd': 'standard deviation', 'Vr': 'variance',
     'Sum': 'Sum', 'Cnt': 'count', 'QC': 'quality_flag'
     }
 _NAME_MAP = {'site_name': 'name', 'std_name': 'std_name'}
@@ -42,14 +43,15 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def __init__(self, site: str, variable_map: str='pfp') -> None:
+    def __init__(
+            self, site: str, use_alternate_vars: str | pathlib.Path=None
+            ) -> None:
         """
         Do inits - read the yaml files, build lookup tables.
 
         Args:
             site: name of site.
-            variable_map (optional): which variable configuration
-            ('pfp' or 'vis') to use. Defaults to 'pfp'.
+            use_alternate_vars: alternate yml variable assignment file.
 
         Returns:
             None.
@@ -64,21 +66,25 @@ class MetaDataManager():
         except KeyError:
             pass
         self.system_type = system_type
-        self.variable_map = variable_map
         self.data_path = (
             pm.get_local_stream_path(
                 site=site, resource='raw_data', stream='flux_slow'
                 )
             )
-        
+
         # Save the basic configs from the yml file
-        self.configs = pm.get_local_config_file(
-            config_stream='variables_pfp', site=site
-            )
+        if use_alternate_vars:
+            self.configs = pm.get_other_config_file(
+                file_path=use_alternate_vars
+                )
+        else:
+            self.configs = pm.get_local_config_file(
+                config_stream='variables_pfp', site=site
+                )
 
         # Create site-based variables table
         self._parse_site_variables()
-       
+
         # Get flux instrument types
         self.instruments = self._get_inst_type()
     #--------------------------------------------------------------------------
@@ -101,7 +107,7 @@ class MetaDataManager():
             .pipe(self._test_variable_conformity)
             .pipe(self._test_file_assignment)
             )
-        
+
         self.site_variables = df[~df.missing]
         self.missing_variables = df[df.missing]
     #--------------------------------------------------------------------------
@@ -121,21 +127,41 @@ class MetaDataManager():
 
         # Get the name parser, check all names and preserve additional properties
         name_parser = PFPNameParser(system_type=self.system_type)
-        props_df = (
-            pd.DataFrame(
-                [
-                    name_parser.parse_variable_name(variable_name=variable_name)
-                    for variable_name in df.index
-                    ]
+
+        # Here we deal with the problem that PFP allows two distinct quantities
+        # using the same variable name: CO2_IRGA can either be mass concentration
+        # OR dry mole fraction. This should change, but we hack in the meantime
+        # to ensure the correct units are assigned to the attributes.
+        props_list = []
+        for variable in df.index:
+            parser_name = variable
+            if 'CO2_IRGA' in variable:
+                if df.loc[variable, 'units'] == 'mg/m^3':
+                    parser_name = variable.replace('CO2', 'CO2c')
+            props_list.append(
+                name_parser.parse_variable_name(variable_name=parser_name)
                 )
+
+        props_df = (
+            pd.DataFrame(props_list)
             .set_index(df.index)
             .fillna('')
             )
-        
+        # props_df = (
+        #     pd.DataFrame(
+        #         [
+        #             name_parser.parse_variable_name(variable_name=variable_name)
+        #             for variable_name in df.index
+        #             ]
+        #         )
+        #     .set_index(df.index)
+        #     .fillna('')
+        #     )
+
         # Convert minima and maxima columns to numeric
         for col in ['plausible_min', 'plausible_max']:
             props_df[col] = pd.to_numeric(props_df[col])
-        
+
         return pd.concat([df, props_df], axis=1)
     #--------------------------------------------------------------------------
 
@@ -154,13 +180,13 @@ class MetaDataManager():
 
         file_list = []
         df = df.assign(missing=df.name.str.len()==0)
-        
-        # If 'file' keyword is in the configuration, override logger / table 
+
+        # If 'file' keyword is in the configuration, override logger / table
         # filename construction
         if 'file' in df.columns:
             file_list = df.loc[~df.missing, 'file']
 
-        # Otherwise use site, logger and table name to construct filename 
+        # Otherwise use site, logger and table name to construct filename
         elif 'logger' and 'table' in df.columns:
 
             file_list = (
@@ -183,7 +209,7 @@ class MetaDataManager():
                 raise FileNotFoundError(
                     f'File {file} does not exist in the data path'
                     )
-        
+
         # Assign and return
         df['file'] = file_list
         return df.fillna('')
@@ -227,7 +253,7 @@ class MetaDataManager():
 
     #--------------------------------------------------------------------------
     def get_file_attributes(
-            self, file: str, include_backups=False, include_extended=False, 
+            self, file: str, include_backups=False, include_extended=False,
             return_field=None
             ) -> pd.Series:
         """
@@ -252,7 +278,7 @@ class MetaDataManager():
                 {'backups': io.get_eligible_concat_files(self.data_path / file)}
                 )
         if return_field is None:
-            return pd.Series(rslt)    
+            return pd.Series(rslt)
         if isinstance(return_field, str):
             return rslt[return_field]
         if isinstance(return_field, list):
@@ -261,7 +287,7 @@ class MetaDataManager():
 
     #--------------------------------------------------------------------------
     def _get_file_dates(self, file: str, include_backups: bool=False):
-        
+
         file_list = [self.data_path / file]
         start_dates, end_dates = [], []
         if include_backups:
@@ -674,7 +700,7 @@ class PFPNameParser():
                     'if `system_type` variable is not None, '
                     'it must be csi or licor!'
                     )
-               
+
         self.variables = (
             pd.concat([
                 (
@@ -752,7 +778,7 @@ class PFPNameParser():
             raise RuntimeError(
                 'Unrecognised element remains: checks failed for variable '
                 f'name {variable_name} with the following messages: {errors}'
-                
+
                 )
 
         # Get properties
@@ -838,17 +864,17 @@ class PFPNameParser():
             return {}
 
         elem = parse_list[0]
-        
+
         valid = False
         if elem.isdigit():
             valid = True
         if elem.isalpha():
             valid = True
-            
+
         if valid:
             parse_list.remove(elem)
             return {'replicate': elem}
-            
+
         raise TypeError(
             'Replicate identifier must be a single alphanumeric character! '
             f'You passed "{elem}"!'

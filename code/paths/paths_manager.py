@@ -28,7 +28,7 @@ PLACEHOLDER = '<site>'
 #------------------------------------------------------------------------------
 ### GLOBALS ###
 def _read_yml(file):
-    
+
     with open(file) as f:
         return yaml.safe_load(stream=f)
 
@@ -120,13 +120,19 @@ def get_local_stream_path(
 
 #------------------------------------------------------------------------------
 def get_local_config_file(config_stream: str, **kwargs: dict) -> dict:
-    
+
     return _read_yml(
         get_path(
-            location='local', resource='configs', stream=config_stream, 
+            location='local', resource='configs', stream=config_stream,
             **kwargs
             )
         )
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_other_config_file(file_path: pathlib.Path | str):
+
+    return _read_yml(file=file_path)
 #------------------------------------------------------------------------------
 
 # #------------------------------------------------------------------------------

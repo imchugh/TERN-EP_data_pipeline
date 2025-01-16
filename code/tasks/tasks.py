@@ -14,6 +14,7 @@ do not need to be loaded every time the task manager is called externally!
 
 #------------------------------------------------------------------------------
 ### STANDARD IMPORTS ###
+import datetime as dt
 from importlib import import_module
 import inspect
 import logging.config
@@ -145,11 +146,11 @@ def construct_homogenised_TOA5(site: str) -> None:
 def construct_L1_nc(site: str) -> None:
     """Construct the L1 NetCDF file"""
 
-    datacon = import_module(module_strs['data_constructors'])    
-    try:
-        datacon.append_to_current_nc_file(site)
-    except FileNotFoundError:
-        datacon.write_nc_year_file(site=site)
+    nc_con = import_module(module_strs['nc_constructors'])
+    L1_con = nc_con.L1DataConstructor(site=site, constrain_start_to_flux=True)
+    this_year = dt.datetime.now().year
+    if max(L1_con.data_years) == this_year:
+        L1_con.write_nc_file_by_year(year=this_year, overwrite=True)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -353,6 +354,7 @@ module_strs = {
     'data_constructors': 'data_constructors.data_constructors',
     'details_constructors': 'data_constructors.details_constructor',
     'network_status': 'network_monitoring.network_status',
+    'nc_constructors': 'data_constructors.nc_constructors',
     'file_fast_data': 'file_handling.fast_data_filer',
     'rclone_transfers': 'file_transfers.rclone_transfer',
     'sftp_transfers': 'file_transfers.sftp_transfer'

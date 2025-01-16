@@ -257,7 +257,7 @@ Tv_SONIC_Sd:
   plausible_min: ''
   plausible_max: ''
 Tv_SONIC_Vr:
-  standard_units: DegC^2
+  standard_units: degC^2
   long_name: Virtual temperature
   standard_name: virtual_temperature
   plausible_min: ''
@@ -269,7 +269,7 @@ Tcanopy:
   plausible_min: -40.0
   plausible_max: 60.0
 Tbody_RAD:
-  standard_units: degK
+  standard_units: K
   long_name: Radiometer body temperature
   standard_name: nan
   plausible_min: 233.0

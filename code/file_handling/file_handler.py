@@ -5,7 +5,7 @@ Created on Thu Nov  9 11:52:46 2023
 @author: jcutern-imchugh
 """
 
-
+import datetime as dt
 import numpy as np
 import pandas as pd
 import pathlib
@@ -515,6 +515,91 @@ class DataHandler():
     #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+
+
+
+###############################################################################
+### BEGIN FILE MERGING FUNCTIONS ###
+###############################################################################
+
+#------------------------------------------------------------------------------
+def merge_data(
+        files: list | dict, concat_files: bool=False, interval: str=None,
+        start_date: dt.datetime | str=None, end_date: dt.datetime | str=None,
+        ) -> pd.core.frame.DataFrame:
+    """
+    Merge and align data and headers from different files.
+
+    Args:
+        files: the absolute path of the files to parse. If a list, all
+            variables returned; if a dict, file is value, and key is passed to
+            the file_handler. That key can be a list of variables, or a
+            dictionary mapping translation of variable names (see file handler
+            documentation).
+        concat_files (optional): concat backup files to current. Defaults to
+            False.
+        interval (optional): resample files to passed interval string. 
+            Defaults to None.
+        constrain_to_file (optional): if a valid file is passed (i.e. one
+            that exists and is present in the passed files), its final
+            timestamp is used as the final timestamp of the concatenated
+            dataset.
+
+    Returns:
+        merged data.
+
+    """
+
+    data_list, header_list = [], []
+    for file in files:
+       
+        # If type is dict, use dict keys as variable map
+        try:
+            usecols = files[file]
+        except TypeError:
+            usecols = None
+
+        # Get file type, and disable file concatenation for all EddyPro files
+        file_type = io.get_file_type(file=file)
+        do_concat = concat_files == True
+        if file_type == 'EddyPro':
+            do_concat = False
+
+        # Get the data handler
+        data_handler = DataHandler(file=file, concat_files=do_concat)
+
+        # Append data and headers to lists
+        data_list.append(
+            data_handler.get_conditioned_data(
+                usecols=usecols,
+                drop_non_numeric=True,
+                monotonic_index=True,
+                resample_intvl=interval
+                )
+            )
+        header_list.append(
+            data_handler.get_conditioned_headers(
+                usecols=usecols, drop_non_numeric=True
+                )
+            )         
+    
+    # Concatenate lists
+    headers = pd.concat(header_list).fillna('')
+    data = pd.concat(data_list, axis=1)
+
+    # Apply date constraints
+    if start_date is not None:
+        data = data.loc[start_date:]
+    if end_date is not None:
+        data = data.loc[: end_date]
+
+    # Return
+    return {'headers': headers, 'data': data}
+#------------------------------------------------------------------------------
+
+###############################################################################
+### END FILE MERGING FUNCTIONS ###
+###############################################################################
 
 
 

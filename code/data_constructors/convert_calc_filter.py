@@ -289,6 +289,12 @@ def calculate_ustar_from_tau_rho(tau, rho):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+def calculate_VPD(Ta: pd.Series, RH: pd.Series) -> pd.Series:
+
+    return calculate_es(Ta=Ta) - calculate_e(Ta=Ta, RH=RH)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
 def get_function(variable, with_params=True):
 
     CALCS_DICT = {
@@ -301,7 +307,8 @@ def get_function(variable, with_params=True):
         'CO2_IRGA': calculate_CO2_mole_fraction,
         'RH': calculate_RH_from_AH,
         'CO2c': calculate_CO2_density,
-        'ustar': calculate_ustar_from_tau_rho
+        'ustar': calculate_ustar_from_tau_rho,
+        'VPD': calculate_VPD
         }
 
     func = CALCS_DICT[variable]

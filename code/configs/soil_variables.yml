@@ -1,0 +1,4 @@
+Calperum:
+  soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc
+  soil_temperature: Ts_8cma, Ts_8cmb, Ts_8cmc
+  soil_moisture: Sws_10cma, Sws_10cmb, Sws_10cmc

@@ -110,17 +110,17 @@ def get_data(
         on_bad_lines='skip',
         low_memory=False
         )
-    
+
     # Set the index and drop the time variables
     df.index = _parse_dates(df[REQ_TIME_VARS])
-    
+
     # Check integrity and return
     return df.pipe(_integrity_checks, non_numeric=CRITICAL_FILE_VARS)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def _parse_dates(date_df):
-    
+
     cols = date_df.columns.tolist()
     s = date_df[cols[0]]
     cols.remove(cols[0])
@@ -147,7 +147,7 @@ def _integrity_checks(df: pd.core.frame.DataFrame, non_numeric: list):
 
     # Dump bad time data
     df = df.loc[~pd.isnull(df.index)]
-        
+
     # # Check the index type, and if bad time data exists, dump the record
     # if not df.index.dtype == '<M8[ns]':
     #     df.index = pd.to_datetime(df.index, errors='coerce')
@@ -768,7 +768,8 @@ def reformat_headers(headers: pd.DataFrame, output_format: str) -> pd.DataFrame:
     funcs_dict = {'TOA5': _TOA5ify_headers, 'EddyPro': _EPify_headers}
     df = headers.copy()
 
-    # Remove all format-specific header columns to make header format-agnostic.
+    # Remove all format-specific datetime header columns to make header
+    # format-agnostic.
     for fmt in FILE_CONFIGS.keys():
         for var in FILE_CONFIGS[fmt]['time_variables']:
             try:
@@ -798,7 +799,7 @@ def _EPify_headers(headers: pd.DataFrame) -> pd.DataFrame:
         index=pd.Index(['DATAH', 'filename', 'date', 'time'], name='variable'),
         )
 
-    # In here need to add a check to see if the fields already exist in the 
+    # In here need to add a check to see if the fields already exist in the
     # headers
     for i, var in enumerate(add_df.index):
         if var in headers.index:
@@ -806,7 +807,7 @@ def _EPify_headers(headers: pd.DataFrame) -> pd.DataFrame:
         headers = pd.concat(
             [headers.iloc[:i], add_df.loc[[var]], headers.iloc[i:]]
             )
-        
+
     # Drop the sampling header line if it exists
     if 'sampling' in headers.columns:
         headers.drop('sampling', axis=1, inplace=True)
@@ -888,7 +889,7 @@ def get_dates(file: str | pathlib.Path, file_type: str=None) -> list:
         skiprows=rows_to_skip,
         sep=separator,
         )
-    
+
     return _parse_dates(date_df=df[time_vars]).to_pydatetime()
 #------------------------------------------------------------------------------
 

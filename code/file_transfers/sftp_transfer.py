@@ -28,7 +28,9 @@ import subprocess as spc
 ###############################################################################
 
 SCRIPT_PATH = pathlib.Path(__file__).parents[1] / 'shell/send_cosmoz_data.sh'
-csiro_aliases = {'AliceSpringsMulga': 'AliceMulga'}
+CSIRO_ALIASES = {
+    'AliceSpringsMulga': 'AliceMulga', 'GreatWesternWoodlands': 'GWW'
+    }
 logger = logging.getLogger(__name__)
 
 ###############################################################################
@@ -43,12 +45,12 @@ logger = logging.getLogger(__name__)
 
 #------------------------------------------------------------------------------
 def send_cosmoz(site):
-      
+
     try:
-        remote_alias = csiro_aliases[site]
+        remote_alias = CSIRO_ALIASES[site]
     except KeyError:
         remote_alias = site
-    
+
     # Do the transfer
     logger.info('Copying now...')
     run_list =  [SCRIPT_PATH, site, remote_alias]

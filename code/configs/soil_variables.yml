@@ -2,3 +2,11 @@ Calperum:
   soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc
   soil_temperature: Ts_8cma, Ts_8cmb, Ts_8cmc
   soil_moisture: Sws_10cma, Sws_10cmb, Sws_10cmc
+SilverPlains:
+  soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc
+  soil_temperature: Ts_10cma, Ts_10cmb, Ts_10cmc, Ts_30cma
+  soil_moisture: Sws_10cma, Sws_10cmb, Sws_10cmc, Sws_30cma
+Tumbarumba:
+  soil_heat_flux: Fg_16cma, Fg_16cmb
+  soil_temperature: Ts_2-16cma, Ts_2-16cmb
+  soil_moisture: Sws_0-30cma, Sws_50cma, Sws_70cma, Sws_110-140cma

@@ -1,0 +1,479 @@
+AliceSpringsMulga:
+  id: https://w3id.org/tern/resources/fd2809a2-e705-4961-b09c-7e9ae1ffa87e
+  fluxnet_id: AU-ASM
+  date_commissioned: '2010-09-01'
+  date_decommissioned: null
+  latitude: -22.2828
+  longitude: 133.2493
+  elevation: 606.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '6.5'
+  soil: red kandosol, sandy loam
+  tower_height: '13.7'
+  vegetation: 'Canopy + three types of understorey (vegetation1-4). vegetation1: Mulga
+    canopy: Acacia aneura and A. aptaneura; vegetation2: C3 understorey forbs and
+    shrubs: Psydrax latifolia, Eremophila gilesii, E. latrobei ssp glabra (Crimson
+    turkey bush), Sida and Abutilon spp, and Solanum ellipticum (Potato bush); vegetation3:
+    C3 understorey grass: perennial Thyridolepsis mitchelliana (Window mulga-grass);
+    vegetation4: C4 understorey grasses: perennial Eragrostis eriopoda (Naked woolybutt)
+    and annual Eriachne pulchella ssp pulchella (Pretty wanderrie).'
+  time_zone: Australia/Darwin
+  UTC_offset: 9.5
+AlpinePeat:
+  id: https://w3id.org/tern/resources/77df3c32-a853-4bed-ad13-192c639288c8
+  fluxnet_id: AU-APL
+  date_commissioned: '2017-04-01'
+  date_decommissioned: null
+  latitude: -36.861
+  longitude: 147.321
+  elevation: 1650.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '0.3'
+  soil: ''
+  tower_height: '2.2'
+  vegetation: ''
+  time_zone: Australia/Melbourne
+  UTC_offset: 10.0
+SnowGum:
+  id: https://w3id.org/tern/resources/7b99bea8-eb8f-43e2-9726-919728120678
+  fluxnet_id: AU-SNO
+  date_commissioned: '2023-12-01'
+  date_decommissioned: null
+  latitude: -36.3715
+  longitude: 148.432
+  elevation: 1616.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: ''
+  soil: ''
+  tower_height: ''
+  vegetation: ''
+  time_zone: Australia/Sydney
+  UTC_offset: 10.0
+Boyagin:
+  id: https://w3id.org/tern/resources/5c711072-4336-4f70-a51d-c16e13d06f9c
+  fluxnet_id: AU-Boy
+  date_commissioned: '2017-09-01'
+  date_decommissioned: null
+  latitude: -32.477093
+  longitude: 116.938559
+  elevation: 484.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '13'
+  soil: ''
+  tower_height: '30'
+  vegetation: Dry sclerophyll woodland
+  time_zone: Australia/Perth
+  UTC_offset: 8.0
+Calperum:
+  id: https://w3id.org/tern/resources/944be073-1ac3-4b3f-affb-080c7c08af5e
+  fluxnet_id: AU-Cpr
+  date_commissioned: '2010-07-01'
+  date_decommissioned: null
+  latitude: -34.0027
+  longitude: 140.5877
+  elevation: 60.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '3'
+  soil: Reddish brown, yellowish red, loamy sand, free grain structure; low organic
+    matter, loose consistence; pH 6
+  tower_height: '20'
+  vegetation: Mallee
+  time_zone: Australia/Adelaide
+  UTC_offset: 9.5
+CowBay:
+  id: https://w3id.org/tern/resources/5eeb3010-59ad-4c6a-9fa6-388438199c53
+  fluxnet_id: AU-Cow
+  date_commissioned: '2008-12-01'
+  date_decommissioned: null
+  latitude: -16.238189
+  longitude: 145.42715
+  elevation: 86.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '26'
+  soil: red clay loam podzolic soils
+  tower_height: '35'
+  vegetation: lowland complex mesophyll vine forest
+  time_zone: Australia/Brisbane
+  UTC_offset: 10.0
+CumberlandPlain:
+  id: https://w3id.org/tern/resources/f6ec7f3f-bbeb-4f8f-9fba-a74aec2e1769
+  fluxnet_id: AU-Cum
+  date_commissioned: '2012-09-01'
+  date_decommissioned: null
+  latitude: -33.6152
+  longitude: 150.7236
+  elevation: 20.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '24'
+  soil: ''
+  tower_height: '30'
+  vegetation: Dry sclerophyll forest
+  time_zone: Australia/Sydney
+  UTC_offset: 10.0
+DalyUncleared:
+  id: https://w3id.org/tern/resources/da0668da-cd77-412b-920e-fe334905d406
+  fluxnet_id: AU-DaS
+  date_commissioned: '2007-02-01'
+  date_decommissioned: null
+  latitude: -14.1592
+  longitude: 131.3881
+  elevation: 110.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '16.4'
+  soil: red kandasol
+  tower_height: '21'
+  vegetation: Woody Savanna
+  time_zone: Australia/Darwin
+  UTC_offset: 9.5
+DryRiver:
+  id: https://w3id.org/tern/resources/f4b5f124-8a06-4eef-b4b8-345223856786
+  fluxnet_id: AU-Dry
+  date_commissioned: '2008-09-01'
+  date_decommissioned: null
+  latitude: -15.2588
+  longitude: 132.3706
+  elevation: 175.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '0.15'
+  soil: red kandasol
+  tower_height: '15'
+  vegetation: Woodland savanna
+  time_zone: Australia/Darwin
+  UTC_offset: 9.5
+Fletcherview:
+  id: https://w3id.org/tern/resources/d72fe730-721a-43db-8606-fa8ab87f15bd
+  fluxnet_id: AU-Fle
+  date_commissioned: '2022-01-21'
+  date_decommissioned: null
+  latitude: -19.887285
+  longitude: 146.189138
+  elevation: 260.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '12'
+  soil: Black vertisol, cracking clay
+  tower_height: '25'
+  vegetation: 'Semi-arid savanna. vegetation1: Reid River Box (Eucalyptus brownii);
+    vegetation2: Currant bush (Carissa lanceolata); vegetation3: Perennial Grasses
+    (Bothriochloa pertusa dominant).'
+  time_zone: Australia/Brisbane
+  UTC_offset: 10.0
+Gingin:
+  id: https://w3id.org/tern/resources/85357141-0361-41fe-9708-2c535c50e749
+  fluxnet_id: AU-Gin
+  date_commissioned: '2011-06-01'
+  date_decommissioned: null
+  latitude: -31.3764
+  longitude: 115.7139
+  elevation: 51.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '6.8'
+  soil: Podosol, Gutless sand
+  tower_height: '15'
+  vegetation: Banksia woodland
+  time_zone: Australia/Perth
+  UTC_offset: 8.0
+GreatWesternWoodlands:
+  id: https://w3id.org/tern/resources/32400f05-a972-421b-9db1-cde04e8034d9
+  fluxnet_id: AU-GWW
+  date_commissioned: '2012-12-01'
+  date_decommissioned: null
+  latitude: -30.1913
+  longitude: 120.6541
+  elevation: 385.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '18'
+  soil: heavy gravelly red clay
+  tower_height: '36'
+  vegetation: sparse eucalypt woodland
+  time_zone: Australia/Perth
+  UTC_offset: 8.0
+HowardSprings:
+  id: https://w3id.org/tern/resources/2b9313de-1545-4701-9e5e-ac851f290853
+  fluxnet_id: AU-How
+  date_commissioned: '2001-08-01'
+  date_decommissioned: null
+  latitude: -12.4952
+  longitude: 131.15005
+  elevation: 64.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '16'
+  soil: red kandasol
+  tower_height: '23'
+  vegetation: Woody savanna
+  time_zone: Australia/Darwin
+  UTC_offset: 9.5
+Litchfield:
+  id: https://w3id.org/tern/resources/1b0227a2-6bbe-4579-9dba-6ee4033e8169
+  fluxnet_id: AU-Lit
+  date_commissioned: '2015-01-01'
+  date_decommissioned: null
+  latitude: -13.179
+  longitude: 130.7945
+  elevation: 222.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '16'
+  soil: red kandasol
+  tower_height: '30'
+  vegetation: Woody savanna
+  time_zone: Australia/Darwin
+  UTC_offset: 9.5
+Longreach:
+  id: https://w3id.org/tern/resources/9989b745-934a-43c9-b01a-1e7737635c72
+  fluxnet_id: AU-Lon
+  date_commissioned: '2018-03-01'
+  date_decommissioned: null
+  latitude: -23.5233
+  longitude: 144.3104
+  elevation: 205.346
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '0.5'
+  soil: Clay
+  tower_height: '4.25'
+  vegetation: Mitchell Grass
+  time_zone: Australia/Brisbane
+  UTC_offset: 10.0
+MyallValeA:
+  id: https://w3id.org/tern/resources/8bc01515-8a8c-4c0b-971e-e2b9dad05bd6
+  fluxnet_id: AU-MvA
+  date_commissioned: '2023-11-14'
+  date_decommissioned: null
+  latitude: -30.543
+  longitude: 150.02
+  elevation: 241.0
+  time_step: 30
+  freq_hz: 20
+  canopy_height: ''
+  soil: ''
+  tower_height: ''
+  vegetation: ''
+  time_zone: Australia/Sydney
+  UTC_offset: 10.0
+MyallValeB:
+  id: https://w3id.org/tern/resources/12611963-123d-46ca-8a7c-ca6de4d12e8f
+  fluxnet_id: AU-MvB
+  date_commissioned: '2023-11-17'
+  date_decommissioned: null
+  latitude: -30.697
+  longitude: 150.09
+  elevation: 244.0
+  time_step: 30
+  freq_hz: 20
+  canopy_height: ''
+  soil: ''
+  tower_height: ''
+  vegetation: ''
+  time_zone: Australia/Sydney
+  UTC_offset: 10.0
+Ridgefield:
+  id: https://w3id.org/tern/resources/f4da99de-52bd-4041-b6c4-c77b8c9f15ec
+  fluxnet_id: AU-Rgf
+  date_commissioned: '2015-01-01'
+  date_decommissioned: null
+  latitude: -32.5061
+  longitude: 116.9668
+  elevation: 330.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '1'
+  soil: ''
+  tower_height: '10'
+  vegetation: Wheat
+  time_zone: Australia/Perth
+  UTC_offset: 8.0
+RobsonCreek:
+  id: https://w3id.org/tern/resources/a452c22a-d60a-47ea-9f04-01c4407b7d2f
+  fluxnet_id: AU-Rob
+  date_commissioned: '2013-08-01'
+  date_decommissioned: null
+  latitude: -17.1175
+  longitude: 145.6301
+  elevation: 710.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '28'
+  soil: Acidic, Dystrophic, Brown Dermosol
+  tower_height: '40'
+  vegetation: Regional Ecosystem (RE) 7.3.36a, complex mesophyll vine forest
+  time_zone: Australia/Brisbane
+  UTC_offset: 10.0
+Samford:
+  id: https://w3id.org/tern/resources/c15e9a28-28c4-463f-b164-44b39112d76c
+  fluxnet_id: AU-Sam
+  date_commissioned: '2010-06-01'
+  date_decommissioned: null
+  latitude: -27.3888
+  longitude: 152.8725
+  elevation: 69.406
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '0.5'
+  soil: ''
+  tower_height: '2'
+  vegetation: pasture
+  time_zone: Australia/Brisbane
+  UTC_offset: 10.0
+SilverPlains:
+  id: https://w3id.org/tern/resources/323b884e-52d6-4e58-b212-b7c85cfb874b
+  fluxnet_id: AU-Sil
+  date_commissioned: '2019-12-01'
+  date_decommissioned: null
+  latitude: -42.090556
+  longitude: 147.087
+  elevation: 880.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '0.1'
+  soil: Organosol
+  tower_height: '2.5'
+  vegetation: Grass
+  time_zone: Australia/Hobart
+  UTC_offset: 10.0
+SturtPlains:
+  id: https://w3id.org/tern/resources/76c37f54-79be-42b5-94e4-6fa015c32cce
+  fluxnet_id: AU-Stp
+  date_commissioned: '2008-08-01'
+  date_decommissioned: null
+  latitude: -17.1507
+  longitude: 133.3502
+  elevation: 250.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '0.5'
+  soil: red kandasol
+  tower_height: '5'
+  vegetation: Mitchell Grasslands
+  time_zone: Australia/Darwin
+  UTC_offset: 9.5
+TiTreeEast:
+  id: https://w3id.org/tern/resources/1fa3e3bf-7d9a-448f-b6cd-0830dd4fe0ba
+  fluxnet_id: AU-TTE
+  date_commissioned: '2012-07-01'
+  date_decommissioned: null
+  latitude: -22.287
+  longitude: 133.64
+  elevation: 553.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '6.5'
+  soil: red kandosol, sandy loam
+  tower_height: '13.7'
+  vegetation: 'Canopy + three types of understorey (vegetation1-4). vegetation1: Mulga
+    canopy: Acacia aneura and A. aptaneura; vegetation2: C3 understorey forbs and
+    shrubs: Psydrax latifolia, Eremophila gilesii, E. latrobei ssp glabra (Crimson
+    turkey bush), Sida and Abutilon spp, and Solanum ellipticum (Potato bush); vegetation3:
+    C3 understorey grass: perennial Thyridolepsis mitchelliana (Window mulga-grass);
+    vegetation4: C4 understorey grasses: perennial Eragrostis eriopoda (Naked woolybutt)
+    and annual Eriachne pulchella ssp pulchella (Pretty wanderrie).'
+  time_zone: Australia/Darwin
+  UTC_offset: 9.5
+Tumbarumba:
+  id: https://w3id.org/tern/resources/6b20fe55-0889-4f0a-9e56-2c147f5bd547
+  fluxnet_id: AU-Tum
+  date_commissioned: '2000-03-01'
+  date_decommissioned: null
+  latitude: -35.6566
+  longitude: 148.1517
+  elevation: 1200.0
+  time_step: 60
+  freq_hz: 20
+  canopy_height: '40'
+  soil: Alfisol
+  tower_height: '70'
+  vegetation: wet sclerophyll forest
+  time_zone: Australia/Sydney
+  UTC_offset: 10.0
+Warra:
+  id: https://w3id.org/tern/resources/c882ded6-0cb5-493a-939b-fd609706823e
+  fluxnet_id: AU-Wrr
+  date_commissioned: '2013-03-01'
+  date_decommissioned: null
+  latitude: -43.095
+  longitude: 146.6545
+  elevation: 100.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '55'
+  soil: Kurosolic Redoxic Hydrosol
+  tower_height: '80'
+  vegetation: Eucalyptus obliqua tall forest
+  time_zone: Australia/Hobart
+  UTC_offset: 10.0
+Wellington:
+  id: https://w3id.org/tern/resources/14e4b3d2-9b33-4cc2-a15d-d185fdbc560a
+  fluxnet_id: AU-Wel
+  date_commissioned: '2023-09-01'
+  date_decommissioned: null
+  latitude: -32.57272578
+  longitude: 148.9842742
+  elevation: 324.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: ''
+  soil: ''
+  tower_height: ''
+  vegetation: ''
+  time_zone: Australia/Sydney
+  UTC_offset: 10.0
+Whroo:
+  id: https://w3id.org/tern/resources/b512e2dc-98a6-40d5-a91c-ad8f47d1ace7
+  fluxnet_id: AU-Whr
+  date_commissioned: '2011-10-01'
+  date_decommissioned: null
+  latitude: -36.6732
+  longitude: 145.0294
+  elevation: 165.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '28'
+  soil: ''
+  tower_height: '35'
+  vegetation: Dry sclerophyll woodland
+  time_zone: Australia/Melbourne
+  UTC_offset: 10.0
+WombatStateForest:
+  id: https://w3id.org/tern/resources/d37bd453-10c6-44d0-8ff8-ffdf2bbe3b5f
+  fluxnet_id: AU-Wom
+  date_commissioned: '2010-01-01'
+  date_decommissioned: null
+  latitude: -37.4222
+  longitude: 144.0944
+  elevation: 705.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '23'
+  soil: silt-clay/clay
+  tower_height: '33'
+  vegetation: dry sclerophyll eucalypt forest
+  time_zone: Australia/Melbourne
+  UTC_offset: 10.0
+Yanco:
+  id: https://w3id.org/tern/resources/eba13c16-2dac-49ba-b8f4-fed55b8657ab
+  fluxnet_id: AU-Ync
+  date_commissioned: '2012-04-01'
+  date_decommissioned: null
+  latitude: -34.9893
+  longitude: 146.2907
+  elevation: 126.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: '0.5'
+  soil: sandy loams, scattered clays, red brown earths, deep sands
+  tower_height: '20'
+  vegetation: Pasture
+  time_zone: Australia/Sydney
+  UTC_offset: 10.0

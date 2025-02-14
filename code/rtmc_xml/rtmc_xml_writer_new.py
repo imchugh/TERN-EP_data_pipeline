@@ -23,7 +23,7 @@ import sys
 ### CUSTOM IMPORTS ###
 #------------------------------------------------------------------------------
 
-from utils.metadata_handlers import MetaDataManager
+from managers.metadata import MetaDataManager
 from rtmc_xml import rtmc_xml_parser as rxp
 
 #------------------------------------------------------------------------------
@@ -194,6 +194,7 @@ def do_system_config(mdm):
         )
 
     # Change the comm status alarm component calculation string
+    breakpoint()
     temp_logger_name = mdm.get_variable_attributes(
         variable='Fco2', return_field='logger'
         )
@@ -471,7 +472,7 @@ def do_soil_config(mdm):
 def main(site, file_name=None):
 
     # Get the RTMC XML parser
-    mdm = MetaDataManager(site=site, variable_map='vis')
+    mdm = MetaDataManager(site=site)
 
     # Don't allow overwrite of original template file, or misnaming of extension
     if file_name:

@@ -16,9 +16,10 @@ import file_handling.file_io as io
 import file_handling.file_handler as fh
 from paths import paths_manager as pm
 import utils.metadata_handlers as mh
-from utils.site_details import SiteDetails as sd
+from managers import site_details as sd
+from file_handling import fast_data_filer as fdf
 
-sd_mngr = sd()
+sd_mngr = sd.SiteDetailsManager(use_local=True)
 SUBSET = ['Fco2', 'Fh', 'Fe', 'Fsd']
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ def write_status_xlsx(site_list) -> None:
 
     # Inits
     output_path = pm.get_local_stream_path(
-        resource='network', 
+        resource='network',
         stream='status',
         file_name='network_status.xlsx'
         )
@@ -102,7 +103,7 @@ def write_status_geojson(site_list):
 
     rslt_list = []
     output_path = pm.get_local_stream_path(
-        resource='network', 
+        resource='network',
         stream='status',
         file_name='network_status.json'
         )
@@ -221,7 +222,7 @@ def get_slow_file_status(
         md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
     site_time = _get_site_time(site=site, run_time=run_time)
 
-    # Get the logger / file particulars (currently must handle sites with no 
+    # Get the logger / file particulars (currently must handle sites with no
     # logger or table)
     try:
         files_df = (
@@ -248,7 +249,7 @@ def get_slow_file_status(
         )
 
     # Get the percentage missing data for each file
-    # Note that here, we DONT try to concatenate if the file is an EP master 
+    # Note that here, we DONT try to concatenate if the file is an EP master
     # file because the concatenation is already handled
     missing_list = []
     do_concat = False
@@ -262,7 +263,7 @@ def get_slow_file_status(
             .get_missing_records()
             )
     missing_df = pd.DataFrame(missing_list)
-    
+
     # Combine all and return
     combined_df = pd.concat([files_df, attrs_df, missing_df], axis=1)
     return (
@@ -392,8 +393,9 @@ def get_fast_file_status(site: str) -> dict:
     run_time = dt.datetime.now()
 
     # Get file
-    rslt = mh.get_last_10Hz_file(site=site)
-    if rslt == 'No files':
+    try:
+        rslt = fdf.get_last_formatted_fast_file(site=site, abs_path=False)
+    except FileNotFoundError:
         return dummy_dict
 
     # Get file and age in days

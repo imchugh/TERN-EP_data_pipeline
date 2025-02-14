@@ -19,7 +19,6 @@ from importlib import import_module
 import inspect
 import logging.config
 import pandas as pd
-import sys
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -32,7 +31,7 @@ from file_transfers import rclone_transfer as rt
 # from file_transfers import sftp_transfer as sftpt
 # from network_monitoring import network_status as ns
 from utils import configs_getters as cg
-from paths import paths_manager as pm
+from managers import paths
 #------------------------------------------------------------------------------
 
 ###############################################################################
@@ -56,7 +55,7 @@ class TaskManager():
 
         """
 
-        self.configs = cg.get_configs(config_name='tasks')
+        self.configs = paths.get_internal_configs(config_name='tasks')
         self.site_master_list = self.configs['sites']
         self.master_tasks = list(self.configs['tasks'].keys())
         self.tasks_df = self._make_task_dataframe()
@@ -117,7 +116,7 @@ class TaskManager():
 ###############################################################################
 
 tasks_mngr = TaskManager()
-LOGGER_CONFIGS = cg.get_configs(config_name='py_logger')
+LOGGER_CONFIGS = paths.get_internal_configs(config_name='py_logger')
 logger = logging.getLogger(__name__)
 
 ###############################################################################
@@ -141,14 +140,6 @@ def construct_homogenised_TOA5(site: str) -> None:
         datacon.append_to_std_file(site=site)
     except FileNotFoundError:
         datacon.write_to_std_file(site=site)
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def construct_homogenised_TOA5_from_nc(site: str) -> None:
-
-    nctoa5 = import_module(module_strs['nc_toa5_constructors'])
-    datacon = nctoa5.NCtoTOA5Constructor(site=site)
-    datacon.write_to_TOA5()
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -196,7 +187,7 @@ def construct_status_geojson() -> None:
 def process_profile_data(site: str) -> None:
 
     pdp = import_module(module_strs['profile_processing'])
-    output_path = pm.get_local_stream_path(
+    output_path = paths.get_local_stream_path(
         resource='processed_data',
         stream='profile',
         site=site,
@@ -223,15 +214,27 @@ def process_profile_data(site: str) -> None:
 #------------------------------------------------------------------------------
 def file_main_fast_data(site: str) -> None:
 
-    fdf = import_module(module_strs['file_fast_data'])
-    fdf.move_fast_files(site=site)
+    ffd = import_module(module_strs['file_fast_data'])
+    ffd.move_main_data(site=site)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def file_aux_fast_data(site: str) -> None:
 
-    fdf = import_module(module_strs['file_fast_data'])
-    fdf.move_fast_files(site=site, is_aux=True)
+    ffd = import_module(module_strs['file_fast_data'])
+    ffd.move_aux_data(site=site)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def _file_fast_data(site: str, which: str) -> None:
+
+    ffd = import_module(module_strs['file_fast_data'])
+    if which == 'main':
+        ffd.move_main_data(site=site)
+    if which == 'aux':
+        ffd.move_aux_data(site=site)
+    else:
+        raise KeyError('`which` must be one of main or aux!')
 #------------------------------------------------------------------------------
 
 ### RCLONE TRANSFERS - PULL TASKS
@@ -269,10 +272,10 @@ def pull_profile_raw(site: str) -> None:
 
     logger.info('Downloading data from remote location...')
     rct = import_module(module_strs['rclone_transfers'])
-    local_location = pm.get_local_stream_path(
+    local_location = paths.get_local_stream_path(
         resource='raw_data', stream='profile', site=site, as_str=True
         )
-    remote_location = pm.get_remote_stream_path(
+    remote_location = paths.get_remote_stream_path(
         resource='raw_data', stream='profile', site=site, as_str=True
         )
     rct.generic_move(
@@ -306,7 +309,6 @@ task_funcs = {
 
     # Data constructors
     'construct_homogenised_TOA5': construct_homogenised_TOA5,
-    'construct_homogenised_TOA5_from_nc': construct_homogenised_TOA5_from_nc,
     'construct_L1_xlsx': xlcon.construct_L1_xlsx,
     'construct_L1_nc': construct_L1_nc,
     'update_EddyPro_master': epc.update_eddypro_master,
@@ -353,7 +355,6 @@ module_strs = {
     'details_constructors': 'data_constructors.details_constructor',
     'network_status': 'network_monitoring.network_status',
     'nc_constructors': 'data_constructors.nc_constructors',
-    'nc_toa5_constructors': 'data_constructors.nc_toa5_constructor',
     'file_fast_data': 'file_handling.fast_data_filer',
     'rclone_transfers': 'file_transfers.rclone_transfer',
     'sftp_transfers': 'file_transfers.sftp_transfer'
@@ -369,17 +370,6 @@ module_strs = {
 ###############################################################################
 ### BEGIN TASK MANAGEMENT FUNCTIONS ###
 ###############################################################################
-
-#------------------------------------------------------------------------------
-def test():
-
-    d = {}
-    current_module = sys.modules[__name__]
-    for name, obj in inspect.getmembers(current_module):
-        if inspect.isfunction(obj):
-            d[name] = obj
-    return d
-#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def configure_logger(log_path):
@@ -408,7 +398,7 @@ def run_site_task(task: str, site:str) -> None:
 
     # Get the log output path and configure the logger
     log_path = (
-        pm.get_local_stream_path(
+        paths.get_local_stream_path(
             resource='logs',
             stream='site_logs',
             site=site
@@ -460,7 +450,7 @@ def run_network_task(task: str) -> None:
 
     # Get the log output path and configure the logger
     log_path = (
-        pm.get_local_stream_path(
+        paths.get_local_stream_path(
             resource='logs',
             stream='network_logs',
             ) /

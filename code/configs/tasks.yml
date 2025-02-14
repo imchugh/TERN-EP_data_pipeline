@@ -1,4 +1,4 @@
-# Master site list 
+# Master site list
 
 sites:
   - AliceSpringsMulga
@@ -23,13 +23,13 @@ sites:
   - WombatStateForest
   - Yanco
 
-# Task list with sublists for sites to process 
+# Task list with sublists for sites to process
 # (note that tasks with empty lists are either not site-specific, or default to master site list)
-  
+
 tasks:
 
   # Data constructors
-  
+
   construct_homogenised_TOA5:
     - AliceSpringsMulga
     - Boyagin
@@ -49,6 +49,9 @@ tasks:
     - Whroo
     - WombatStateForest
     - Yanco
+
+  construct_homogenised_TOA5_from_nc:
+    - Tumbarumba
 
   construct_L1_xlsx:
     - AliceSpringsMulga
@@ -74,6 +77,7 @@ tasks:
 
   construct_L1_nc:
     - Calperum
+    - Tumbarumba
 
   update_EddyPro_master:
     - CumberlandPlain
@@ -85,7 +89,7 @@ tasks:
     - CumberlandPlain
 
   # Local data moving
-  
+
   file_main_fast_data:
     - Boyagin
     - Calperum
@@ -93,12 +97,12 @@ tasks:
     - GreatWesternWoodlands
     - HowardSprings
     - Whroo
-    
+
   file_aux_fast_data:
     - Boyagin
-    
+
   # Network status constructors
-  
+
   construct_status_xlsx:
     - AliceSpringsMulga
     - Boyagin
@@ -121,7 +125,7 @@ tasks:
     - Whroo
     - WombatStateForest
     - Yanco
-    
+
   construct_status_geojson:
     - AliceSpringsMulga
     - Boyagin
@@ -139,13 +143,13 @@ tasks:
     - RobsonCreek
     - SnowGum
     - SturtPlains
-    - Tumbarumba 
+    - Tumbarumba
     - Wellington
     - Whroo
     - WombatStateForest
     - Yanco
 
-  # Metadata constructors  
+  # Metadata constructors
 
   construct_site_details_file: []
 
@@ -153,13 +157,13 @@ tasks:
 
   pull_profile_raw_rdm:
     - CumberlandPlain
-    
+
   pull_slow_rdm:
     - CowBay
     - CumberlandPlain
-    - RobsonCreek  
- 
-  pull_RTMC_images: []  
+    - RobsonCreek
+
+  pull_RTMC_images: []
 
   # Rclone transfers - push tasks
 
@@ -174,14 +178,14 @@ tasks:
 
   push_aux_fast_rdm:
     - Boyagin
-    
+
   push_profile_raw_rdm:
     - Boyagin
 
   push_profile_proc_rdm:
     - Boyagin
     - CumberlandPlain
-    
+
   push_slow_rdm:
     - AliceSpringsMulga
     - Boyagin
@@ -205,12 +209,14 @@ tasks:
   push_RTMC_images: []
 
   push_status_geojson: []
-  
+
   push_status_xlsx: []
 
   # s/ftp - push tasks
-  
+
   push_cosmoz:
     - Fletcherview
     - AliceSpringsMulga
     - Litchfield
+    - MyallValeA
+    - GreatWesternWoodlands

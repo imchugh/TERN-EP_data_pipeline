@@ -24,10 +24,10 @@ import pandas as pd
 import pathlib
 import xarray as xr
 
-from paths import paths_manager as pm
+from managers import metadata as md
+from managers import paths
 import file_handling.file_io as io
 import file_handling.file_handler as fh
-import utils.metadata_handlers_new as mh
 
 #------------------------------------------------------------------------------
 SITE_DETAIL_ALIASES = {'elevation': 'altitude'}
@@ -73,26 +73,20 @@ class L1DataConstructor():
         """
 
         self.site = site
-        self.md_mngr = mh.MetaDataManager(
+        self.md_mngr = md.MetaDataManager(
             site=site, use_alternate_vars=use_alternate_vars)
 
         # If requested, set flux file date constraints on merged file
         start_date, end_date = None, None
         if constrain_start_to_flux or constrain_end_to_flux:
-            flux_file = (
-                self.md_mngr.data_path /
-                self.md_mngr.get_variable_attributes(
-                    variable=FLUX_FILE_VAR_IND, return_field='file'
-                    )
-                )
             if constrain_start_to_flux:
                 start_date = self.md_mngr.get_file_attributes(
-                    file=flux_file, include_backups=concat_files,
+                    file=self.md_mngr.flux_file, include_backups=concat_files,
                     return_field='start_date'
                     )
             if constrain_end_to_flux:
                 end_date = self.md_mngr.get_file_attributes(
-                    file=flux_file, include_backups=concat_files,
+                    file=self.md_mngr.flux_file, include_backups=concat_files,
                     return_field='end_date'
                     )
 
@@ -116,7 +110,7 @@ class L1DataConstructor():
         # Set attributes
         self.data_years = self.data.index.year.unique().tolist()
         self.global_attrs = self._get_site_global_attrs()
-        self.io_path = pm.get_local_stream_path(
+        self.io_path = paths.get_local_stream_path(
             resource='homogenised_data', stream='nc', subdirs=[site]
             )
     #--------------------------------------------------------------------------
@@ -133,7 +127,7 @@ class L1DataConstructor():
         """
 
         global_attrs = io.read_yml(
-            file=pm.get_local_stream_path(
+            file=paths.get_local_stream_path(
                 resource='configs',
                 stream='nc_generic_attrs'
                 )
@@ -395,7 +389,7 @@ class L1DataConstructor():
         """
 
         dim_attrs = io.read_yml(
-            file=pm.get_local_stream_path(
+            file=paths.get_local_stream_path(
                 resource='configs',
                 stream='nc_dim_attrs'
                 )
@@ -456,7 +450,7 @@ class L1DataConstructor():
         """
 
         dim_attrs = io.read_yml(
-            file=pm.get_local_stream_path(
+            file=paths.get_local_stream_path(
                 resource='configs',
                 stream='nc_dim_attrs'
                 )

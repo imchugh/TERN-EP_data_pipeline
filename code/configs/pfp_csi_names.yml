@@ -17,7 +17,7 @@ Fco2_EF_Cnt:
   plausible_min: ''
   plausible_max: ''
 Fe_EF:
-  standard_units: umol/m^2/s
+  standard_units: W/m^2
   long_name: Latent heat flux (Campbell Scientific EasyFluxDL)
   standard_name: surface_upward_latent_heat_flux
   plausible_min: -200.0
@@ -35,7 +35,7 @@ Fe_EF_Cnt:
   plausible_min: ''
   plausible_max: ''
 Fh_EF:
-  standard_units: umol/m^2/s
+  standard_units: W/m^2
   long_name: Sensible heat flux (Campbell Scientific EasyFluxDL)
   standard_name: surface_upward_sensible_heat_flux
   plausible_min: -200.0
@@ -52,9 +52,27 @@ Fh_EF_Cnt:
   standard_name: nan
   plausible_min: ''
   plausible_max: ''
+Fm_EF_QC:
+  standard_units: '1'
+  long_name: Momentum flux quality control flag (Campbell Scientific EasyFluxDL)
+  standard_name: nan
+  plausible_min: ''
+  plausible_max: ''
 Tstar:
-  standard_units: 'degC'
+  standard_units: degC
   long_name: Surface layer scaling temperature
   standard_name: nan
   plausible_min: -50
   plausible_max: 50
+AH_Samples:
+  standard_units: '1'
+  long_name: Absolute humidity accepted samples
+  standard_name: nan
+  plausible_min: ''
+  plausible_max: ''
+CO2_Samples:
+  standard_units: '1'
+  long_name: CO2 concentration accepted samples
+  standard_name: nan
+  plausible_min: ''
+  plausible_max: ''

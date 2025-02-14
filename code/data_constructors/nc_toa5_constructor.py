@@ -4,27 +4,20 @@ Created on Thu May 16 16:25:29 2024
 
 @author: imchugh
 
-This module is used to read data from an existing set of netcdf files and write
-data back to .
+This module is used to read data from an existing set of netcdf files and allow
+analysis and write back toan output file.
 
 Module classes:
-    - L1DataConstructor: builds an xarray dataset with data and metadata
-    required to generate L1 .nc files.
-    - NCConverter: used to extract data from an existing .nc file and push
-    back out to Campbell Scientific TOA5 format data file.
-    - StdDataConstructor: builds a pseudo-TOA5 dataset with a predictable
-    variable set and standard naming conventions, with unit conversions and
-    range-limits applied.
+    - NCtoTOA5Reader: reads data and metadata from existing netcdf files and
+    makes data and metadata available as pandas dataframes.
+    - NCtoTOA5Constructor: compiles and parses data from raw form to a
+    formatted dataset that can be written to an output TOA5 file.
 
-Module functions:
-    - make_nc_file: generate the xarray dataset and write out to nc file.
-    - make_nc_year_file: as above, but confined to a single data year.
-    - append_to_current_nc_file: check for a current-year .nc file - append
-    if it exists, generate it if it doesn't.
-    - append_to_nc - generic append function where existing file is passed as
-    arg.
-    - (__): generic function to merge data using lower-level data
-    handlers.
+Todo:
+    - the reader currently generates TOA5 headers, but that should ideally be \
+    done by the TOA5 constructor;
+    - the concatenation of all compatible L1 netcdf files should ideally take
+    place within the reader.
 
 """
 
@@ -38,21 +31,21 @@ import pathlib
 import xarray as xr
 
 # Custom imports #
-import data_constructors.convert_calc_filter as ccf
-from paths import paths_manager as pm
-import file_handling.file_io as io
-import utils.metadata_handlers_new as mh
-from utils import configs_getters as cg
+from data_constructors import convert_calc_filter as ccf
+from file_handling import file_io as io
+from managers import metadata as md
+from managers import paths
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 ### INITIALISATIONS AND CONSTANTS ###
 #------------------------------------------------------------------------------
 STATISTIC_ALIASES = {
-    'average': 'Avg', 'variance': 'Vr', 'standard deviation': 'Sd',
+    'average': 'Avg', 'variance': 'Vr', 'standard_deviation': 'Sd',
     'sum': 'Tot'
     }
 VARIABLE_ALIASES = {'Wd_SONIC_Av': 'Wd', 'Ws_SONIC_Av': 'Ws'}
+TRUNCATE_VARIABLES = ['Fco2', 'Fe', 'Fh']
 ADD_VARIABLES = ['AH', 'RH', 'CO2_IRGA', 'Td', 'VPD']
 FLUX_FILE_VAR_IND = 'Uz_SONIC_Av'
 logger = logging.getLogger(__name__)
@@ -140,7 +133,7 @@ class NCtoTOA5Reader():
             data = [
                 {
                     'units': self.ds[var].attrs['units'],
-                    'statistic_type':
+                    'sampling':
                         STATISTIC_ALIASES[self.ds[var].attrs['statistic_type']]
                     }
                 for var in self.labels_to_keep
@@ -195,11 +188,14 @@ class NCtoTOA5Constructor():
 
         """
 
-        self.path = pm.get_local_stream_path(
+        self.input_path = paths.get_local_stream_path(
             resource='homogenised_data', stream='nc', subdirs=[self.site]
             )
-        self.files = sorted([file.name for file in self.path.glob('*.nc')])
-        reader = NCtoTOA5Reader(nc_file=self.path / self.files[-1])
+        self.output_path = paths.get_local_stream_path(
+            resource='homogenised_data', stream='TOA5'
+            )
+        self.files = sorted([file.name for file in self.input_path.glob('*.nc')])
+        reader = NCtoTOA5Reader(nc_file=self.input_path / self.files[-1])
         self.translation_dict = self._build_translation_dict(reader=reader)
         self.drop_list = self._build_drop_list(reader=reader)
         self.headers = self._build_headers(reader=reader)
@@ -227,11 +223,11 @@ class NCtoTOA5Constructor():
             }
         vars_to_drop = [var for var in reader.labels_to_keep if 'Sd' in var]
         soil_to_keep = (
-            cg.get_configs(config_name='soil_variables')
+            paths.get_internal_configs(config_name='soil_variables')
             [self.site]
             )
         for quantity, keep_variables in soil_to_keep.items():
-            quantity_str = soil_keys[quantity]
+            quantity_str = soil_keys[quantity] + '_'
             available_variables = [
                 var for var in reader.labels_to_keep if quantity_str in var
                 ]
@@ -256,6 +252,7 @@ class NCtoTOA5Constructor():
 
         # Create rename dictionary
         return (
+            self._translate_fluxes(reader=reader) |
             self._translate_averages(reader=reader) |
             self._translate_met_variables(reader=reader) |
             self._translate_co2_variables(reader=reader) |
@@ -264,9 +261,33 @@ class NCtoTOA5Constructor():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
+    def _translate_fluxes(self, reader: NCtoTOA5Reader) -> dict:
+        """
+        Remove system-based suffixes from raw logger fluxes.
+
+        Args:
+            reader: netcdf reader class.
+
+        Returns:
+            dictionary mapping.
+
+        """
+
+        var_list = []
+        for flux_var in TRUNCATE_VARIABLES:
+            for file_var in reader.get_dataframe().columns:
+                if flux_var in file_var:
+                    split_list = file_var.split('_')
+                    if len(split_list) == 2:
+                        if split_list[-1] in md.VALID_FLUX_SYSTEMS.keys():
+                            var_list.append(file_var)
+        return dict(zip(var_list, TRUNCATE_VARIABLES))
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
     def _translate_met_variables(self, reader: NCtoTOA5Reader) -> dict:
         """
-        Find nearest T and RH sensor to flux height and create trasnlation
+        Find nearest T and RH sensor to flux height and create translation
         alias.
 
         Args:
@@ -277,9 +298,8 @@ class NCtoTOA5Constructor():
 
         """
 
-        int_extractor = (
-            lambda height: int(''.join([s for s in height if s.isdigit()]))
-            )
+
+        int_extractor = lambda height: float(height.replace('m', ''))
         target_height = int_extractor(
             reader.get_variable_attrs(variable=FLUX_FILE_VAR_IND)['height']
             )
@@ -355,7 +375,7 @@ class NCtoTOA5Constructor():
 
         # Parse the netcdf reader and collect the attributes
         rslt = {}
-        parser = mh.PFPNameParser()
+        parser = md.PFPNameParser()
         for variable in reader.get_headers().index:
             parser_name = variable
             if 'CO2_IRGA' in variable:
@@ -417,7 +437,7 @@ class NCtoTOA5Constructor():
         # Iterate through files and check which can be concatenated
         master_header = reader.get_headers()
         for file in self.files[:-1]:
-            reader = NCtoTOA5Reader(nc_file=self.path / file)
+            reader = NCtoTOA5Reader(nc_file=self.input_path / file)
             header = reader.get_headers()
             if len(header) == len(master_header):
                 if all(header.index == master_header.index):
@@ -427,7 +447,7 @@ class NCtoTOA5Constructor():
         # Concatenate data
         data = (
             pd.concat(data_list)
-            [header.index]
+            [master_header.index]
             .sort_index()
             .rename(self.translation_dict, axis=1)
             .drop(self.drop_list, axis=1)
@@ -586,7 +606,7 @@ class NCtoTOA5Constructor():
 
         # Add variables (and units) that are missing
         missing_vars = self.get_missing_variables()
-        var_attrs = pm.get_local_config_file('pfp_std_names')
+        var_attrs = paths.get_internal_configs('pfp_std_names')
         units = [var_attrs[var]['standard_units'] for var in missing_vars]
         missing_headers = pd.DataFrame(
             data=units,
@@ -602,7 +622,9 @@ class NCtoTOA5Constructor():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def write_to_TOA5(self, file_path: pathlib.Path | str) -> None:
+    def write_to_TOA5(
+            self, output_path: pathlib.Path | str=None, overwrite=True
+            ) -> None:
         """
         Write out the data to a TOA5-formatted file.
 
@@ -614,6 +636,15 @@ class NCtoTOA5Constructor():
 
         """
 
+        # Check paths
+        if output_path is None:
+            output_path = self.output_path / f'{self.site}_merged_std.dat'
+        else:
+            output_path = pathlib.Path(output_path)
+        if output_path.exists():
+            if not overwrite:
+                raise FileExistsError('File already created for year {year}!')
+
         headers = io.reformat_headers(
             headers=self.parse_headers(),
             output_format='TOA5'
@@ -622,10 +653,15 @@ class NCtoTOA5Constructor():
             data=self.parse_data(),
             output_format='TOA5'
             )
+        info = dict(zip(
+            io.INFO_FIELD_NAMES,
+            io.FILE_CONFIGS['TOA5']['dummy_info'][:-1] + ['merged']
+            ))
         io.write_data_to_file(
             headers=headers,
             data=data,
-            abs_file_path=file_path,
+            info=info,
+            abs_file_path=output_path,
             output_format='TOA5'
             )
 

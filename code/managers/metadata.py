@@ -24,12 +24,12 @@ from managers.site_details import SiteDetailsManager as sdm
 VALID_INSTRUMENTS = ['SONIC', 'IRGA', 'RAD']
 VALID_FLUX_SYSTEMS = {'EF': 'EasyFluxDL', 'EP': 'SmartFlux', 'DL': 'TERN'}
 TURBULENT_FLUX_QUANTITIES = ['Fco2', 'Fe', 'Fh']
+FLUX_FILE_VAR_IND = 'Fco2'
 VALID_LOC_UNITS = ['cm', 'm']
 VALID_SUFFIXES = {
-    'Av': 'average', 'Sd': 'standard deviation', 'Vr': 'variance',
-    'Sum': 'Sum', 'Cnt': 'count', 'QC': 'quality_flag'
+    'Av': 'average', 'Sd': 'standard_deviation', 'Vr': 'variance',
+    'Sum': 'sum', 'Ct': 'count', 'QC': 'quality_control_flag'
     }
-FLUX_FILE_VAR_IND = 'Fco2'
 _NAME_MAP = {'site_name': 'name', 'std_name': 'std_name'}
 
 ###############################################################################
@@ -133,13 +133,13 @@ class MetaDataManager():
         for variable in df.index:
             parser_name = variable
             if 'CO2_IRGA' in variable:
-                if df.loc[variable, 'units'] == 'mg/m^3':
+                if 'mg' in df.loc[variable, 'units']:
                     parser_name = variable.replace('CO2', 'CO2c')
             props_list.append(
                 name_parser.parse_variable_name(variable_name=parser_name)
                 )
 
-        # Concatenate the proprerties into df
+        # Concatenate the properties into df
         props_df = (
             pd.DataFrame(props_list)
             .set_index(df.index)
@@ -222,7 +222,8 @@ class MetaDataManager():
 
         attrs = (
             self.site_variables.loc[
-                self.site_variables.quantity == FLUX_FILE_VAR_IND
+                (self.site_variables.quantity == FLUX_FILE_VAR_IND) &
+                (self.site_variables.statistic_type == 'average')
                 ]
             )
         if len(attrs) > 1:
@@ -722,28 +723,10 @@ class PFPNameParser():
 
         """
 
-        config_list = ['pfp_std_names', 'pfp_csi_names']
-        # if system_type is not None:
-        #     if system_type == 'csi':
-        #         config_list.append('pfp_csi_names')
-        #     elif system_type == 'licor':
-        #         config_list.append('pfp_licor_names')
-        #     else:
-        #         raise KeyError(
-        #             'if `system_type` variable is not None, '
-        #             'it must be csi or licor!'
-        #             )
-
         self.SPLIT_CHAR = '_'
         self.variables = (
-            pd.concat([
-                (
-                    pd.DataFrame(
-                    paths.get_internal_configs(config_name=config_name))
-                    .T
-                    )
-                for config_name in config_list
-                ])
+            pd.DataFrame(paths.get_internal_configs('pfp_std_names'))
+            .T
             .rename_axis('quantity')
             )
     #--------------------------------------------------------------------------
@@ -778,11 +761,6 @@ class PFPNameParser():
 
         errors = []
 
-        # Check if variable is a complete quantity - that is, the entire name
-        # is already defined in the configuration files
-        if variable_name in self.variables.index:
-            rslt_dict['quantity'] = variable_name
-
         # Get string elements
         elems = variable_name.split(self.SPLIT_CHAR)
 
@@ -794,6 +772,12 @@ class PFPNameParser():
         # Check if final element is a process
         try:
             rslt_dict.update(self._check_str_is_process(parse_list=elems))
+        except TypeError as e:
+            errors.append(e.args[0])
+
+        # Check if first remaining element is a system type
+        try:
+            rslt_dict.update(self._check_str_is_system_type(parse_list=elems))
         except TypeError as e:
             errors.append(e.args[0])
 
@@ -877,13 +861,27 @@ class PFPNameParser():
 
         if len(parse_list) == 0:
             return {}
-        if not parse_list[-1] in VALID_SUFFIXES.keys():
-            raise TypeError(
-                f'{parse_list[-1]} is not a valid process identifier!'
-                )
         process = parse_list[-1]
+        if process not in VALID_SUFFIXES.keys():
+            raise TypeError(
+                f'{process} is not a valid process identifier!'
+                )
         parse_list.remove(process)
         return {'process': process}
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _check_str_is_system_type(self, parse_list: list) -> dict:
+
+        if len(parse_list) == 0:
+            return {}
+        sys_type = parse_list[0]
+        if sys_type not in VALID_FLUX_SYSTEMS.keys():
+            raise TypeError(
+                f'{sys_type} is not a valid system identifier!'
+                )
+        parse_list.remove(sys_type)
+        return {'system_type': VALID_FLUX_SYSTEMS[sys_type]}
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -907,15 +905,12 @@ class PFPNameParser():
 
         elem = parse_list[0]
 
-        if elem in VALID_FLUX_SYSTEMS.keys():
-            parse_list.remove(elem)
-            return {'system_type': VALID_FLUX_SYSTEMS[elem]}
-
         valid = False
-        if elem.isdigit():
-            valid = True
-        if elem.isalpha():
-            valid = True
+        if len(elem) == 1:
+            if elem.isdigit():
+                valid = True
+            if elem.isalpha():
+                valid = True
 
         if valid:
             parse_list.remove(elem)
@@ -959,10 +954,16 @@ class PFPNameParser():
                 continue
 
             split_list = sub_list[0].split('-')
-            if not all([s.isdigit() for s in split_list]) or len(split_list) > 2:
+            if len(split_list) > 2:
+                error = (
+                    'A maximum of two location idenitifers is allowed!'
+                    )
+            try:
+                [float(s) for s in split_list]
+            except ValueError:
                 error = (
                     'Characters preceding height / depth units must be '
-                    'numeric, or contain numerals separated by "-"!'
+                    'numeric, or contain numerals separated by single "-"!'
                     )
                 continue
 
@@ -987,30 +988,6 @@ class PFPNameParser():
     #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-
-# #------------------------------------------------------------------------------
-# def get_last_10Hz_file(site):
-
-#     dummy_response = 'No files'
-
-#     # Get data path to raw file
-#     try:
-#         data_path = paths.get_local_stream_path(
-#             resource='raw_data',
-#             stream='flux_fast',
-#             site=site,
-#             check_exists=True
-#             )
-#     except FileNotFoundError:
-#         return dummy_response
-
-#     # Get file and age in days
-#     try:
-#         #return max(data_path.rglob('TOB3*.dat'), key=os.path.getctime).name
-#         return sorted([file.name for file in data_path.rglob('TOB3*.dat')])[-1]
-#     except IndexError:
-#         return dummy_response
-# #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def convert_units_to_variance(units):

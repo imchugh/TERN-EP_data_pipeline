@@ -204,7 +204,8 @@ def convert_variable(variable):
         'ps': convert_pressure,
         'Sws': convert_Sws,
         'VPD': convert_pressure,
-        'Precip': convert_precipitation
+        'Precip': convert_precipitation,
+        'Tbody_RAD': convert_temperature
         }
     return conversions_dict[variable]
 #------------------------------------------------------------------------------

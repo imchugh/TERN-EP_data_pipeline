@@ -16,6 +16,7 @@ standard output files written.
 from matplotlib.pyplot import cm
 import matplotlib.colors as colors
 import numpy as np
+import pandas as pd
 import pathlib
 import sys
 
@@ -23,7 +24,8 @@ import sys
 ### CUSTOM IMPORTS ###
 #------------------------------------------------------------------------------
 
-from managers.metadata import MetaDataManager
+from managers import paths
+from managers import metadata
 from rtmc_xml import rtmc_xml_parser as rxp
 
 #------------------------------------------------------------------------------
@@ -100,6 +102,45 @@ def colour_getter(search_str, n_col=6):
             f'{",".join((np.array(colour[:3])*255).astype(int).astype(str))},'
             '1)'
             )
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def edit_MetaDataManager(mdm: metadata.MetaDataManager) -> None:
+
+    var_types = {
+        'soil_heat_flux': 'Fg',
+        'soil_temperature': 'Ts',
+        'soil_moisture': 'Sws'
+        }
+
+    df = mdm.site_variables
+
+    rename_dict = (
+        pd.concat(
+            [
+                df.loc[df.quantity==x, 'quantity'] for
+                x in metadata.TURBULENT_FLUX_QUANTITIES
+                ]
+            )
+        .to_dict()
+        )
+    df = df.rename(rename_dict)
+
+    drop_list = []
+    soil_vars = get_soil_vars(site=mdm.site)
+    for var_type, var_list in soil_vars.items():
+        identifier = var_types[var_type]
+        all_list = df[df.quantity==identifier].index.tolist()
+        drop_list += [var for var in all_list if not var in var_list]
+
+    df = df.drop(drop_list)
+    mdm.site_variables = df
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_soil_vars(site: str) -> dict:
+
+    return paths.get_internal_configs('soil_variables')[site]
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -194,7 +235,6 @@ def do_system_config(mdm):
         )
 
     # Change the comm status alarm component calculation string
-    breakpoint()
     temp_logger_name = mdm.get_variable_attributes(
         variable='Fco2', return_field='logger'
         )
@@ -471,8 +511,10 @@ def do_soil_config(mdm):
 #------------------------------------------------------------------------------
 def main(site, file_name=None):
 
-    # Get the RTMC XML parser
-    mdm = MetaDataManager(site=site)
+    # Get the RTMC XML parser and edit it to standardise the flux naming conventions
+    mdm = metadata.MetaDataManager(site=site)
+    edit_MetaDataManager(mdm=mdm)
+
 
     # Don't allow overwrite of original template file, or misnaming of extension
     if file_name:

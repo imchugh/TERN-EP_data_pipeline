@@ -274,14 +274,14 @@ class NCtoTOA5Constructor():
         """
 
         var_list = []
-        for flux_var in TRUNCATE_VARIABLES:
+        for flux_var in md.TURBULENT_FLUX_QUANTITIES:
             for file_var in reader.get_dataframe().columns:
                 if flux_var in file_var:
                     split_list = file_var.split('_')
                     if len(split_list) == 2:
                         if split_list[-1] in md.VALID_FLUX_SYSTEMS.keys():
                             var_list.append(file_var)
-        return dict(zip(var_list, TRUNCATE_VARIABLES))
+        return dict(zip(var_list, md.TURBULENT_FLUX_QUANTITIES))
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -468,7 +468,7 @@ class NCtoTOA5Constructor():
 
         return (
             self.data.copy()
-            .pipe(self._convert_units)
+            # .pipe(self._convert_units)
             .pipe(self._apply_limits)
             .pipe(self._add_missing_variables)
             )
@@ -493,27 +493,27 @@ class NCtoTOA5Constructor():
             )
     #--------------------------------------------------------------------------
 
-    #--------------------------------------------------------------------------
-    def _convert_units(self, data: pd.DataFrame) -> pd.DataFrame:
-        """
-        Convert units for variables that require it.
+    # #--------------------------------------------------------------------------
+    # def _convert_units(self, data: pd.DataFrame) -> pd.DataFrame:
+    #     """
+    #     Convert units for variables that require it.
 
-        Args:
-            data: the dataframe containing the unconverted data.
+    #     Args:
+    #         data: the dataframe containing the unconverted data.
 
-        Returns:
-            data: the dataframe containing the converted data.
+    #     Returns:
+    #         data: the dataframe containing the converted data.
 
-        """
+    #     """
 
-        for variable in self.get_variables_for_conversion():
-            attrs = self.var_attrs.loc[variable]
-            func = ccf.convert_variable(variable=attrs['quantity'])
-            data[variable] = func(
-                data=data[variable], from_units=attrs['units']
-                )
-        return data
-    #--------------------------------------------------------------------------
+    #     for variable in self.get_variables_for_conversion():
+    #         attrs = self.var_attrs.loc[variable]
+    #         func = ccf.convert_variable(variable=attrs['quantity'])
+    #         data[variable] = func(
+    #             data=data[variable], from_units=attrs['units']
+    #             )
+    #     return data
+    # #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
     def _apply_limits(self, data: pd.DataFrame) -> pd.DataFrame:

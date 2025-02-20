@@ -722,10 +722,20 @@ class RtmcSyntaxGenerator():
 
         """
 
+        stripped_list = [x.replace('-', '_') for x in var_list]
+        tuples = zip(stripped_list, var_list)
         return self._str_joiner(
-            [f'Alias({x},"DataFile:merged.{x}");' for x in var_list],
+            str_list=[
+                f'Alias({this_tuple[0]},"DataFile:merged.{this_tuple[1]}");'
+                for this_tuple in tuples
+                ],
             joiner='\r\n'
             )
+
+        # return self._str_joiner(
+        #     [f'Alias({x},"DataFile:merged.{x}");' for x in var_list],
+        #     joiner='\r\n'
+        #     )
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -763,7 +773,7 @@ class RtmcSyntaxGenerator():
             ):
 
         alias_string = self.get_alias_string(var_list=var_list)
-        eval_string = ','.join(var_list)
+        eval_string = ','.join([var.replace('-', '_') for var in var_list])
         if len(var_list) > 1:
             eval_string = f'AvgSpa({eval_string})'
         if scaled_to_range:

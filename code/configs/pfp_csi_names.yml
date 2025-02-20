@@ -10,7 +10,7 @@ Fco2_EF_QC:
   standard_name: nan
   plausible_min: ''
   plausible_max: ''
-Fco2_EF_Cnt:
+Fco2_EF_Ct:
   standard_units: '1'
   long_name: CO2 flux number valid samples (Campbell Scientific EasyFluxDL)
   standard_name: nan
@@ -28,7 +28,7 @@ Fe_EF_QC:
   standard_name: nan
   plausible_min: ''
   plausible_max: ''
-Fe_EF_Cnt:
+Fe_EF_Ct:
   standard_units: '1'
   long_name: Latent heat flux number valid samples (Campbell Scientific EasyFluxDL)
   standard_name: nan
@@ -46,7 +46,7 @@ Fh_EF_QC:
   standard_name: nan
   plausible_min: ''
   plausible_max: ''
-Fh_EF_Cnt:
+Fh_EF_Ct:
   standard_units: '1'
   long_name: Sensible heat flux number valid samples (Campbell Scientific EasyFluxDL)
   standard_name: nan
@@ -64,13 +64,13 @@ Tstar:
   standard_name: nan
   plausible_min: -50
   plausible_max: 50
-AH_Samples:
+AH_Ct:
   standard_units: '1'
   long_name: Absolute humidity accepted samples
   standard_name: nan
   plausible_min: ''
   plausible_max: ''
-CO2_Samples:
+CO2_Ct:
   standard_units: '1'
   long_name: CO2 concentration accepted samples
   standard_name: nan

@@ -12,8 +12,6 @@ class.
 Module classes:
     - L1DataConstructor: builds an xarray dataset with data and metadata
     required to generate L1 .nc files.
-    - NCConverter: used to extract data from an existing .nc file and push
-    back out to Campbell Scientific TOA5 format data file.
 
 """
 
@@ -24,6 +22,7 @@ import pandas as pd
 import pathlib
 import xarray as xr
 
+from data_constructors import convert_calc_filter as ccf
 from managers import metadata as md
 from managers import paths
 import file_handling.file_io as io
@@ -37,11 +36,10 @@ SITE_DETAIL_SUBSET = [
     ]
 VAR_METADATA_SUBSET = [
     'height', 'instrument', 'long_name', 'standard_name', 'statistic_type',
-    'units'
+    'standard_units'
     ]
 STATISTIC_ALIASES = {'average': 'Avg', 'variance': 'Vr', 'sum': 'Tot'}
 TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
-FLUX_FILE_VAR_IND = 'Uz_SONIC_Av' # Variable that is always found in flux file
 logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
@@ -75,37 +73,7 @@ class L1DataConstructor():
         self.site = site
         self.md_mngr = md.MetaDataManager(
             site=site, use_alternate_vars=use_alternate_vars)
-
-        # If requested, set flux file date constraints on merged file
-        start_date, end_date = None, None
-        if constrain_start_to_flux or constrain_end_to_flux:
-            if constrain_start_to_flux:
-                start_date = self.md_mngr.get_file_attributes(
-                    file=self.md_mngr.flux_file, include_backups=concat_files,
-                    return_field='start_date'
-                    )
-            if constrain_end_to_flux:
-                end_date = self.md_mngr.get_file_attributes(
-                    file=self.md_mngr.flux_file, include_backups=concat_files,
-                    return_field='end_date'
-                    )
-
-        # Merge the raw data (no corrections applied)
-        merge_dict = {
-            file: self.md_mngr.translate_variables_by_table(table=table)
-            for table, file in self.md_mngr.map_tables_to_files(abs_path=True).items()
-            }
-        merge_to_int = f'{int(self.md_mngr.get_site_details().time_step)}min'
-        self.data = (
-            fh.merge_data(
-                files=merge_dict,
-                concat_files=concat_files,
-                interval=merge_to_int,
-                start_date=start_date,
-                end_date=end_date
-                )
-            ['data']
-            )
+        self._build_internal_data(args=locals())
 
         # Set attributes
         self.data_years = self.data.index.year.unique().tolist()
@@ -113,6 +81,54 @@ class L1DataConstructor():
         self.io_path = paths.get_local_stream_path(
             resource='homogenised_data', stream='nc', subdirs=[site]
             )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _build_internal_data(self, args):
+
+        # If requested, set flux file date constraints on merged file
+        start_date, end_date = None, None
+        if args['constrain_start_to_flux']:
+            start_date = self.md_mngr.get_file_attributes(
+                file=self.md_mngr.flux_file,
+                include_backups=args['concat_files'],
+                return_field='start_date'
+                )
+        if args['constrain_end_to_flux']:
+            end_date = self.md_mngr.get_file_attributes(
+                file=self.md_mngr.flux_file,
+                include_backups=args['concat_files'],
+                return_field='end_date'
+                )
+
+        # Merge the raw data
+        merge_dict = {
+            file: self.md_mngr.translate_variables_by_table(table=table)
+            for table, file in self.md_mngr.map_tables_to_files(abs_path=True).items()
+            }
+        merge_to_int = f'{int(self.md_mngr.get_site_details().time_step)}min'
+        data = (
+            fh.merge_data(
+                files=merge_dict,
+                concat_files=args['concat_files'],
+                interval=merge_to_int,
+                start_date=start_date,
+                end_date=end_date
+                )
+            ['data']
+            )
+
+        # Apply unit conversions and create data attribute
+        for variable in self.md_mngr.list_variables_for_conversion():
+            attrs = self.md_mngr.get_variable_attributes(variable=variable)
+            try:
+                func = ccf.convert_variable(variable=attrs['quantity'])
+            except KeyError:
+                breakpoint()
+            data[variable] = func(
+                data=data[variable], from_units=attrs['units']
+                )
+        self.data = data
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -428,11 +444,13 @@ class L1DataConstructor():
 
         """
 
-        var_list = [var for var in ds.variables if not var in ds.dims]
-        for var in var_list:
+        # Note 'standard units' is renamed to units because unit conversions
+        # are applied to any variables that don't have standard units.
+        for var in list(ds.keys()):
             ds[var].attrs = (
                 self.md_mngr.get_variable_attributes(variable=var)
                 [VAR_METADATA_SUBSET]
+                .rename({'standard_units': 'units'})
                 )
     #--------------------------------------------------------------------------
 
@@ -488,122 +506,4 @@ class L1DataConstructor():
 
 ###############################################################################
 ### END L1 NETCDF DATA CONSTRUCTOR CLASS ###
-###############################################################################
-
-
-
-###############################################################################
-### BEGIN NETCDF CONVERTER CLASS ###
-###############################################################################
-
-#------------------------------------------------------------------------------
-class NCConverter():
-    """
-    Class to allow conversion of data from NetCDF format back to a TOA5-like file.
-    This is intended to replace the current functionality for production of the
-    RTMC datasets.
-    """
-
-    #--------------------------------------------------------------------------
-    def __init__(self, nc_file: pathlib.Path | str) -> None:
-        """
-        Open the NetCDF file as xarray dataset, and set labels to keep / drop.
-
-        Args:
-            nc_file: Absolute path to NetCDF file.
-
-        Returns:
-            None.
-
-        """
-
-
-        self.ds = xr.open_dataset(nc_file)
-        self.labels_to_drop = (
-            ['crs'] + [x for x in self.ds if 'QCFlag' in x]
-            )
-        self.labels_to_keep = [
-            var for var in self.ds if not var in self.labels_to_drop
-            ]
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def make_dataframe(self) -> pd.core.frame.DataFrame:
-        """
-        Strip back the dataset to the minimum required for the dataframe.
-
-        Returns:
-            dataframe.
-
-        """
-
-        return (
-            self.ds
-            .to_dataframe()
-            .droplevel(['latitude', 'longitude'])
-            .drop(self.labels_to_drop, axis=1)
-            .rename_axis('DATETIME')
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def make_headers(self) -> pd.core.frame.DataFrame:
-        """
-        Create the header dataframe required for the TOA5 conversion.
-
-        Returns:
-            dataframe.
-
-        """
-
-        return pd.DataFrame(
-            data = [
-                {
-                    'units': self.ds[var].attrs['units'],
-                    'statistic_type':
-                        STATISTIC_ALIASES[self.ds[var].attrs['statistic_type']]
-                    }
-                for var in self.labels_to_keep
-                ],
-            index=self.labels_to_keep
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def write_to_TOA5(self, file_path):
-        """
-
-
-        Args:
-            file_path (TYPE): DESCRIPTION.
-
-        Returns:
-            None.
-
-        """
-
-        headers = io.reformat_headers(
-            headers=(
-                self.make_headers()
-                .rename({'statistic_type': 'sampling'}, axis=1)
-                ),
-            output_format='TOA5'
-            )
-        data = io.reformat_data(
-            data=self.make_dataframe(),
-            output_format='TOA5'
-            )
-        io.write_data_to_file(
-            headers=headers,
-            data=data,
-            abs_file_path=file_path,
-            output_format='TOA5'
-            )
-
-    #--------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-
-###############################################################################
-### END NETCDF CONVERTER CLASS ###
 ###############################################################################

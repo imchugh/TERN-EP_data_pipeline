@@ -14,12 +14,28 @@ Todo:
 
 """
 
-import pandas as pd
+###############################################################################
+### BEGIN IMPORTS ###
+###############################################################################
+
 import pathlib
+import pandas as pd
+
+#------------------------------------------------------------------------------
 
 from managers import paths
 from file_handling import file_io as io
 from managers.site_details import SiteDetailsManager as sdm
+
+###############################################################################
+### END IMPORTS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN INITS ###
+###############################################################################
 
 VALID_INSTRUMENTS = ['SONIC', 'IRGA', 'RAD']
 VALID_FLUX_SYSTEMS = {'EF': 'EasyFluxDL', 'EP': 'SmartFlux', 'DL': 'TERN'}
@@ -33,25 +49,34 @@ VALID_SUFFIXES = {
 _NAME_MAP = {'site_name': 'name', 'std_name': 'std_name'}
 
 ###############################################################################
-### BEGIN SINGLE SITE CONFIGURATION READER SECTION ###
+### END INITS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN SITE METADATA MANAGER CLASS ###
 ###############################################################################
 
 #------------------------------------------------------------------------------
 class MetaDataManager():
-    """Class to read and interrogate variable data from site-specific config file"""
+    """
+    Class to read and interrogate variable metadata from site-specific
+    config file
+    """
 
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
     def __init__(
-            self, site: str, use_alternate_vars: str | pathlib.Path=None
+            self, site: str, use_alternate_configs: str | pathlib.Path=None
             ) -> None:
         """
         Do inits - read the yaml files, build lookup tables.
 
         Args:
             site: name of site.
-            use_alternate_vars: alternate yml variable assignment file.
+            use_alternate_configs: alternate yml variable assignment file.
 
         Returns:
             None.
@@ -67,9 +92,9 @@ class MetaDataManager():
             )
 
         # Save the basic configs from the yml file
-        if use_alternate_vars:
+        if use_alternate_configs:
             self.configs = paths.get_other_config_file(
-                file_path=use_alternate_vars
+                file_path=use_alternate_configs
                 )
         else:
             self.configs = paths.get_local_config_file(
@@ -83,7 +108,7 @@ class MetaDataManager():
         self._parse_system_type()
 
         # Get flux instrument types
-        self.instruments = self._get_inst_type()
+        self.instruments = self._parse_instrument_type()
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -97,16 +122,13 @@ class MetaDataManager():
         """
 
         # Get the variable map and check the conformity of all names
-        df = (
+        self.site_variables = (
             pd.DataFrame(self.configs)
             .T
             .rename_axis('std_name')
             .pipe(self._test_variable_conformity)
             .pipe(self._test_file_assignment)
             )
-
-        self.site_variables = df[~df.missing]
-        self.missing_variables = df[df.missing]
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -166,30 +188,12 @@ class MetaDataManager():
 
         """
 
-        file_list = []
-        df = df.assign(missing=df.name.str.len()==0)
-
-        # If 'file' keyword is in the configuration, override logger / table
-        # filename construction
-        if 'file' in df.columns:
-            file_list = df.loc[~df.missing, 'file']
-
-        # Otherwise use site, logger and table name to construct filename
-        elif 'logger' and 'table' in df.columns:
-
-            file_list = (
-                f'{self.site}_' +
-                df.loc[~df.missing, ['logger', 'table']]
-                .agg('_'.join, axis=1) + '.dat'
-                )
-
-        # Raise error if none of the requisite fields are available
-        else:
-
-            raise RuntimeError(
-                'Either logger and table, or the file name must be listed '
-                'in the configuration file!'
-                )
+        # Make file names
+        file_list = (
+            f'{self.site}_' +
+            df[['logger', 'table']]
+            .agg('_'.join, axis=1) + '.dat'
+            )
 
         # Check file paths are valid
         for file in file_list.unique():
@@ -199,8 +203,7 @@ class MetaDataManager():
                     )
 
         # Assign and return
-        df['file'] = file_list
-        return df.fillna('')
+        return df.assign(file=file_list).fillna('')
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -237,7 +240,7 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _get_inst_type(self) -> str:
+    def _parse_instrument_type(self) -> str:
         """
         Get the instrument types for SONIC and IRGA.
 
@@ -258,7 +261,7 @@ class MetaDataManager():
                     'More than one instrument specified as instrument attribute '
                     f'for {instrument} device variable ({", ".join(inst_list)})'
                     )
-            elif len(inst_list) == 0:
+            if len(inst_list) == 0:
                 rslt.update({instrument: None})
             else:
                 rslt.update({instrument: inst_list[0]})
@@ -266,8 +269,19 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_site_details(self, field=None) -> pd.Series:
-        """ Get the non-variable site details."""
+    def get_site_details(self, field: str=None) -> pd.Series | str:
+        """
+        Get the global (non-variable) site metadata.
+
+        Args:
+            field (optional): if str, returns a specific named field
+            (KeyError if field does not exist). If none, returns all available
+            fields. Defaults to None.
+
+        Returns:
+            series containing all fields, or single string field.
+
+        """
 
         return (
             sdm(use_local=True)
@@ -294,7 +308,6 @@ class MetaDataManager():
         rslt = (
             io.get_file_info(file=self.data_path / file) |
             self._get_file_dates(file=file, include_backups=include_backups)
-            # io.get_start_end_dates(file=self.data_path / file)
             )
         if include_extended:
             rslt.update(
@@ -310,14 +323,26 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _get_file_dates(self, file: str, include_backups: bool=False):
+    def _get_file_dates(self, file: str, include_backups: bool=False) -> dict:
+        """
+        Get the date span of the file(s).
+
+        Args:
+            file: file for which to retrieve span.
+            include_backups (optional): If true, gets span across master file
+            AND backups combined. Defaults to False.
+
+        Returns:
+            start and end dates.
+
+        """
 
         file_list = [self.data_path / file]
         start_dates, end_dates = [], []
         if include_backups:
             file_list += io.get_eligible_concat_files(self.data_path / file)
-        for file in file_list:
-            dates = io.get_start_end_dates(file=file)
+        for this_file in file_list:
+            dates = io.get_start_end_dates(file=this_file)
             start_dates.append(dates['start_date'])
             end_dates.append(dates['end_date'])
         return {'start_date': min(start_dates), 'end_date': max(end_dates)}
@@ -325,6 +350,13 @@ class MetaDataManager():
 
     #--------------------------------------------------------------------------
     def list_loggers(self) -> list:
+        """
+        List the loggers defined in the variable map.
+
+        Returns:
+            the list of loggers.
+
+        """
 
         return self.site_variables.logger.unique().tolist()
     #--------------------------------------------------------------------------
@@ -342,10 +374,14 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def list_files(self, abs_path=False) -> list:
+    def list_files(self, abs_path: pathlib.Path | str=False) -> list:
         """
         List the files constructed from the site, logger and table attributes
         of the variable map.
+
+        Args:
+            abs_path (optional): if true, output the absolute path.
+            Defaults to False.
 
         Returns:
             the list of files.
@@ -368,7 +404,7 @@ class MetaDataManager():
         """
 
         return (
-            self._index_translator(use_index='std_name', include_missing=True)
+            self._index_translator(use_index='std_name')
             .index
             .tolist()
             )
@@ -398,11 +434,7 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
     def map_loggers_to_tables(self) -> dict:
         """
-        Return a dictionary that maps loggers to table names.
-
-        Args:
-            table (optional): table for which to return file. If None, maps all
-            available tables to files. Defaults to None.
+        Map loggers to table names.
 
         Returns:
             the map.
@@ -423,13 +455,13 @@ class MetaDataManager():
         self, table: str | list=None, abs_path: bool=False
         ) -> dict:
         """
-        Return a dictionary that maps logger tables to file names.
+        Map logger tables to file names.
 
         Args:
             table (optional): table for which to return file. If None, maps all
             available tables to files. Defaults to None.
-            abs_path (optional): whether to return the absolute path (if True)
-            or just the file name (if False). Defaults to False.
+            abs_path (optional): if true, return the absolute path.
+            Defaults to False.
 
         Returns:
             the map.
@@ -466,7 +498,7 @@ class MetaDataManager():
             return_field: str=None
             ) -> pd.Series | str:
         """
-        Get the attributes for a given variable
+        Get the attributes for a given variable.
 
         Args:
             variable: the variable for which to return the attribute(s).
@@ -480,10 +512,7 @@ class MetaDataManager():
 
         """
 
-        df = self._index_translator(
-            use_index=source_field,
-            include_missing=True
-            )
+        df = self._index_translator(use_index=source_field)
         if return_field is None:
             return df.loc[variable]
         return df.loc[variable, return_field]
@@ -491,6 +520,16 @@ class MetaDataManager():
 
     #--------------------------------------------------------------------------
     def get_variables_by_quantity(self, quantity) -> list:
+        """
+
+
+        Args:
+            quantity (TYPE): DESCRIPTION.
+
+        Returns:
+            list: DESCRIPTION.
+
+        """
 
         return (
             self.site_variables.loc[self.site_variables.quantity == quantity]
@@ -662,8 +701,7 @@ class MetaDataManager():
 
     #--------------------------------------------------------------------------
     def _index_translator(
-            self, use_index: str, include_missing=False
-            ) -> pd.core.frame.DataFrame:
+            self, use_index: str) -> pd.core.frame.DataFrame:
         """
         Reindex the variable lookup table on the desired index.
 
@@ -675,21 +713,24 @@ class MetaDataManager():
 
         """
 
-        df = self.site_variables.copy()
-        if include_missing:
-            df = pd.concat([df, self.missing_variables])
         return (
-            df
+            self.site_variables
             .reset_index()
             .set_index(keys=_NAME_MAP[use_index])
             )
     #--------------------------------------------------------------------------
 
-    ###########################################################################
-    ### END VARIABLE DESCRIPTORS SECTION ###
-    ###########################################################################
-
 #------------------------------------------------------------------------------
+
+###############################################################################
+### END SITE METADATA MANAGER CLASS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN PFP NAME PARSER CLASS ###
+###############################################################################
 
 #------------------------------------------------------------------------------
 class PFPNameParser():
@@ -732,9 +773,7 @@ class PFPNameParser():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def parse_variable_name(
-            self, variable_name: str, strict: bool=True
-            ) -> dict:
+    def parse_variable_name(self, variable_name: str) -> dict:
         """
         Break variable name into components and parse each for conformity.
 
@@ -766,7 +805,7 @@ class PFPNameParser():
 
         # Find quantity and instrument (if valid); only update if
         rslt = self._check_str_is_quantity(elems)
-        if rslt_dict['quantity'] == None:
+        if rslt_dict['quantity'] is None:
             rslt_dict.update(rslt)
 
         # Check if final element is a process
@@ -989,8 +1028,28 @@ class PFPNameParser():
 
 #------------------------------------------------------------------------------
 
+###############################################################################
+### END PFP NAME PARSER CLASS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN FUNCTIONS ###
+###############################################################################
+
 #------------------------------------------------------------------------------
-def convert_units_to_variance(units):
+def convert_units_to_variance(units: str) -> str:
+    """
+    Convert standard units to variance.
+
+    Args:
+        units: the units.
+
+    Returns:
+        altered units.
+
+    """
 
     ref_dict = {
         'g/m^3': 'g^2/m^6',
@@ -1002,3 +1061,7 @@ def convert_units_to_variance(units):
 
     return ref_dict[units]
 #------------------------------------------------------------------------------
+
+###############################################################################
+### END FUNCTIONS ###
+###############################################################################

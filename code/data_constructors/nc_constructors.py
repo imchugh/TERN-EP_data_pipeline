@@ -52,7 +52,7 @@ class L1DataConstructor():
 
     #--------------------------------------------------------------------------
     def __init__(
-            self, site: str, use_alternate_vars: pathlib.Path | str=None,
+            self, site: str, use_alternate_configs: pathlib.Path | str=None,
             concat_files: bool=False, constrain_start_to_flux: bool=False,
             constrain_end_to_flux: bool=True
             ) -> None:
@@ -72,7 +72,7 @@ class L1DataConstructor():
 
         self.site = site
         self.md_mngr = md.MetaDataManager(
-            site=site, use_alternate_vars=use_alternate_vars)
+            site=site, use_alternate_configs=use_alternate_configs)
         self._build_internal_data(args=locals())
 
         # Set attributes

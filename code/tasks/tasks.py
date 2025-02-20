@@ -132,6 +132,22 @@ logger = logging.getLogger(__name__)
 
 ### DATA CONSTRUCTORS ###
 
+
+# module_strs = {
+
+#     'profile_processing': 'profile_processing.profile_data_processor',
+#     'data_constructors': 'data_constructors.data_constructors',
+#     'details_constructors': 'data_constructors.details_constructor',
+#     'network_status': 'network_monitoring.network_status',
+#     'nc_constructors': 'data_constructors.nc_constructors',
+#     'nc_toa5_constructors': 'data_constructors.nc_toa5_constructor',
+#     'file_fast_data': 'file_handling.fast_data_filer',
+#     'rclone_transfers': 'file_transfers.rclone_transfer',
+#     'sftp_transfers': 'file_transfers.sftp_transfer'
+
+#     }
+
+
 #------------------------------------------------------------------------------
 def construct_homogenised_TOA5(site: str) -> None:
     """Construct a TOA5 file for visualisation."""

@@ -155,10 +155,10 @@ tasks:
 
   # Rclone transfers - pull tasks
 
-  pull_profile_raw_rdm:
+  pull_profile_raw:
     - CumberlandPlain
 
-  pull_slow_rdm:
+  pull_slow_flux:
     - CowBay
     - CumberlandPlain
     - RobsonCreek
@@ -167,7 +167,7 @@ tasks:
 
   # Rclone transfers - push tasks
 
-  push_main_fast_rdm:
+  push_main_fast_flux:
     - Boyagin
     - Calperum
     - Gingin
@@ -176,17 +176,17 @@ tasks:
     - Whroo
     - WombatStateForest
 
-  push_aux_fast_rdm:
+  push_aux_fast_flux:
     - Boyagin
 
-  push_profile_raw_rdm:
+  push_profile_raw:
     - Boyagin
 
-  push_profile_proc_rdm:
+  push_profile_proc:
     - Boyagin
     - CumberlandPlain
 
-  push_slow_rdm:
+  push_slow_flux:
     - AliceSpringsMulga
     - Boyagin
     - Calperum

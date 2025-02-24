@@ -432,6 +432,32 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
+    def map_fluxes_to_standard_names(self) -> dict:
+        """
+        Create a dictionary to map the site-specific turbulent flux names to
+        universal names. This is required because the L1 netcdf files use
+        suffixes to describe the turbulent fluxes, which may need to be removed
+        in certain cases.
+
+        Returns:
+            mapping from specific to general.
+
+        """
+
+        return (
+            self.site_variables
+            .quantity
+            .reset_index()
+            .set_index(keys='quantity')
+            .loc[TURBULENT_FLUX_QUANTITIES]
+            .reset_index()
+            .set_index(keys='std_name')
+            .squeeze()
+            .to_dict()
+            )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
     def map_loggers_to_tables(self) -> dict:
         """
         Map loggers to table names.

@@ -18,10 +18,12 @@ from paths import paths_manager as pm
 import utils.metadata_handlers as mh
 from managers import site_details as sd
 from file_handling import fast_data_filer as fdf
+from network_monitoring import network_status_from_nc as nsnc
 
 sd_mngr = sd.SiteDetailsManager(use_local=True)
 SUBSET = ['Fco2', 'Fh', 'Fe', 'Fsd']
 logger = logging.getLogger(__name__)
+new_sites = ['Calperum', 'Tumbarumba']
 
 ###############################################################################
 ### BEGIN MAIN FUNCTIONS ###
@@ -50,18 +52,26 @@ def write_status_xlsx(site_list) -> None:
 
         logger.info(f'    - {site}')
 
+        # Handle sites not yet generating netcdf and usaing old metadata manager
+        if not site in new_sites:
 
-        md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
-        slow_file_status_list.append(
-            get_slow_file_status(site=site, md_mngr=md_mngr)
-            )
+            md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
+            slow_file_status = get_slow_file_status(site=site, md_mngr=md_mngr)
+            slow_data_status = (
+                get_slow_data_status(site=site, md_mngr=md_mngr)
+                .reset_index()
+                )
+
+        # Or new continuously appending netcdf
+        else:
+            slow_file_status = nsnc.get_file_status(site=site)
+            slow_data_status = nsnc.get_data_status(site=site)
+
+        slow_file_status_list.append(slow_file_status)
+        site_data_status_dict[site] = slow_data_status
         fast_file_status_list.append(
             {'site': site} |
             get_fast_file_status(site=site)
-            )
-        site_data_status_dict[site] = (
-            get_slow_data_status(site=site, md_mngr=md_mngr)
-            .reset_index()
             )
 
     # Write sheets

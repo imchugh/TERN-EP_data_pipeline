@@ -44,8 +44,8 @@ INFO_FIELD_NAMES = [
     ]
 
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
-
 EDDYPRO_SEARCH_STR = 'EP-Summary'
+CHUNK_SIZE = 10000
 
 ###############################################################################
 ### FUNCTIONS ###
@@ -110,6 +110,70 @@ def get_data(
         on_bad_lines='skip',
         low_memory=False
         )
+
+    # Set the index and drop the time variables
+    df.index = _parse_dates(df[REQ_TIME_VARS])
+
+    # Check integrity and return
+    return df.pipe(_integrity_checks, non_numeric=CRITICAL_FILE_VARS)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_data_2(
+        file: str | pathlib.Path, file_type: str=None, usecols: list=None
+        ) -> pd.core.frame.DataFrame:
+    """Read data from file.
+
+    Args:
+        file: absolute path of file to parse.
+        file_type: if specified, must be either `TOA5` or
+            `EddyPro`. If None, file_type is fetched.
+        usecols (list, optional): The subset of columns to keep. If None, keep
+            all.
+        Defaults to None.
+
+    Returns:
+        File data content.
+
+    """
+
+    # If file type not supplied, detect it.
+    if not file_type:
+        file_type = get_file_type(file)
+
+    # Get dictionary containing file configurations
+    MASTER_DICT = FILE_CONFIGS[file_type]
+
+    # Set rows to skip
+    REQ_TIME_VARS = list(MASTER_DICT['time_variables'].keys())
+    CRITICAL_FILE_VARS = MASTER_DICT['non_numeric_cols']
+    rows_to_skip = list(set([0] + list(MASTER_DICT['header_lines'].values())))
+    rows_to_skip.remove(MASTER_DICT['header_lines']['variable'])
+
+    # Usecols MUST include critical non-numeric variables (including date vars)
+    # and at least ONE additional column; if this condition is not satisifed,
+    # do not subset the columns on import.
+    thecols = None
+    if usecols and not usecols == CRITICAL_FILE_VARS:
+        thecols = (
+            CRITICAL_FILE_VARS +
+            [col for col in usecols if not col in CRITICAL_FILE_VARS]
+            )
+
+    # Now import data
+    df = pd.DataFrame()
+    with pd.read_csv(
+            file,
+            skiprows=rows_to_skip,
+            usecols=thecols,
+            na_values=MASTER_DICT['na_values'],
+            sep=MASTER_DICT['separator'],
+            engine='c',
+            on_bad_lines='skip',
+            chunksize=10000
+            ) as reader:
+        for chunk in reader:
+            df = pd.concat([df, chunk]).drop_duplicates()
 
     # Set the index and drop the time variables
     df.index = _parse_dates(df[REQ_TIME_VARS])

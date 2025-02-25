@@ -141,7 +141,6 @@ def get_file_status(
             do_concat = True
         else:
             do_concat = False
-        breakpoint()
         missing_list.append(
             file_handler.DataHandler(file=file, concat_files=do_concat)
             .get_missing_records()

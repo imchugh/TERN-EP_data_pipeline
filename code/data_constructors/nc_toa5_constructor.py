@@ -468,7 +468,6 @@ class NCtoTOA5Constructor():
 
         return (
             self.data.copy()
-            # .pipe(self._convert_units)
             .pipe(self._apply_limits)
             .pipe(self._add_missing_variables)
             )
@@ -492,28 +491,6 @@ class NCtoTOA5Constructor():
             .tolist()
             )
     #--------------------------------------------------------------------------
-
-    # #--------------------------------------------------------------------------
-    # def _convert_units(self, data: pd.DataFrame) -> pd.DataFrame:
-    #     """
-    #     Convert units for variables that require it.
-
-    #     Args:
-    #         data: the dataframe containing the unconverted data.
-
-    #     Returns:
-    #         data: the dataframe containing the converted data.
-
-    #     """
-
-    #     for variable in self.get_variables_for_conversion():
-    #         attrs = self.var_attrs.loc[variable]
-    #         func = ccf.convert_variable(variable=attrs['quantity'])
-    #         data[variable] = func(
-    #             data=data[variable], from_units=attrs['units']
-    #             )
-    #     return data
-    # #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
     def _apply_limits(self, data: pd.DataFrame) -> pd.DataFrame:

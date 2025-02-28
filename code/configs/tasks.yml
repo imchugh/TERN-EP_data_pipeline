@@ -33,7 +33,6 @@ tasks:
   construct_homogenised_TOA5:
     - AliceSpringsMulga
     - Boyagin
-    - Calperum
     - CumberlandPlain
     - Fletcherview
     - Gingin
@@ -47,11 +46,12 @@ tasks:
     - SturtPlains
     - Wellington
     - Whroo
-    - WombatStateForest
     - Yanco
 
   construct_homogenised_TOA5_from_nc:
+    - Calperum
     - Tumbarumba
+    - WombatStateForest
 
   construct_L1_xlsx:
     - AliceSpringsMulga
@@ -78,6 +78,7 @@ tasks:
   construct_L1_nc:
     - Calperum
     - Tumbarumba
+    - WombatStateForest
 
   update_EddyPro_master:
     - CumberlandPlain
@@ -151,7 +152,7 @@ tasks:
 
   # Metadata constructors
 
-  construct_site_details_file: []
+  construct_site_details: []
 
   # Rclone transfers - pull tasks
 

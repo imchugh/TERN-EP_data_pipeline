@@ -15,6 +15,10 @@ Module classes:
 
 """
 
+###############################################################################
+### BEGIN IMPORTS ###
+###############################################################################
+
 import datetime as dt
 import logging
 import numpy as np
@@ -22,11 +26,17 @@ import pandas as pd
 import pathlib
 import xarray as xr
 
+#------------------------------------------------------------------------------
+
 from data_constructors import convert_calc_filter as ccf
 from managers import metadata as md
 from managers import paths
 import file_handling.file_io as io
 import file_handling.file_handler as fh
+
+###############################################################################
+### END IMPORTS ###
+###############################################################################
 
 #------------------------------------------------------------------------------
 SITE_DETAIL_ALIASES = {'elevation': 'altitude'}
@@ -73,7 +83,11 @@ class L1DataConstructor():
         self.site = site
         self.md_mngr = md.MetaDataManager(
             site=site, use_alternate_configs=use_alternate_configs)
-        self._build_internal_data(args=locals())
+        self.data = (
+            self._build_internal_data(args=locals())
+            .pipe(self._do_unit_conversions)
+            .pipe(self._do_diag_conversions)
+            )
 
         # Set attributes
         self.data_years = self.data.index.year.unique().tolist()
@@ -107,7 +121,7 @@ class L1DataConstructor():
             for table, file in self.md_mngr.map_tables_to_files(abs_path=True).items()
             }
         merge_to_int = f'{int(self.md_mngr.get_site_details().time_step)}min'
-        data = (
+        return (
             fh.merge_data(
                 files=merge_dict,
                 concat_files=args['concat_files'],
@@ -117,18 +131,59 @@ class L1DataConstructor():
                 )
             ['data']
             )
+    #--------------------------------------------------------------------------
 
-        # Apply unit conversions and create data attribute
+    #--------------------------------------------------------------------------
+    def _do_unit_conversions(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Convert units from site-specific to network standard.
+
+        Args:
+            data: uncorrected input data.
+
+        Returns:
+            corrected output data.
+
+        """
+
+        # Apply unit conversions
         for variable in self.md_mngr.list_variables_for_conversion():
             attrs = self.md_mngr.get_variable_attributes(variable=variable)
-            try:
-                func = ccf.convert_variable(variable=attrs['quantity'])
-            except KeyError:
-                breakpoint()
+            func = ccf.convert_variable(variable=attrs['quantity'])
             data[variable] = func(
                 data=data[variable], from_units=attrs['units']
                 )
-        self.data = data
+        return data
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _do_diag_conversions(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Converst diagnostic definition from expression of valid samples to
+        invalid samples.
+
+        Args:
+            data: uncorrected input data.
+
+        Returns:
+            corrected output data.
+
+        """
+
+        # Apply diagnostic conversions
+        n_samples = (
+            self.md_mngr.site_details.freq_hz *
+            self.md_mngr.site_details.time_step *
+            60
+            )
+        for diag_var, units in self.md_mngr.diag_types.items():
+            if units == 'valid_count':
+                data[diag_var] = ccf.convert_diagnostic(
+                    data=data[diag_var],
+                    n_samples=n_samples,
+                    from_units=units
+                    )
+        return data
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -138,7 +193,7 @@ class L1DataConstructor():
         attrs.
 
         Returns:
-            TYPE: DESCRIPTION.
+            dictionary with field names and site values.
 
         """
 
@@ -156,7 +211,7 @@ class L1DataConstructor():
         global_attrs.update(new_dict)
 
         site_specific_attrs = (
-            self.md_mngr.get_site_details()
+            self.md_mngr.site_details
             [SITE_DETAIL_SUBSET]
             .rename(SITE_DETAIL_ALIASES)
             .to_dict()

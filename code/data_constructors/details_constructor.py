@@ -5,52 +5,66 @@ Created on Mon Aug 26 11:46:04 2024
 @author: jcutern-imchugh
 """
 
+###############################################################################
+### BEGIN IMPORTS ###
+###############################################################################
+
 import datetime as dt
 import logging
 import pandas as pd
 
 #------------------------------------------------------------------------------
+
 import utils.metadata_handlers as mh
-import file_handling.file_handler as fh
+from file_handling import file_handler as fh, fast_data_filer as fdf
 from data_constructors.convert_calc_filter import TimeFunctions
 from file_handling import file_io as io
-from paths import paths_manager as pm
+from managers import paths
 
-#------------------------------------------------------------------------------
-# INITS #
+###############################################################################
+### END IMPORTS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN INITS ###
+###############################################################################
+
 logger = logging.getLogger(__name__)
 DETAILS_SUBSET = []
 LOGGER_SUBSET = [
     'format', 'station_name', 'logger_type', 'serial_num', 'OS_version',
     'program_name'
     ]
-#------------------------------------------------------------------------------
 
-# #------------------------------------------------------------------------------
-# def write_all_site_info() -> None:
+###############################################################################
+### END INITS ###
+###############################################################################
 
-#     site_list = (cg.get_task_configs()['site_tasks']).keys()
-#     for site in site_list:
-#         logger.info(f'Writing info TOA5 file for site {site}')
-#         try:
-#             write_site_info(site=site)
-#             logger.info('... done')
-#         except FileNotFoundError:
-#             logger.error(
-#                 f'Write of details file for site {site} failed with the '
-#                 'following error: ',
-#                 exc_info=True
-#                 )
-#             continue
-# #------------------------------------------------------------------------------
+
+
+###############################################################################
+### BEGIN FUNCTIONS ###
+###############################################################################
 
 #------------------------------------------------------------------------------
 def write_site_info(site: str) -> None:
+    """
+    Collate and write site information required for RTMC files.
+
+    Args:
+        site: name of site.
+
+    Returns:
+        None.
+
+    """
 
     # Get site info
     logger.info('Getting site information...')
     site_info = (
-        pm.get_local_config_file(config_stream='all_site_metadata')[site]
+        paths.get_local_config_file(config_stream='all_site_metadata')[site]
         )
     site_info['start_year'] = str(
         dt.datetime.strptime(site_info['date_commissioned'], '%Y-%m-%d').year
@@ -80,7 +94,16 @@ def write_site_info(site: str) -> None:
 
     # Get fast file info
     logger.info('Getting latest 10Hz file...')
-    fast_file_info = {'10Hz_file': mh.get_last_10Hz_file(site=site)}
+    try:
+        file = fdf.get_last_formatted_fast_file(
+            site=site,
+            abs_path=False
+            )
+        fast_file_info = {'10Hz_file': file}
+        logger.info(f'Found fast file {file}')
+    except FileNotFoundError:
+        fast_file_info = {'10Hz_file': 'No files'}
+        logger.error('No files found')
 
     # Get flux logger info
     logger.info('Getting flux logger information...')
@@ -125,9 +148,9 @@ def write_site_info(site: str) -> None:
 
     # Set the output path
     output_path = (
-        pm.get_local_stream_path(
+        paths.get_local_stream_path(
             resource='homogenised_data', stream='TOA5', site=site
-            ) / 
+            ) /
         f'{site}_details.dat'
         )
 
@@ -136,3 +159,7 @@ def write_site_info(site: str) -> None:
     io.write_data_to_file(
         headers=headers, data=data, abs_file_path=output_path, info=info)
 #------------------------------------------------------------------------------
+
+###############################################################################
+### END FUNCTIONS ###
+###############################################################################

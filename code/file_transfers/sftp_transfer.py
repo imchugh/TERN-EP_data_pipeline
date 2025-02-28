@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def send_cosmoz(site):
+def push_cosmoz(site):
 
     try:
         remote_alias = CSIRO_ALIASES[site]

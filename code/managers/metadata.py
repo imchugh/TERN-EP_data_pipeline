@@ -90,6 +90,10 @@ class MetaDataManager():
                 site=site, resource='raw_data', stream='flux_slow'
                 )
             )
+        self.site_details = (
+            sdm(use_local=True)
+            .get_single_site_details(site=self.site)
+            )
 
         # Save the basic configs from the yml file
         if use_alternate_configs:
@@ -101,6 +105,8 @@ class MetaDataManager():
                 config_stream='variables_pfp', site=site
                 )
 
+        self._parse_diagnostics()
+
         # Create site-based variables table
         self._parse_site_variables()
 
@@ -109,6 +115,23 @@ class MetaDataManager():
 
         # Get flux instrument types
         self.instruments = self._parse_instrument_type()
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _parse_diagnostics(self):
+
+        rslt = {
+            'Diag_IRGA': 'invalid_count',
+            'Diag_SONIC': 'invalid_count'
+            }
+        for variable in ['Diag_IRGA', 'Diag_SONIC']:
+            try:
+                rslt[variable] = (
+                    self.configs[variable].pop('diag_type')
+                    )
+            except KeyError:
+                next
+        self.diag_types = rslt
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -222,18 +245,11 @@ class MetaDataManager():
             None.
 
         """
-
-        attrs = (
-            self.site_variables.loc[
-                (self.site_variables.quantity == FLUX_FILE_VAR_IND) &
-                (self.site_variables.statistic_type == 'average')
-                ]
-            )
-        if len(attrs) > 1:
-            raise IndexError(
-                f'Quantity {FLUX_FILE_VAR_IND} should have only one entry '
-                'in mapping file!'
-                )
+        var = [
+            key for key, value in self.map_fluxes_to_standard_names().items()
+            if value == FLUX_FILE_VAR_IND
+            ]
+        attrs = self.site_variables.loc[var]
         self.flux_file = attrs.file.item()
         self.flux_logger = attrs.logger.item()
         self.flux_table = attrs.table.item()

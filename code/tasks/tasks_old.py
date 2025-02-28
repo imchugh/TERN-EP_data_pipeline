@@ -6,74 +6,71 @@ Created on Fri Aug  2 09:43:07 2024
 
 Note that imports are embedded in the task function calls so that all modules
 do not need to be loaded every time the task manager is called externally!
+
+To do:
+    fix profile processing and push / pull of raw and processed profile data (edit cron)
+
+
 """
 
 ###############################################################################
 ### BEGIN IMPORTS ###
 ###############################################################################
 
+#------------------------------------------------------------------------------
+### STANDARD IMPORTS ###
 import datetime as dt
 import inspect
 import logging.config
 import pandas as pd
 import sys
 from importlib import import_module
-
 #------------------------------------------------------------------------------
 
-from file_transfers import rclone_transfer as rct
-from file_transfers import sftp_transfer as sftpt
+#------------------------------------------------------------------------------
+### CUSTOM IMPORTS ###
+# from data_constructors import data_constructors as datacon
+# from data_constructors import details_constructor as deetcon
+# from data_constructors import L1_workbook_constructor as xlcon
+# from file_handling import eddypro_concatenator as epc
+from file_transfers import rclone_transfer as rt
+
+# from file_transfers import sftp_transfer as sftpt
+# from network_monitoring import network_status as ns
+# from utils import configs_getters as cg
 from managers import paths
+#------------------------------------------------------------------------------
 
 ###############################################################################
 ### END IMPORTS ###
 ###############################################################################
 
 
-###############################################################################
-### BEGIN INITS ###
-###############################################################################
-
-LOGGER_CONFIGS = paths.get_internal_configs('py_logger')
-logger = logging.getLogger(__name__)
 
 ###############################################################################
-### END INITS ###
-###############################################################################
-
-
-
-###############################################################################
-### BEGIN TASK MANAGER CLASS ###
+### BEGIN TASK MANAGER ###
 ###############################################################################
 
 #------------------------------------------------------------------------------
 class TaskManager():
-    """
-    Class to allow retrieval of task functions and sites for which tasks are
-    enabled.
-
-    """
 
     #--------------------------------------------------------------------------
     def __init__(self) -> None:
         """
-        Initialise manager with tasks x sites matrix and function dicts / lists.
+        Build yml task configuration file into a dataframe to interrogate
+        (tasks x sites matrix).
 
         """
 
         self.configs = paths.get_internal_configs('tasks')
         self.site_master_list = self.configs['sites']
         self.master_tasks = list(self.configs['tasks'].keys())
-        self._make_task_dataframe()
+        self.tasks_df = self._make_task_dataframe()
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
     def _make_task_dataframe(self) -> pd.DataFrame:
-        """
-        Make a dataframe with tasks x sites matrix.
-
-        """
+        """Make a dataframe with tasks x sites matrix"""
 
         tasks_df = pd.DataFrame(
             data=False,
@@ -85,7 +82,7 @@ class TaskManager():
             if not site_list:
                 site_list = self.site_master_list
             tasks_df.loc[site_list, task] = True
-        self.tasks_df = tasks_df
+        return tasks_df
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -105,18 +102,7 @@ class TaskManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_excluded_sites_for_task(self, task) -> list:
-
-        """
-        Return the list of sites for which task is not enabled.
-
-        Args:
-            task: name of task.
-
-        Returns:
-            the list.
-
-        """
+    def get_excluded_sites_for_task(self, task, by_missing=True) -> list:
 
         return [
             site for site in self.site_master_list
@@ -126,10 +112,22 @@ class TaskManager():
 
 #------------------------------------------------------------------------------
 
-tasks_mngr = TaskManager()
+###############################################################################
+### END TASK MANAGER ###
+###############################################################################
+
+
 
 ###############################################################################
-### END TASK MANAGER CLASS ###
+### BEGIN INITS ###
+###############################################################################
+
+tasks_mngr = TaskManager()
+LOGGER_CONFIGS = paths.get_internal_configs('py_logger')
+logger = logging.getLogger(__name__)
+
+###############################################################################
+### END INITS ###
 ###############################################################################
 
 
@@ -141,6 +139,21 @@ tasks_mngr = TaskManager()
 #------------------------------------------------------------------------------
 ### BEGIN DATA CONSTRUCTORS ###
 #------------------------------------------------------------------------------
+
+# module_strs = {
+
+#     'profile_processing': 'profile_processing.profile_data_processor',
+#     'data_constructors': 'data_constructors.data_constructors',
+#     'details_constructors': 'data_constructors.details_constructor',
+#     'network_status': 'network_monitoring.network_status',
+#     'nc_constructors': 'data_constructors.nc_constructors',
+#     'nc_toa5_constructors': 'data_constructors.nc_toa5_constructor',
+#     'file_fast_data': 'file_handling.fast_data_filer',
+#     'rclone_transfers': 'file_transfers.rclone_transfer',
+#     'sftp_transfers': 'file_transfers.sftp_transfer'
+
+#     }
+
 
 #------------------------------------------------------------------------------
 def construct_homogenised_TOA5(site: str) -> None:
@@ -225,7 +238,7 @@ def construct_status_geojson() -> None:
 #------------------------------------------------------------------------------
 def process_profile_data(site: str) -> None:
 
-    pdp = import_module('profile_processing.profile_data_processor')
+    pdp = import_module(module_strs['profile_processing'])
     output_path = paths.get_local_stream_path(
         resource='processed_data',
         stream='profile',
@@ -268,12 +281,72 @@ def file_aux_fast_data(site: str) -> None:
 #------------------------------------------------------------------------------
 def _file_fast_data(site: str, is_aux: bool) -> None:
 
-    fdf = import_module('file_handling.fast_data_filer')
+    fdf = import_module(module_strs['file_fast_data'])
     fdf.move_fast_files(site=site, is_aux=is_aux)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 ### END LOCAL DATA MOVING ###
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+### BEGIN RCLONE TRANSFERS - PULL TASKS ###
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_rclone_transfer_func(func: str):
+
+    rt = import_module('file_transfers.rclone_transfer')
+    funcs_dict = {
+
+        # Pull tasks
+        'pull_slow_flux': rt.pull_slow_flux,
+        'pull_RTMC_images': rt.pull_RTMC_images,
+        'pull_profile_raw': rt.pull_profile_raw,
+        'push_profile_raw': rt.push_profile_raw,
+
+        # Push tasks
+        'push_slow_rdm': rt.push_slow_flux,
+        'push_main_fast_rdm': rt.push_main_fast_flux,
+        'push_aux_fast_rdm': rt.push_aux_fast_flux,
+        'push_RTMC_images': rt.push_RTMC_images,
+        'push_homogenised_TOA5': rt.push_homogenised_TOA5,
+        'push_L1_nc': rt.push_L1_nc,
+        'push_L1_xlsx': rt.push_L1_xlsx,
+        'push_status_geojson': rt.push_status_geojson,
+        'push_status_xlsx': rt.push_status_xlsx,
+
+        }
+
+    return funcs_dict[func]
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def pull_profile_raw(site: str) -> None:
+
+    logger.info('Downloading data from remote location...')
+    rct = import_module(module_strs['rclone_transfers'])
+    local_location = paths.get_local_stream_path(
+        resource='raw_data', stream='profile', site=site, as_str=True
+        )
+    remote_location = paths.get_remote_stream_path(
+        resource='raw_data', stream='profile', site=site, as_str=True
+        )
+    rct.generic_move(
+        local_location=local_location,
+        remote_location=remote_location,
+        which_way='from_remote'
+        )
+    logger.info('Done!')
+#------------------------------------------------------------------------------
+
+### S/FTP - PUSH TASKS ###
+
+#------------------------------------------------------------------------------
+def push_cosmoz(site: str) -> None:
+
+    sftpt = import_module(module_strs['sftp_transfers'])
+    sftpt.send_cosmoz(site=site)
 #------------------------------------------------------------------------------
 
 ###############################################################################
@@ -283,55 +356,69 @@ def _file_fast_data(site: str, is_aux: bool) -> None:
 
 
 ###############################################################################
-### BEGIN FUNCTION FINDER CLASS ###
+### BEGIN DEFINE TASK FUNCTION DICTIONARY ###
 ###############################################################################
 
-#------------------------------------------------------------------------------
-class FunctionFinder():
-    """
+task_funcs = {
 
-    """
+    # Data constructors
+    'construct_homogenised_TOA5': construct_homogenised_TOA5,
+    'construct_homogenised_TOA5_from_nc': construct_homogenised_TOA5_from_nc,
+    'construct_L1_xlsx': construct_L1_xlsx,
+    'construct_L1_nc': construct_L1_nc,
+    'update_EddyPro_master': update_EddyPro_master,
 
-    #--------------------------------------------------------------------------
-    def __init__(self):
-        """
+    # Data processing
+    'process_profile_data': process_profile_data,
 
+    # Local data moving
+    'file_main_fast_data': file_main_fast_data,
+    'file_aux_fast_data': file_aux_fast_data,
 
-        Returns:
-            None.
+    # Network status constructors
+    'construct_status_xlsx': construct_status_xlsx,
+    'construct_status_geojson': construct_status_geojson,
 
-        """
+    # Metadata constructors
+    'construct_site_details': construct_site_details,
 
-        task_functions = (
-            dict(inspect.getmembers(sys.modules[__name__], inspect.isfunction)) |
-            dict(inspect.getmembers(rct, inspect.isfunction)) |
-            dict(inspect.getmembers(sftpt, inspect.isfunction))
-            )
-        task_functions = {
-            name: func for name, func in task_functions.items()
-            if not name.startswith('_')
-            }
-        network_tasks, site_tasks = [], []
-        for name, func in task_functions.items():
-            if name.startswith('_'):
-                task_functions.pop(name)
-            args = list(inspect.signature(func).parameters.keys())
-            if not args:
-                network_tasks.append(name)
-            elif args[0] == 'site':
-                site_tasks.append(name)
-        self.tasks = list(task_functions.keys())
-        self.task_functions = task_functions
-        self.network_tasks = network_tasks
-        self.site_tasks = site_tasks
-    #--------------------------------------------------------------------------
+    # Rclone transfers - pull tasks
+    'pull_slow_flux': rt.pull_slow_flux,
+    'pull_RTMC_images': rt.pull_RTMC_images,
+    'pull_profile_raw': pull_profile_raw,
 
-#------------------------------------------------------------------------------
+    # Rclone transfers - push tasks
+    'push_slow_flux': rt.push_slow_flux,
+    'push_main_fast_flux': rt.push_main_fast_flux,
+    'push_aux_fast_flux': rt.push_aux_fast_flux,
+    'push_RTMC_images': rt.push_RTMC_images,
+    'push_homogenised_TOA5': rt.push_homogenised_TOA5,
+    'push_L1_nc': rt.push_L1_nc,
+    'push_L1_xlsx': rt.push_L1_xlsx,
+    'push_status_geojson': rt.push_status_geojson,
+    'push_status_xlsx': rt.push_status_xlsx,
 
-func_finder = FunctionFinder()
+    # s/ftp - push tasks
+    'push_cosmoz': push_cosmoz
+
+    }
+
+module_strs = {
+
+    'profile_processing': 'profile_processing.profile_data_processor',
+    'data_constructors': 'data_constructors.data_constructors',
+    'details_constructors': 'data_constructors.details_constructor',
+    'network_status': 'network_monitoring.network_status',
+    'nc_constructors': 'data_constructors.nc_constructors',
+    'nc_toa5_constructors': 'data_constructors.nc_toa5_constructor',
+    'file_fast_data': 'file_handling.fast_data_filer',
+    'rclone_transfers': 'file_transfers.rclone_transfer',
+    'sftp_transfers': 'file_transfers.sftp_transfer'
+
+    }
 
 ###############################################################################
-### END FUNCTION FINDER CLASS ###
+### END DEFINE TASK FUNCTION DICTIONARY ###
 ###############################################################################
 
 
@@ -339,6 +426,20 @@ func_finder = FunctionFinder()
 ###############################################################################
 ### BEGIN TASK MANAGEMENT FUNCTIONS ###
 ###############################################################################
+
+#------------------------------------------------------------------------------
+def get_funcs_dict():
+
+    current_module = sys.modules[__name__]
+    rt_module = import_module('file_transfers.rclone_transfer')
+    rslt = (
+        dict(inspect.getmembers(current_module, inspect.isfunction)) |
+        dict(inspect.getmembers(rt_module, inspect.isfunction))
+        )
+    return {
+        name: func for name, func in rslt.items() if not name.startswith('_')
+        }
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def configure_logger(log_path):
@@ -379,7 +480,7 @@ def run_site_task(task: str, site:str) -> None:
     # Retrieve the function and run the task
     logger.info(f'Running task {task}...')
     try:
-        function = func_finder.task_functions[task]
+        function = task_funcs[task]
         function(site=site)
         logger.info('Task completed without error\n')
     except Exception:
@@ -428,7 +529,7 @@ def run_network_task(task: str) -> None:
     configure_logger(log_path=log_path)
 
     # Get the requested function
-    function = func_finder.task_functions[task]
+    function = task_funcs[task]
 
     # Run the task
     logger.info(f'Running task {task}...')
@@ -442,14 +543,19 @@ def run_network_task(task: str) -> None:
 #------------------------------------------------------------------------------
 def run_task(task):
 
-    if task in func_finder.site_tasks:
-        run_site_task_from_list(task=task)
-    elif task in func_finder.network_tasks:
-        run_network_task(task=task)
-    else:
+    if task not in task_funcs.keys():
         raise NotImplementedError(
             f'Function for task "{task}" not implemented!'
             )
+
+    task_func = task_funcs[task]
+    args = list(inspect.signature(task_func).parameters.keys())
+    if not args:
+        run_network_task(task=task)
+    elif args[0] == 'site':
+        run_site_task_from_list(task=task)
+    else:
+        raise RuntimeError(f'Unknown task {task} passed!')
 #------------------------------------------------------------------------------
 
 ###############################################################################

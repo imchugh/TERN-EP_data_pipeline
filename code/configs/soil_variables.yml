@@ -10,3 +10,7 @@ Tumbarumba:
   soil_heat_flux: Fg_16cma, Fg_16cmb
   soil_temperature: Ts_2-16cma, Ts_2-16cmb
   soil_moisture: Sws_0-30cma, Sws_50cma, Sws_70cma, Sws_110-140cma
+WombatStateForest:
+  soil_heat_flux: Fg_13cma, Fg_16cmb
+  soil_temperature: Ts_5-18cma, Ts_5-18cmb
+  soil_moisture: Sws_10cma, Sws_20cma, Sws_40cma, Sws_60cma

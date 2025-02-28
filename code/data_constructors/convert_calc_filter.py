@@ -69,13 +69,18 @@ class TimeFunctions():
     def _get_rise_set(self, rise_or_set, next_or_last, as_utc=True):
 
         sun = ephem.Sun()
-        funcs_dict = {'rise':
-                      {'next': self.obs.next_rising(sun).datetime(),
-                       'last': self.obs.previous_rising(sun).datetime()},
-                      'set':
-                      {'next': self.obs.next_setting(sun).datetime(),
-                       'last': self.obs.previous_setting(sun).datetime()}
-                      }
+        funcs_dict = {
+            'rise':
+                {
+                    'next': self.obs.next_rising(sun).datetime(),
+                    'last': self.obs.previous_rising(sun).datetime()
+                    },
+            'set':
+                {
+                    'next': self.obs.next_setting(sun).datetime(),
+                    'last': self.obs.previous_setting(sun).datetime()
+                    }
+                }
 
         if as_utc:
             return funcs_dict[rise_or_set][next_or_last]
@@ -140,6 +145,13 @@ def convert_CO2_signal(data, from_units='frac'):
 
     if from_units == 'frac':
         return data * 100
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def convert_diagnostic(data, n_samples, from_units='valid_count'):
+
+    if from_units == 'valid_count':
+        return n_samples - data
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

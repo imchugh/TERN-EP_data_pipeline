@@ -105,20 +105,32 @@ class MetaDataManager():
                 config_stream='variables_pfp', site=site
                 )
 
-        self._parse_diagnostics()
+        # Check for the diag_type attribute in the configurations, and set them
+        # to either 'valid_count' (default in new Campbell progs) or
+        # 'invalid_count' (past default)
+        self.diag_types = self._parse_diagnostics()
 
         # Create site-based variables table
-        self._parse_site_variables()
+        self.site_variables = self._parse_site_variables()
 
         # Determine and write system type / flux file
-        self._parse_system_type()
+        self.flux_file = self._get_flux_file()
 
         # Get flux instrument types
         self.instruments = self._parse_instrument_type()
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _parse_diagnostics(self):
+    def _parse_diagnostics(self) -> dict:
+        """
+        Get the expression of the diag_type variable (either 'valid_count'
+        [default in new Campbell progs] or 'invalid_count' [past default])
+        and remove from configuration.
+
+        Returns:
+            rslt: dictionary with IRGA and SONIC entries.
+
+        """
 
         rslt = {
             'Diag_IRGA': 'invalid_count',
@@ -131,7 +143,7 @@ class MetaDataManager():
                     )
             except KeyError:
                 next
-        self.diag_types = rslt
+        return rslt
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -145,7 +157,7 @@ class MetaDataManager():
         """
 
         # Get the variable map and check the conformity of all names
-        self.site_variables = (
+        return (
             pd.DataFrame(self.configs)
             .T
             .rename_axis('std_name')
@@ -230,7 +242,7 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _parse_system_type(self) -> None:
+    def _get_flux_file(self) -> str:
         """
         Use the FLUX_FILE_VAR_IND constant to set the system type and flux
         file name, logger and table.
@@ -249,10 +261,7 @@ class MetaDataManager():
             key for key, value in self.map_fluxes_to_standard_names().items()
             if value == FLUX_FILE_VAR_IND
             ]
-        attrs = self.site_variables.loc[var]
-        self.flux_file = attrs.file.item()
-        self.flux_logger = attrs.logger.item()
-        self.flux_table = attrs.table.item()
+        return self.site_variables.loc[var, 'file'].item()
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -282,27 +291,6 @@ class MetaDataManager():
             else:
                 rslt.update({instrument: inst_list[0]})
         return rslt
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_site_details(self, field: str=None) -> pd.Series | str:
-        """
-        Get the global (non-variable) site metadata.
-
-        Args:
-            field (optional): if str, returns a specific named field
-            (KeyError if field does not exist). If none, returns all available
-            fields. Defaults to None.
-
-        Returns:
-            series containing all fields, or single string field.
-
-        """
-
-        return (
-            sdm(use_local=True)
-            .get_single_site_details(site=self.site, field=field)
-            )
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -418,6 +406,7 @@ class MetaDataManager():
             the list of variables.
 
         """
+        breakpoint()
 
         return (
             self._index_translator(use_index='std_name')

@@ -98,7 +98,7 @@ class L1DataConstructor():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _build_internal_data(self, args):
+    def _build_internal_data(self, args: dict) -> pd.DataFrame:
 
         # If requested, set flux file date constraints on merged file
         start_date, end_date = None, None
@@ -120,7 +120,7 @@ class L1DataConstructor():
             file: self.md_mngr.translate_variables_by_table(table=table)
             for table, file in self.md_mngr.map_tables_to_files(abs_path=True).items()
             }
-        merge_to_int = f'{int(self.md_mngr.get_site_details().time_step)}min'
+        merge_to_int = f'{int(self.md_mngr.site_details.time_step)}min'
         return (
             fh.merge_data(
                 files=merge_dict,

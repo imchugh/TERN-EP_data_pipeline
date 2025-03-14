@@ -36,7 +36,7 @@ def get_data_status(site: str, run_time: dt.datetime=None) -> pd.DataFrame:
     # Grab the site-adjusted run time
     run_time = _get_site_time(
         site=site,
-        UTC_offset=md_mngr.get_site_details(field='UTC_offset'),
+        UTC_offset=md_mngr.site_details.UTC_offset,
         run_time=run_time
         )
 
@@ -101,7 +101,7 @@ def get_file_status(
     # Grab the site-adjusted run time
     site_time = _get_site_time(
         site=site,
-        UTC_offset=md_mngr.get_site_details(field='UTC_offset'),
+        UTC_offset=md_mngr.site_details.UTC_offset,
         run_time=run_time
         )
 

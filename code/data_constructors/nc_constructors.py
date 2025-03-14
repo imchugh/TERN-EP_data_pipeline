@@ -21,6 +21,7 @@ Module classes:
 
 import datetime as dt
 import logging
+import netCDF4
 import numpy as np
 import pandas as pd
 import pathlib
@@ -38,20 +39,34 @@ import file_handling.file_handler as fh
 ### END IMPORTS ###
 ###############################################################################
 
+
+
+###############################################################################
+### BEGIN INITS ###
+###############################################################################
+
 #------------------------------------------------------------------------------
 SITE_DETAIL_ALIASES = {'elevation': 'altitude'}
 SITE_DETAIL_SUBSET = [
     'fluxnet_id', 'latitude', 'longitude', 'elevation', 'time_step',
     'time_zone', 'canopy_height', 'tower_height', 'soil', 'vegetation'
     ]
+GLOBAL_METADATA_SUBSET = [
+    'time_coverage_start', 'time_coverage_end', 'irga_type', 'sonic_type']
 VAR_METADATA_SUBSET = [
     'height', 'instrument', 'long_name', 'standard_name', 'statistic_type',
     'standard_units'
     ]
-STATISTIC_ALIASES = {'average': 'Avg', 'variance': 'Vr', 'sum': 'Tot'}
+# STATISTIC_ALIASES = {'average': 'Avg', 'variance': 'Vr', 'sum': 'Tot'}
 TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
+
+###############################################################################
+### END INITS ###
+###############################################################################
+
+
 
 ###############################################################################
 ### BEGIN L1 NETCDF DATA CONSTRUCTOR CLASS ###
@@ -87,7 +102,11 @@ class L1DataConstructor():
             self._build_internal_data(args=locals())
             .pipe(self._do_unit_conversions)
             .pipe(self._do_diag_conversions)
+            .pipe(self._do_variance_conversions)
             )
+
+        # Amend metadata manager to account for variance conversions
+        self._amend_metadata_manager()
 
         # Set attributes
         self.data_years = self.data.index.year.unique().tolist()
@@ -159,7 +178,7 @@ class L1DataConstructor():
     #--------------------------------------------------------------------------
     def _do_diag_conversions(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        Converst diagnostic definition from expression of valid samples to
+        Convert diagnostic definition from expression of valid samples to
         invalid samples.
 
         Args:
@@ -184,6 +203,54 @@ class L1DataConstructor():
                     from_units=units
                     )
         return data
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _do_variance_conversions(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Convert variances to standard deviations.
+
+        Args:
+            data: the unconverted input data.
+
+        Returns:
+            the converted output data.
+
+        """
+        rename_dict = {
+            var: var.replace('Vr', 'Sd') for var in
+            self.md_mngr.list_variance_variables()
+            }
+        for variable in rename_dict.keys():
+            data[variable] = ccf.convert_variance_stdev(data=data[variable])
+        return data.rename(rename_dict, axis=1)
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _amend_metadata_manager(self) -> None:
+        """
+        Amend the metadata manager to convert any variances to standard
+        deviations.
+
+        Returns:
+            None.
+
+        """
+
+        rename_dict = {
+            var: var.replace('Vr', 'Sd') for var in
+            self.md_mngr.list_variance_variables()
+            }
+        for variable in rename_dict.keys():
+            self.md_mngr.site_variables.loc[variable] = (
+                self.md_mngr.get_variable_attributes(
+                    variable=variable,
+                    variance_2_stdev=True
+                    )
+                )
+        self.md_mngr.site_variables = (
+            self.md_mngr.site_variables.rename(rename_dict)
+            )
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -416,7 +483,6 @@ class L1DataConstructor():
             .year
             .unique()
             )
-        # pd.to_datetime(ds.time.values).year.unique()
         year_str = ''
         if len(year_list) == 1:
             year_str = f' for the calendar year {year_list[0]}'
@@ -502,11 +568,21 @@ class L1DataConstructor():
         # Note 'standard units' is renamed to units because unit conversions
         # are applied to any variables that don't have standard units.
         for var in list(ds.keys()):
-            ds[var].attrs = (
-                self.md_mngr.get_variable_attributes(variable=var)
+            attrs = (
+                self.md_mngr.get_variable_attributes(
+                    variable=var,
+                    variance_2_stdev=True
+                    )
                 [VAR_METADATA_SUBSET]
                 .rename({'standard_units': 'units'})
                 )
+            final_attrs = {}
+            for key, value in attrs.items():
+                if isinstance(value, str):
+                    if len(value) == 0:
+                        continue
+                final_attrs[key] = value
+            ds[var].attrs = final_attrs
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -562,3 +638,227 @@ class L1DataConstructor():
 ###############################################################################
 ### END L1 NETCDF DATA CONSTRUCTOR CLASS ###
 ###############################################################################
+
+
+
+###############################################################################
+### BEGIN L1 NETCDF DATA MERGE FUNCTIONS ###
+###############################################################################
+
+class NCMerger():
+
+    def __init__(self, file_list):
+        """
+
+
+        Args:
+            file_list (TYPE): DESCRIPTION.
+
+        Raises:
+            FileNotFoundError: DESCRIPTION.
+            RuntimeError: DESCRIPTION.
+
+        Returns:
+            None.
+
+        """
+
+        self._TYPES_DICT = {
+            'irga': 'irga_type', 'sonic': 'sonic_type', 'flux': 'combined_type'
+            }
+
+        # Get attributes (check all files exist first)
+        attrs_to_get = [
+            'time_coverage_start', 'time_coverage_end', 'irga_type',
+            'sonic_type'
+            ]
+        rslt = (
+            {attr: [] for attr in attrs_to_get} |
+            {'combined_type': [], 'abs_path': []}
+            )
+        for file in file_list:
+            full_path = pathlib.Path(file)
+            if not full_path.exists():
+                raise FileNotFoundError('File {file.name} does not exist!')
+            rslt['abs_path'].append(full_path)
+            attrs = get_nc_global_attrs(file_path=file)
+            [rslt[attr].append(attrs[attr]) for attr in attrs_to_get]
+            rslt['combined_type'].append(
+                f'[{attrs["irga_type"]},{attrs["sonic_type"]}]'
+                )
+        df = pd.DataFrame(
+            data=rslt,
+            index=[file_path.name for file_path in rslt['abs_path']]
+            )
+        for var in ['time_coverage_start', 'time_coverage_end']:
+            df[var] = pd.to_datetime(df[var])
+        df = df.sort_values(var)
+
+        # Check there are no file overlaps
+        for i in range(1, len(df)):
+            start_series = df.iloc[i - 1]
+            end_series = df.iloc[i]
+            if start_series.time_coverage_end >= end_series.time_coverage_start:
+                raise RuntimeError(
+                    f'Dates must not overlap! File {start_series.name} '
+                    f'overlaps with {end_series.name}!'
+                    )
+
+        # Now assign attribute
+        self.file_info = df
+
+    def get_global_instrument_output_str(self, instrument_type):
+
+        col_str = self._TYPES_DICT[instrument_type]
+        return '; '.join(self.file_info[col_str].unique())
+
+    def get_variable_instrument_output_str(self, instrument_type):
+
+        col_str = self._TYPES_DICT[instrument_type]
+        inst_list = self.file_info[col_str].unique()
+        if len(inst_list) == 1:
+            return inst_list.item()
+        str_list = []
+        for inst in inst_list:
+            series = self.file_info[self.file_info[col_str] == inst]
+            str_list.append(
+                dt.datetime.strftime(
+                    series.time_coverage_start.item(),
+                    TIME_FORMAT
+                    ) + ' -> ' +
+                dt.datetime.strftime(
+                    series.time_coverage_end.item(),
+                    TIME_FORMAT
+                    ) + ': ' +
+                inst
+                )
+        return '; '.join(str_list)
+
+    def get_combined_date_span(self):
+
+        return {
+            'time_coverage_start': self.file_info.time_coverage_start.min(),
+            'time_coverage_end': self.file_info.time_coverage_end.max()
+            }
+
+
+
+
+
+
+
+    # def _get_file_paths(self, file_list):
+
+    #     for file in file_list:
+    #         full_path = pathlib.Path(file)
+    #         if not full_path.exists():
+    #             raise FileNotFoundError('File {file.name} does not exist!')
+    #         paths.append(full_path)
+    #     return paths
+
+    # def _get_global_attrs(self, file_list):
+
+
+    #     return {
+    #         file_path.name: get_nc_global_attrs(file_path)
+    #         for file_path in file_list
+    #         }
+
+    # def get_file_chron_order(self):
+
+    #     files = np.array(list(self.global_attrs.keys()))
+    #     test = np.argsort([
+    #         self.global_attrs[file]['time_coverage_end']
+    #         for file in files
+    #         ])
+    #     return files[test].tolist()
+
+    # def _check_file_dates(self):
+
+    #     file_list = self.get_file_chron_order()
+    #     for i in range(1, (len(file_list))):
+    #         file1 = file_list[i - 1]
+    #         file2 = file_list[i]
+    #         end_last = dt.datetime.strptime(
+    #             self.global_attrs[file1]['time_coverage_end'],
+    #             TIME_FORMAT
+    #             )
+    #         start_next = dt.datetime.strptime(
+    #             self.global_attrs[file2]['time_coverage_start'],
+    #             TIME_FORMAT
+    #             )
+    #         if end_last >= start_next:
+    #             raise RuntimeError(
+    #                 f'Dates must not overlap! File {file1} overlaps with {file2}!'
+    #                 )
+
+
+    #     return
+
+    # def get_newest_file(self):
+
+    #     return max(
+    #         self.global_attrs[file.name]['time_coverage_end']
+    #         for file in self.file_list
+    #         )
+
+    # def check_irga_changes(self):
+
+    #     return [
+    #         self.global_attrs[file.name]['irga_type']
+    #         for file in self.file_list
+    #         ]
+
+
+
+
+
+def get_nc_global_attrs(file_path):
+
+    _check_exists(file_path=file_path)
+    with netCDF4.Dataset(file_path, 'r') as nc_file:
+        return {
+            attr: nc_file.getncattr(attr) for attr in nc_file.ncattrs()
+            }
+
+def _check_exists(file_path):
+
+    if not pathlib.Path(file_path).exists():
+        raise FileNotFoundError('File {file.name} does not exist!')
+
+def merge_nc(file_list):
+
+    ds = xr.open_mfdataset(paths=file_list)#, combine_attrs=_merge_attrs)
+
+    return ds
+
+def _merge_attrs(attrs_list: dict, context=None) -> dict:
+
+    last_attrs = attrs_list.pop()
+    if not 'instrument' in last_attrs:
+        return last_attrs
+    inst_list = []
+    for attrs in attrs_list:
+        try:
+            instrument = attrs['instrument']
+            if not instrument == last_attrs['instrument']:
+                inst_list.append(instrument)
+        except KeyError:
+            continue
+    inst_list.append(last_attrs['instrument'])
+    new_dict = {'instrument': '; '.join(inst_list)}
+    last_attrs.update(new_dict)
+    return last_attrs
+
+
+
+
+    # return attrs_list[-1]
+    # rslt = []
+    # for item in attrs_list:
+    #     rslt.append(
+    #         item['attribute'] + ': ' +
+    #         item['start'].strftime(TIME_FORMAT) + ' -> ' +
+    #         item['end'].strftime(TIME_FORMAT)
+    #         )
+    # return f'[{", ".join(rslt)}]'

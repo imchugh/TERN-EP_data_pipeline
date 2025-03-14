@@ -406,7 +406,6 @@ class MetaDataManager():
             the list of variables.
 
         """
-        breakpoint()
 
         return (
             self._index_translator(use_index='std_name')
@@ -433,6 +432,23 @@ class MetaDataManager():
                 ]
             .index
             .tolist()
+            )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def list_variance_variables(self) -> list:
+        """
+        List all variance variables.
+
+        Returns:
+            list of variables.
+
+        """
+
+        return (
+            self.site_variables
+            [self.site_variables.process=='Vr']
+            .index.tolist()
             )
     #--------------------------------------------------------------------------
 
@@ -525,8 +541,8 @@ class MetaDataManager():
 
     #--------------------------------------------------------------------------
     def get_variable_attributes(
-            self, variable: str, source_field: str='std_name',
-            return_field: str=None
+            self, variable: str, variance_2_stdev=False,
+            source_field: str='std_name', return_field: str=None
             ) -> pd.Series | str:
         """
         Get the attributes for a given variable.
@@ -543,10 +559,51 @@ class MetaDataManager():
 
         """
 
-        df = self._index_translator(use_index=source_field)
+        # df = self._index_translator(use_index=source_field)
+        # if return_field is None:
+        #     return df.loc[variable]
+        # return df.loc[variable, return_field]
+        series = self._index_translator(use_index=source_field).loc[variable]
+        if variance_2_stdev:
+            self._amend_variance_metadata(series=series)
         if return_field is None:
-            return df.loc[variable]
-        return df.loc[variable, return_field]
+            return series
+        return series[return_field]
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _amend_variance_metadata(self, series: pd.Series) -> pd.Series:
+
+        if not series.process == 'Vr':
+            return series
+        series.loc['process'] = 'Sd'
+        series.loc['standard_units'] = convert_variance_units(
+            units=series.standard_units, to_variance=False
+            )
+        series.loc['statistic_type'] = 'standard_deviation'
+        series.name = series.name.replace('Vr', 'Sd')
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def convert_variance_attrs_2_stdev(self, variable: str) -> pd.Series:
+        """
+        Convert the attributes of a variance variable to standard deviation.
+
+        Args:
+            variable: name of variable.
+
+        Returns:
+            attrs: all attributes or requested attribute.
+
+        """
+
+        attrs = self.site_variables.loc[variable].copy()
+        attrs.process = 'Sd'
+        attrs.standard_units = convert_variance_units(
+            units=attrs.standard_units, to_variance=False
+            )
+        attrs.name = attrs.name.replace('Vr', 'Sd')
+        return attrs
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -780,7 +837,7 @@ class PFPNameParser():
     in the absence of a device identifier (e.g. AH versus AH_IRGA).
 
     3) If there is a process identifier, it must occur as the last substring.
-    If it is 'Vr', this must become past of the unique variable identifier,
+    If it is 'Vr', this must become part of the unique variable identifier,
     because variances necessarily have different units.
 
     """
@@ -834,7 +891,7 @@ class PFPNameParser():
         # Get string elements
         elems = variable_name.split(self.SPLIT_CHAR)
 
-        # Find quantity and instrument (if valid); only update if
+        # Find quantity and instrument (if valid)
         rslt = self._check_str_is_quantity(elems)
         if rslt_dict['quantity'] is None:
             rslt_dict.update(rslt)
@@ -874,14 +931,13 @@ class PFPNameParser():
             raise RuntimeError(
                 'Unrecognised element remains: checks failed for variable '
                 f'name {variable_name} with the following messages: {errors}'
-
                 )
 
         # Get properties
         rslt_dict.update(self.variables.loc[rslt_dict['quantity']].to_dict())
         if rslt_dict['process'] == 'Vr':
             rslt_dict['standard_units'] = (
-                convert_units_to_variance(units=rslt_dict['standard_units'])
+                convert_variance_units(units=rslt_dict['standard_units'])
                 )
 
         # Return results
@@ -1070,7 +1126,7 @@ class PFPNameParser():
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def convert_units_to_variance(units: str) -> str:
+def convert_variance_units(units: str, to_variance=True) -> str:
     """
     Convert standard units to variance.
 
@@ -1090,6 +1146,8 @@ def convert_units_to_variance(units: str) -> str:
         'm/s': 'm^2/s^2'
         }
 
+    if not to_variance:
+        ref_dict = {value: key for key, value in ref_dict.items()}
     return ref_dict[units]
 #------------------------------------------------------------------------------
 

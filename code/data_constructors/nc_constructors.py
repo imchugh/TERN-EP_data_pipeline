@@ -59,6 +59,7 @@ VAR_METADATA_SUBSET = [
     ]
 # STATISTIC_ALIASES = {'average': 'Avg', 'variance': 'Vr', 'sum': 'Tot'}
 TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
+HIST_STR = 'instrument_history'
 logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
@@ -642,32 +643,36 @@ class L1DataConstructor():
 
 
 ###############################################################################
-### BEGIN L1 NETCDF DATA MERGE FUNCTIONS ###
+### BEGIN L1 NETCDF DATA MERGE CLASS ###
 ###############################################################################
 
+#------------------------------------------------------------------------------
 class NCMerger():
+    """Class for merging multiple netcdf files"""
 
-    def __init__(self, file_list):
+    #--------------------------------------------------------------------------
+    def __init__(self, file_list: list, expected_interval: int=30) -> None:
         """
-
+        Initialise by parsing input files and gathering requisite info.
 
         Args:
-            file_list (TYPE): DESCRIPTION.
+            file_list: list of files to be combined.
 
         Raises:
-            FileNotFoundError: DESCRIPTION.
-            RuntimeError: DESCRIPTION.
+            FileNotFoundError: raised if file doesn't exist.
 
         Returns:
             None.
 
         """
 
+        # Assign private attributes
+        self._expected_interval = expected_interval
         self._TYPES_DICT = {
             'irga': 'irga_type', 'sonic': 'sonic_type', 'flux': 'combined_type'
             }
 
-        # Get attributes (check all files exist first)
+        # Get attributes and assign to dataframe
         attrs_to_get = [
             'time_coverage_start', 'time_coverage_end', 'irga_type',
             'sonic_type'
@@ -692,173 +697,271 @@ class NCMerger():
             )
         for var in ['time_coverage_start', 'time_coverage_end']:
             df[var] = pd.to_datetime(df[var])
-        df = df.sort_values(var)
+        self.file_info = df.sort_values(var)
+    #--------------------------------------------------------------------------
 
-        # Check there are no file overlaps
-        for i in range(1, len(df)):
-            start_series = df.iloc[i - 1]
-            end_series = df.iloc[i]
-            if start_series.time_coverage_end >= end_series.time_coverage_start:
-                raise RuntimeError(
-                    f'Dates must not overlap! File {start_series.name} '
-                    f'overlaps with {end_series.name}!'
-                    )
-
-        # Now assign attribute
-        self.file_info = df
-
+    #--------------------------------------------------------------------------
     def get_global_instrument_output_str(self, instrument_type):
 
         col_str = self._TYPES_DICT[instrument_type]
         return '; '.join(self.file_info[col_str].unique())
+    #--------------------------------------------------------------------------
 
-    def get_variable_instrument_output_str(self, instrument_type):
+    #--------------------------------------------------------------------------
+    def merge_files(self) -> xr.DataSet:
+        """
+        Merge the netcdf files, using a custom merge function for attrs.
 
-        col_str = self._TYPES_DICT[instrument_type]
-        inst_list = self.file_info[col_str].unique()
-        if len(inst_list) == 1:
-            return inst_list.item()
-        str_list = []
-        for inst in inst_list:
-            series = self.file_info[self.file_info[col_str] == inst]
-            str_list.append(
-                dt.datetime.strftime(
-                    series.time_coverage_start.item(),
-                    TIME_FORMAT
-                    ) + ' -> ' +
-                dt.datetime.strftime(
-                    series.time_coverage_end.item(),
-                    TIME_FORMAT
-                    ) + ': ' +
-                inst
-                )
-        return '; '.join(str_list)
+        Returns:
+            xarray dataset containing the merged information.
 
-    def get_combined_date_span(self):
+        """
 
-        return {
+        # Merge files and handle variable attribute merging
+        ds = xr.open_mfdataset(
+            paths=self.file_info.abs_path, combine_attrs=self._merge_attrs
+            )
+
+        # Update global variables as required
+        span = {
             'time_coverage_start': self.file_info.time_coverage_start.min(),
             'time_coverage_end': self.file_info.time_coverage_end.max()
             }
+        for key, date in span.items():
+            ds.attrs[key] = date
+        for instrument in ['irga_type', 'sonic_type']:
+            ds.attrs[instrument] = (
+                self.get_global_instrument_output_str(
+                    instrument_type=instrument.split('_')[0])
+                )
 
+        # Return
+        return ds
+    #--------------------------------------------------------------------------
 
+    #--------------------------------------------------------------------------
+    def _merge_attrs(self, attrs_list: list, context: dict=None) -> dict:
+        """
+        Combine a list of attribute dictionaries into a single dictionary, and
+        combine instrument histories.
 
+        Args:
+            attrs_list: list of variable attribute dictionaries.
+            context (optional): not used. Defaults to None.
 
+        Returns:
+            a single attribute dictionary with amended instrument histories
+            (where applicable).
 
+        """
 
+        # WARNING - seems the attributes are passed to the function in reverse!
+        attrs_list.reverse()
 
-    # def _get_file_paths(self, file_list):
+        # Check whether attribute dicts are the same
+        if all(attrs==attrs_list[0] for attrs in attrs_list):
+            return attrs_list[-1]
 
-    #     for file in file_list:
-    #         full_path = pathlib.Path(file)
-    #         if not full_path.exists():
-    #             raise FileNotFoundError('File {file.name} does not exist!')
-    #         paths.append(full_path)
-    #     return paths
+        histories = []
 
-    # def _get_global_attrs(self, file_list):
+        # Iterate over all passed attribute dictionaries
+        for i, attrs in enumerate(attrs_list):
 
+            # Some variables do not have an instrument (e.g. time)
+            if not 'instrument' in attrs.keys():
+                continue
 
-    #     return {
-    #         file_path.name: get_nc_global_attrs(file_path)
-    #         for file_path in file_list
-    #         }
+            # Parse any existing histories
+            for key, value in attrs.items():
+                if HIST_STR in key:
+                    histories.append(_parse_history_str(value))
 
-    # def get_file_chron_order(self):
+            # Test whether instrument changed from one file to next; if so,
+            # add to histories
+            try:
+                if attrs['instrument'] != attrs_list[i + 1]['instrument']:
+                    start = self.file_info.iloc[i]['time_coverage_start']
+                    end = self.file_info.iloc[i]['time_coverage_end']
+                    if len(histories) != 0:
+                        start = (
+                            max(history['end'] for history in histories) +
+                            dt.timedelta(minutes=self._expected_interval)
+                            )
+                    histories.append(
+                        {
+                            'instrument': attrs['instrument'],
+                            'start': start,
+                            'end': end
+                            }
+                        )
+            except IndexError:
+                pass
 
-    #     files = np.array(list(self.global_attrs.keys()))
-    #     test = np.argsort([
-    #         self.global_attrs[file]['time_coverage_end']
-    #         for file in files
-    #         ])
-    #     return files[test].tolist()
+        # If there are no histories, just return the most recent attrs
+        if len(histories) == 0:
+            return attrs_list[-1]
 
-    # def _check_file_dates(self):
+        # Create a dataframe, and 1) test for range overlap and 2) combine any
+        # concurrent records
+        df = (
+            pd.DataFrame(histories)
+            .sort_values(by='end')
+            .pipe(_check_range_overlap)
+            .pipe(_combine_concurrent)
+            )
 
-    #     file_list = self.get_file_chron_order()
-    #     for i in range(1, (len(file_list))):
-    #         file1 = file_list[i - 1]
-    #         file2 = file_list[i]
-    #         end_last = dt.datetime.strptime(
-    #             self.global_attrs[file1]['time_coverage_end'],
-    #             TIME_FORMAT
-    #             )
-    #         start_next = dt.datetime.strptime(
-    #             self.global_attrs[file2]['time_coverage_start'],
-    #             TIME_FORMAT
-    #             )
-    #         if end_last >= start_next:
-    #             raise RuntimeError(
-    #                 f'Dates must not overlap! File {file1} overlaps with {file2}!'
-    #                 )
+        # Add the history string to the dataframe index
+        df.index = [f'{HIST_STR}_{i}' for i in range(len(df))]
 
+        # Select the last attribute dictionary, scrub it of all histories,
+        # then add the combined histories and return
+        return (
+            {
+                key: value for key, value in attrs_list[-1].items()
+                if HIST_STR not in key
+                } |
+            (
+                (
+                    df.instrument + ',' +
+                    df.start.dt.strftime(TIME_FORMAT) + ',' +
+                    df.end.dt.strftime(TIME_FORMAT)
+                    )
+                .to_dict()
+                )
+            )
+    #--------------------------------------------------------------------------
 
-    #     return
+#------------------------------------------------------------------------------
 
-    # def get_newest_file(self):
+#------------------------------------------------------------------------------
+def _parse_history_str(history: str) -> dict:
+    """
+    Split instrument history string, check, format and return parts as dict.
 
-    #     return max(
-    #         self.global_attrs[file.name]['time_coverage_end']
-    #         for file in self.file_list
-    #         )
+    Args:
+        history: the history string.
 
-    # def check_irga_changes(self):
+    Raises:
+        RuntimeError: raised if wrong number of elements following split.
 
-    #     return [
-    #         self.global_attrs[file.name]['irga_type']
-    #         for file in self.file_list
-    #         ]
+    Returns:
+        formatted comnponents.
 
+    """
 
+    split_list = history.split(',')
+    if not len(split_list) == 3:
+        raise RuntimeError(
+            'instrument_history attribute must consist of three '
+            'comma-separated elements (instrument, start date, end date)'
+            )
+    return {
+        'instrument': split_list[0].strip(),
+        'start': _date_str_converter(date=split_list[1].strip()),
+        'end': _date_str_converter(date=split_list[2].strip())
+        }
+#------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+def _combine_concurrent(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Checks for concurrent instrument histories that can be combined into one.
 
+    Args:
+        df: dataframe containing instrument history components.
 
-def get_nc_global_attrs(file_path):
+    Returns:
+        dataframe with any concurrents combined.
 
-    _check_exists(file_path=file_path)
+    """
+
+    dupe = df[df.instrument==df.instrument.shift()]
+    if len(dupe) == 0:
+        return df
+    for row in dupe.index:
+        df.loc[row - 1, 'end'] = dupe.loc[row, 'end']
+        df = df.drop(row)
+    return df.reset_index(drop=True)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def _check_range_overlap(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Checks all start and end dates valid (i.e. end after start) and do not
+    overlap.
+
+    Args:
+        df: dataframe containing instrument history components (incl. dates).
+
+    Raises:
+        RuntimeError: raised if end before start or if dates for multiple
+        histories overlap.
+
+    Returns:
+        unaltered dataframe.
+
+    """
+
+    for i in df.index:
+        if not df.loc[i, 'start'] < df.loc[i, 'end']:
+            raise RuntimeError(
+                'Start date must be less than end date for instrument '
+                f'{df.iloc[i, "instrument"]}'
+                )
+        if i > 0:
+            if not df.loc[i, 'start'] > df.loc[i - 1, 'end']:
+                raise RuntimeError(
+                    f'Start date ({df.loc[i, "start"]}) for instrument '
+                    f'{df.loc[i, "instrument"]} overlaps with end date '
+                    f'({df.loc[i - 1, "end"]}) for instrument '
+                    f'{df.loc[i - 1, "instrument"]}!'
+                    )
+    return df
+#------------------------------------------------------------------------------
+
+###############################################################################
+### END L1 NETCDF DATA MERGE CLASS ###
+###############################################################################
+
+#------------------------------------------------------------------------------
+def _date_str_converter(date: str | dt.datetime) -> str | dt.datetime:
+    """
+    Convert string to date or date to string.
+
+    Args:
+        date: date in either format.
+
+    Returns:
+        date in other format.
+
+    """
+
+    if isinstance(date, str):
+        return dt.datetime.strptime(date, TIME_FORMAT)
+    if isinstance(date, dt.datetime):
+        return dt.datetime.strftime(date, TIME_FORMAT)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_nc_global_attrs(file_path: str | pathlib.Path) -> dict:
+    """
+    Extract the global attributes efficiently.
+
+    Args:
+        file_path: absolute path to file.
+
+    Raises:
+        FileNotFoundError: raised if file does not exist.
+
+    Returns:
+        dictionary of attrs.
+
+    """
+
+    if not pathlib.Path(file_path).exists():
+        raise FileNotFoundError('File {file.name} does not exist!')
     with netCDF4.Dataset(file_path, 'r') as nc_file:
         return {
             attr: nc_file.getncattr(attr) for attr in nc_file.ncattrs()
             }
-
-def _check_exists(file_path):
-
-    if not pathlib.Path(file_path).exists():
-        raise FileNotFoundError('File {file.name} does not exist!')
-
-def merge_nc(file_list):
-
-    ds = xr.open_mfdataset(paths=file_list)#, combine_attrs=_merge_attrs)
-
-    return ds
-
-def _merge_attrs(attrs_list: dict, context=None) -> dict:
-
-    last_attrs = attrs_list.pop()
-    if not 'instrument' in last_attrs:
-        return last_attrs
-    inst_list = []
-    for attrs in attrs_list:
-        try:
-            instrument = attrs['instrument']
-            if not instrument == last_attrs['instrument']:
-                inst_list.append(instrument)
-        except KeyError:
-            continue
-    inst_list.append(last_attrs['instrument'])
-    new_dict = {'instrument': '; '.join(inst_list)}
-    last_attrs.update(new_dict)
-    return last_attrs
-
-
-
-
-    # return attrs_list[-1]
-    # rslt = []
-    # for item in attrs_list:
-    #     rslt.append(
-    #         item['attribute'] + ': ' +
-    #         item['start'].strftime(TIME_FORMAT) + ' -> ' +
-    #         item['end'].strftime(TIME_FORMAT)
-    #         )
-    # return f'[{", ".join(rslt)}]'
+#------------------------------------------------------------------------------

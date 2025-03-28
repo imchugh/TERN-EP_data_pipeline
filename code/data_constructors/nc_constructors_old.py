@@ -98,8 +98,7 @@ class L1DataConstructor():
 
         self.site = site
         self.md_mngr = md.MetaDataManager(
-            site=site, use_alternate_configs=use_alternate_configs
-            )
+            site=site, use_alternate_configs=use_alternate_configs)
         self.data = (
             self._build_internal_data(args=locals())
             .pipe(self._do_unit_conversions)
@@ -137,12 +136,10 @@ class L1DataConstructor():
                 )
 
         # Merge the raw data
-        merge_dict = self.md_mngr.translate_variables_by_file(abs_path=True)
-        # merge_dict = {
-        #     file: self.md_mngr.translate_variables_by_table(table=table)
-        #     for table, file in self.md_mngr.map_tables_to_files(abs_path=True).items()
-        #     }
-
+        merge_dict = {
+            file: self.md_mngr.translate_variables_by_table(table=table)
+            for table, file in self.md_mngr.map_tables_to_files(abs_path=True).items()
+            }
         merge_to_int = f'{int(self.md_mngr.site_details.time_step)}min'
         return (
             fh.merge_data(

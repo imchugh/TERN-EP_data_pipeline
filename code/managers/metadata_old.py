@@ -46,10 +46,6 @@ VALID_SUFFIXES = {
     'Av': 'average', 'Sd': 'standard_deviation', 'Vr': 'variance',
     'Sum': 'sum', 'Ct': 'count', 'QC': 'quality_control_flag'
     }
-REQUISITE_FIELDS = [
-    'height', 'instrument', 'statistic_type', 'units', 'name', 'logger',
-    'table'
-    ]
 _NAME_MAP = {'site_name': 'name', 'std_name': 'std_name'}
 
 ###############################################################################
@@ -109,9 +105,6 @@ class MetaDataManager():
                 config_stream='variables_pfp', site=site
                 )
 
-        # Check for the requisite fields in each entry of the control file
-        self._check_config_fields()
-
         # Check for the diag_type attribute in the configurations, and set them
         # to either 'valid_count' (default in new Campbell progs) or
         # 'invalid_count' (past default)
@@ -125,35 +118,6 @@ class MetaDataManager():
 
         # Get flux instrument types
         self.instruments = self._parse_instrument_type()
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _check_config_fields(self):
-        """
-        Check that all entries in the config file contain the requisite input
-        fields.
-
-        Raises:
-            KeyError: raised if any are missing.
-
-        Returns:
-            None.
-
-        """
-
-        for variable, fields in self.configs.items():
-
-            fields_in_metadata = [field in fields for field in REQUISITE_FIELDS]
-            if not all(fields_in_metadata):
-                missing_fields = [
-                    field for field, field_in_metadata in
-                    zip(REQUISITE_FIELDS, fields_in_metadata)
-                    if not field_in_metadata
-                    ]
-                raise KeyError(
-                    f'The following fields were missing from entry {variable}: '
-                    f'{", ".join(missing_fields)}'
-                    )
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -215,47 +179,22 @@ class MetaDataManager():
 
         """
 
-        # Get the name parser
+        # Get the name parser, check all names and preserve additional properties
         name_parser = PFPNameParser()
 
-        # Iterate through all names and capture additional variable properties
+        # Here we deal with the problem that PFP allows two distinct quantities
+        # using the same variable name: CO2_IRGA can either be mass concentration
+        # OR dry mole fraction. This should change, but we hack in the meantime
+        # to ensure the correct units are assigned to the attributes.
         props_list = []
         for variable in df.index:
-
-            # Check whether variable is custom (determined True if a long_name
-            # attribute is in the config file)
-            is_custom = False
-            try:
-                if not pd.isnull(df.loc[variable, 'long_name']):
-                    is_custom = True
-            except KeyError:
-                pass
-
-            # If custom, bypass conformity check and call custom metadata routine.
-            if is_custom:
-                props_list.append(
-                    self._build_custom_metadata(df.loc[variable])
-                    )
-
-            # ... otherwise, do standard conformity checking.
-            else:
-
-                # Here we deal with the problem that PFP allows two distinct
-                # quantities using the same variable name: CO2_IRGA can either
-                # be mass concentration OR dry mole fraction. This should
-                # change, but we hack in the meantime to ensure the correct
-                # units are assigned to the attributes.
-                parser_name = variable
-                if 'CO2_IRGA' in variable:
-                    if 'mg' in df.loc[variable, 'units']:
-                        parser_name = variable.replace('CO2', 'CO2c')
-
-                #
-                props_list.append(
-                    name_parser.parse_variable_name(
-                        variable_name=parser_name
-                        )
-                    )
+            parser_name = variable
+            if 'CO2_IRGA' in variable:
+                if 'mg' in df.loc[variable, 'units']:
+                    parser_name = variable.replace('CO2', 'CO2c')
+            props_list.append(
+                name_parser.parse_variable_name(variable_name=parser_name)
+                )
 
         # Concatenate the properties into df
         props_df = (
@@ -269,22 +208,6 @@ class MetaDataManager():
             props_df[col] = pd.to_numeric(props_df[col])
 
         return pd.concat([df, props_df], axis=1)
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _build_custom_metadata(self, series: pd.Series) -> dict:
-        """
-        Assign standard_units attribute to result dictionary.
-
-        Args:
-            series: series containing the attributes.
-
-        Returns:
-            dict containing only 'standard_units' attribute.
-
-        """
-
-        return {'standard_units': series['units']}
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -908,24 +831,14 @@ class PFPNameParser():
     currently defined variable identifiers can be accessed as a class attribute
     (`self.variable_list`).
 
-    2) If there is a process identifier, it must occur as the last substring.
-    If it is 'Vr', this must become part of the unique variable identifier,
-    because variances necessarily have different units.
-
-    3) A system type identifier can be added but must immediately follow the
-    unique variable identifier.
-
-    4) Location and replicate identifiers can be added, but must be in order
-    of vertical identifier (which must have units of cm or m),
-    horizontal identifier (single alpha character only) and replicate
-    identifiers (numeric characters only). They do not all need to be present.
-    They must NOT be separated by underscores.
-
-    Second component can be either a unique device identifier (listed under
+    2) Second component can be either a unique device identifier (listed under
     VALID_INSTRUMENTS in this module) or a location identifier. The former are
     variables that are either unique to that device or that would be ambiguous
     in the absence of a device identifier (e.g. AH versus AH_IRGA).
 
+    3) If there is a process identifier, it must occur as the last substring.
+    If it is 'Vr', this must become part of the unique variable identifier,
+    because variances necessarily have different units.
 
     """
 
@@ -964,42 +877,54 @@ class PFPNameParser():
 
         """
 
-        # Init result dict
         rslt_dict = {
             'quantity': None,
             'instrument_type': None,
-            'vertical_location': None,
-            'horizontal_location':None,
+            'location': None,
             'replicate': None,
             'process': None,
             'system_type': None
             }
 
-        # Init error list
         errors = []
 
         # Get string elements
         elems = variable_name.split(self.SPLIT_CHAR)
 
-        # Find quantity and instrument (if valid);
-        # We can't proceed without a valid quantity, so let this fail without
-        # catching
-        rslt_dict.update(self._check_str_is_quantity(parse_list=elems))
+        # Find quantity and instrument (if valid)
+        rslt = self._check_str_is_quantity(elems)
+        if rslt_dict['quantity'] is None:
+            rslt_dict.update(rslt)
 
-        # Iterate over the checking functions, progressively removing elements
-        # and updating dicts
-        for func in [
-            self._check_str_is_process,
-            self._check_str_is_system_type,
-            self._check_str_is_vertical_location,
-            self._check_str_is_horizontal_location,
-            self._check_str_is_replicate_num
-            ]:
+        # Check if final element is a process
+        try:
+            rslt_dict.update(self._check_str_is_process(parse_list=elems))
+        except TypeError as e:
+            errors.append(e.args[0])
 
-            try:
-                rslt_dict.update(func(parse_list=elems))
-            except TypeError as e:
-                errors.append(e.args[0])
+        # Check if first remaining element is a system type
+        try:
+            rslt_dict.update(self._check_str_is_system_type(parse_list=elems))
+        except TypeError as e:
+            errors.append(e.args[0])
+
+        # Check how many elements remain. If more than one, throw an error
+        if len(elems) > 1:
+            raise RuntimeError('Too many elements!')
+
+        # Check if next element is a replicate
+        try:
+            rslt_dict.update(
+                self._check_str_is_alphanum_replicate(parse_list=elems)
+                )
+        except TypeError as e:
+            errors.append(e.args[0])
+
+        # Check if next element is a location / replicate combo
+        try:
+            rslt_dict.update(self._check_str_is_location(parse_list=elems))
+        except TypeError as e:
+            errors.append(e.args[0])
 
         # Raise error if list element remains
         if len(elems) > 0:
@@ -1020,7 +945,7 @@ class PFPNameParser():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _check_str_is_quantity(self, parse_list: list) -> dict:
+    def _check_str_is_quantity(self, parse_list: str) -> dict:
         """
         Check the list of elements for quantity substrings.
 
@@ -1028,10 +953,10 @@ class PFPNameParser():
             parse_list: the list of substring elements to parse.
 
         Raises:
-            TypeError: raised if a valid quantity identifier not found.
+            KeyError: raised if a valid quantity identifier not found.
 
         Returns:
-            the quantity (and instrument, if valid).
+            the identities of the substrings.
 
         """
 
@@ -1047,7 +972,7 @@ class PFPNameParser():
                 instrument = parse_list[0]
                 parse_list.remove(instrument)
         if not quantity in self.variables.index:
-            raise TypeError(
+            raise KeyError(
                 f'{quantity} is not a valid quantity identifier!'
                 )
 
@@ -1058,20 +983,7 @@ class PFPNameParser():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _check_str_is_process(self, parse_list: list) -> dict:
-        """
-        Check the list of elements for a valid process as its final element.
-
-        Args:
-            parse_list: the list of substring elements to parse.
-
-        Raises:
-            TypeError: raised if a valid process identifier not found.
-
-        Returns:
-            the process.
-
-        """
+    def _check_str_is_process(self, parse_list: str) -> dict:
 
         if len(parse_list) == 0:
             return {}
@@ -1086,19 +998,6 @@ class PFPNameParser():
 
     #--------------------------------------------------------------------------
     def _check_str_is_system_type(self, parse_list: list) -> dict:
-        """
-        Check the list of elements for a system type suffix.
-
-        Args:
-            parse_list: the list of substring elements to parse.
-
-        Raises:
-            TypeError: raised if a valid quantity identifier not found.
-
-        Returns:
-            the system type.
-
-        """
 
         if len(parse_list) == 0:
             return {}
@@ -1112,18 +1011,56 @@ class PFPNameParser():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _check_str_is_vertical_location(self, parse_list: str) -> dict:
+    def _check_str_is_alphanum_replicate(self, parse_list: str) -> dict:
         """
-        Check the list of elements for vertical location.
+        Check the list of elements for alphanumeric replicate substrings.
 
         Args:
             parse_list: the list of substring elements to parse.
 
         Raises:
-            TypeError: raised if a valid vertical location identifier not found.
+            TypeError: raised if not a single alphanumeric character.
 
         Returns:
-            the vertical location.
+            the identities of the substrings.
+
+        """
+
+        if len(parse_list) == 0:
+            return {}
+
+        elem = parse_list[0]
+
+        valid = False
+        if len(elem) == 1:
+            if elem.isdigit():
+                valid = True
+            if elem.isalpha():
+                valid = True
+
+        if valid:
+            parse_list.remove(elem)
+            return {'replicate': elem}
+
+        raise TypeError(
+            'Replicate identifier must be a single alphanumeric character! '
+            f'You passed "{elem}"!'
+            )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _check_str_is_location(self, parse_list: str) -> dict:
+        """
+        Check the list of elements for location / replicate substrings.
+
+        Args:
+            parse_list: the list of substring elements to parse.
+
+        Raises:
+            TypeError: raised if substring non-conformal.
+
+        Returns:
+            the identities of the substrings.
 
         """
 
@@ -1134,7 +1071,6 @@ class PFPNameParser():
 
         for units in VALID_LOC_UNITS:
 
-            # If no location units, length will be one - skip if so
             sub_list = parse_str.split(units)
             if len(sub_list) == 1:
                 error = (
@@ -1143,20 +1079,13 @@ class PFPNameParser():
                     )
                 continue
 
-            # Strip any '' elements out of the list (split adds '' to list
-            # when the split characters are the last elements)
-            if sub_list[1] == '':
-                sub_list = sub_list[:1]
-
-            # Parse the first list element to check for depth-integrated sensor
-            # (e.g. vertical soil moisture `Sws_0-30cm`)
             split_list = sub_list[0].split('-')
             if len(split_list) > 2:
                 error = (
-                    'A maximum of two height / depth identifiers is allowed!'
+                    'A maximum of two location idenitifers is allowed!'
                     )
             try:
-                [float(elem) for elem in split_list]
+                [float(s) for s in split_list]
             except ValueError:
                 error = (
                     'Characters preceding height / depth units must be '
@@ -1164,74 +1093,24 @@ class PFPNameParser():
                     )
                 continue
 
-            # If we get this far, we send the remaining substring (if any)
-            # back to the parse list to be evaluated as a potential replicate,
-            # and return the vertical location
-            vertical_location = sub_list[0] + units
-            if parse_list[0] == vertical_location:
-                parse_list.remove(vertical_location)
-            else:
-                parse_list[0] = parse_list[0].replace(vertical_location, '')
-            return {'vertical_location': vertical_location}
+            if len(sub_list[1]) != 0:
+                if not sub_list[1].isalpha():
+                    error = (
+                        'Characters succeeding valid location identifier '
+                        'must be single alpha character!'
+                        )
+                    continue
 
-        # Raise error if not recognised!
+            parse_list.remove(parse_str)
+            location = ''.join([sub_list[0], units])
+            replicate = None
+            if len(sub_list[1]) != 0:
+                replicate = sub_list[1]
+            return {'location': location, 'replicate': replicate}
+
         raise TypeError(
             error + f' Passed substring "{parse_str}" does not conform!'
             )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _check_str_is_horizontal_location(self, parse_list: str) -> dict:
-        """
-        Check the list of elements for horizontal location.
-
-        Args:
-            parse_list: the list of substring elements to parse.
-
-        Raises:
-            TypeError: raised if a valid horizontal identifier not found.
-
-        Returns:
-            the horizontal location.
-
-        """
-
-        if len(parse_list) == 0:
-            return {}
-        horizontal_location = parse_list[0][0]
-        if not horizontal_location.isalpha():
-            raise TypeError(f'{horizontal_location} is not an alpha character!')
-        if parse_list[0] == horizontal_location:
-            parse_list.remove(horizontal_location)
-        else:
-            parse_list[0] = parse_list[0].replace(horizontal_location, '')
-        return {'horizontal_location': horizontal_location}
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _check_str_is_replicate_num(self, parse_list: str) -> dict:
-        """
-        Check the list of elements for replicate number.
-
-        Args:
-            parse_list: the list of substring elements to parse.
-
-        Raises:
-            TypeError: raised if a valid replicate identifier not found.
-
-        Returns:
-            the replicate number.
-
-        """
-
-        if len(parse_list) == 0:
-            return {}
-
-        is_rep_num = parse_list[0]
-        if not is_rep_num.isdigit():
-            raise TypeError('Replicate number must be an integer!')
-        parse_list.remove(is_rep_num)
-        return {'replicate': is_rep_num}
     #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

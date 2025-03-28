@@ -156,9 +156,11 @@ def construct_homogenised_TOA5(site: str) -> None:
 #------------------------------------------------------------------------------
 def construct_homogenised_TOA5_from_nc(site: str) -> None:
 
+    # nctoa5 = import_module('data_constructors.nc_toa5_constructor_old')
+    # datacon = nctoa5.NCtoTOA5Constructor(site=site)
+    # datacon.write_to_TOA5()
     nctoa5 = import_module('data_constructors.nc_toa5_constructor')
-    datacon = nctoa5.NCtoTOA5Constructor(site=site)
-    datacon.write_to_TOA5()
+    nctoa5.construct_visualisation_TOA5(site=site, n_files=3)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

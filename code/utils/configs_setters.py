@@ -18,7 +18,7 @@ from configobj import ConfigObj
 
 import io
 from paths import paths_manager as pm
-from .site_details import SiteDetails
+# from .site_details import SiteDetails
 
 GLOBAL_ATTRS = [
     'Conventions', 'acknowledgement', 'altitude',  'canopy_height', 'comment',
@@ -52,7 +52,7 @@ ALIAS_DICT = {'elevation': 'altitude'}
 
 DEVICES = ['modem', 'logger', 'camera']
 
-Details = SiteDetails()
+# Details = SiteDetails()
 
 ###############################################################################
 ### BEGIN MULTI-SITE CONFIGURATION GENERATOR SECTION ###
@@ -607,7 +607,7 @@ def _selective_strip(df):
 #------------------------------------------------------------------------------
 
 def PFPL1XlToYml(
-        file_name_xl: pathlib.Path | str, 
+        file_name_xl: pathlib.Path | str,
         file_name_yml: pathlib.Path | str=None
         ) -> None:
     """
@@ -630,17 +630,29 @@ def PFPL1XlToYml(
     df = (
         pd.read_excel(io=file_name_xl, sheet_name='Variable_attrs')
         .set_index(keys='pfp_name')
-        [output_vars]
         .fillna('')
         )
-    # df['instrument'] = df['instrument'].apply(_delistify)
+
+    if 'ignore' in df.columns:
+        df = df[~df.ignore.astype(bool)]
+    if 'long_name' in df.columns:
+        output_vars.insert(4, 'long_name')
+    df = df[output_vars]
+
+    rslt = df.T.to_dict()
+    for var, attrs in rslt.items():
+        try:
+            if len(attrs['long_name']) == 0:
+                attrs.pop('long_name')
+        except KeyError:
+            pass
 
     if file_name_yml is None:
         file_name_xl = pathlib.Path(file_name_xl)
         file_name_yml = file_name_xl.parent / f'{file_name_xl.stem}.yml'
 
     with open(file=file_name_yml, mode='w', encoding='utf-8') as f:
-        yaml.dump(data=df.T.to_dict(), stream=f, sort_keys=False)
+        yaml.dump(data=rslt, stream=f, sort_keys=False)
 
 
 
@@ -729,7 +741,7 @@ def _get_generic_globals_file() -> str | pathlib.Path:
         )
 
 def convert_xl_variables_to_yml(site):
-    
+
     input_path = (
         pm.get_local_stream_path(resource='configs', stream='site_xl') /
         f'{site}.xlsx'
@@ -739,7 +751,7 @@ def convert_xl_variables_to_yml(site):
             resource='configs', stream='variables_vis', site='Whroo'
             )
         )
-    
+
     data = (
         pd.read_excel(input_path)
         .set_index('variable')
@@ -749,7 +761,7 @@ def convert_xl_variables_to_yml(site):
         .T
         .to_dict()
         )
-        
+
     _write_yml(file=output_path, data=data)
 
 def _listify_old(data: pd.DataFrame, series_name) -> pd.DataFrame:
@@ -770,14 +782,14 @@ def _listify_old(data: pd.DataFrame, series_name) -> pd.DataFrame:
         return data
     except KeyError:
         return data
-    
+
 def _write_yml(file: pathlib.Path | str, data: dict) -> None:
-    
+
     with open(file, mode='w', encoding='utf-8') as f:
         yaml.dump(data=data, stream=f, sort_keys=False)
-        
+
 def _delistify(elem: str | list) -> str:
-    
+
     try:
         literal_elem = ast.literal_eval(elem)
         if isinstance(literal_elem, list):
@@ -790,7 +802,7 @@ def _delistify(elem: str | list) -> str:
 def _stringify_list(elem: str | list) -> str:
 
     if isinstance(elem, str):
-        return elem                    
+        return elem
     elif isinstance(elem, list):
         return ','.join(elem)
     raise TypeError('`elem` must be of type list or str!')

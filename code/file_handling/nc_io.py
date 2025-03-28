@@ -24,7 +24,7 @@ class NCReader():
     """
 
     #--------------------------------------------------------------------------
-    def __init__(self, nc_file: pathlib.Path | str) -> None:
+    def __init__(self, nc_file: pathlib.Path | str | list) -> None:
         """
         Open the NetCDF file as xarray dataset, and set QC flags and coordinate
         reference system variables as labels to drop.
@@ -37,7 +37,13 @@ class NCReader():
 
         """
 
-        ds = xr.open_dataset(nc_file)
+        chunks = {'time': 1000}
+        if isinstance(nc_file, list):
+            self.files = nc_file
+            ds = xr.open_mfdataset(self.files, chunks=chunks)
+        else:
+            self.files = [nc_file]
+            ds = xr.open_dataset(nc_file, chunks=chunks)
         self.ds = ds
         ds.close()
         self.labels_to_drop = (
@@ -107,3 +113,5 @@ class NCReader():
 ###############################################################################
 ### END NETCDF READER CLASS ###
 ###############################################################################
+
+

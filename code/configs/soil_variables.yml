@@ -1,3 +1,7 @@
+Boyagin:
+  soil_heat_flux: Fg_8cma, Fg_8cmb
+  soil_temperature: Ts_05cma1, Ts_10cma1, Ts_20cma1, Ts_40cma, Ts_80cma
+  soil_moisture: Sws_05cma1, Sws_10cma1, Sws_20cma1, Sws_40cma, Sws_80cma
 Calperum:
   soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc
   soil_temperature: Ts_8cma, Ts_8cmb, Ts_8cmc

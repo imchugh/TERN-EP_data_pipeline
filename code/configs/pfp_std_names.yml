@@ -190,6 +190,18 @@ Fsd:
   plausible_min: -20.0
   standard_name: surface_downwelling_shortwave_flux_in_air
   standard_units: W/m^2
+FsdDiff:
+  long_name: Down-welling shortwave diffuse component
+  plausible_max: 1412.0
+  plausible_min: -20.0
+  standard_name:
+  standard_units: W/m^2
+FsdDir:
+  long_name: Down-welling shortwave direct component
+  plausible_max: 1412.0
+  plausible_min: -20.0
+  standard_name:
+  standard_units: W/m^2
 Fsu:
   long_name: Up-welling shortwave
   plausible_max: 1412.0

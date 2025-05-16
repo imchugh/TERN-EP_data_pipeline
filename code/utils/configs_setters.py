@@ -16,37 +16,39 @@ import pathlib
 import yaml
 from configobj import ConfigObj
 
-import io
 from paths import paths_manager as pm
+
+from managers import paths
+from managers import metadata
 # from .site_details import SiteDetails
 
-GLOBAL_ATTRS = [
-    'Conventions', 'acknowledgement', 'altitude',  'canopy_height', 'comment',
-    'contact', 'data_link', 'featureType', 'fluxnet_id', 'history',
-    'institution', 'latitude', 'license', 'license_name', 'longitude',
-    'metadata_link', 'ozflux_link', 'publisher_name', 'references',
-    'site_name', 'site_pi', 'soil', 'source', 'time_step', 'time_zone',
-    'title', 'tower_height', 'vegetation'
-    ]
+# GLOBAL_ATTRS = [
+#     'Conventions', 'acknowledgement', 'altitude',  'canopy_height', 'comment',
+#     'contact', 'data_link', 'featureType', 'fluxnet_id', 'history',
+#     'institution', 'latitude', 'license', 'license_name', 'longitude',
+#     'metadata_link', 'ozflux_link', 'publisher_name', 'references',
+#     'site_name', 'site_pi', 'soil', 'source', 'time_step', 'time_zone',
+#     'title', 'tower_height', 'vegetation'
+#     ]
 
-GENERIC_GLOBAL_ATTRS = {
-    'Conventions': 'CF-1.8',
-    'acknowledgement': 'This work used eddy covariance data collected by '
-    'the TERN Ecosystem \nProcesses facility. Ecosystem Processes would '
-    'like to acknowledge the financial support of the \nAustralian Federal '
-    'Government via the National Collaborative Research Infrastructure '
-    'Scheme \nand the Education Investment Fund.',
-    'comment': 'CF metadataOzFlux standard variable names',
-    'featureType': 'timeSeries',
-    'license': 'https://creativecommons.org/licenses/by/4.0/',
-    'license_name': 'CC BY 4.0',
-    'metadata_link': 'http://www.ozflux.org.au/monitoringsites/<site>/index.html',
-    'ozflux_link': 'http://ozflux.org.au/',
-    'publisher_name': 'TERN Ecosystem ProcessesOzFlux',
-    'processing_level': 'L1',
-    'data_link': 'http://data.ozflux.org.au/',
-    'site_name': '<site>'
-    }
+# GENERIC_GLOBAL_ATTRS = {
+#     'Conventions': 'CF-1.8',
+#     'acknowledgement': 'This work used eddy covariance data collected by '
+#     'the TERN Ecosystem \nProcesses facility. Ecosystem Processes would '
+#     'like to acknowledge the financial support of the \nAustralian Federal '
+#     'Government via the National Collaborative Research Infrastructure '
+#     'Scheme \nand the Education Investment Fund.',
+#     'comment': 'CF metadataOzFlux standard variable names',
+#     'featureType': 'timeSeries',
+#     'license': 'https://creativecommons.org/licenses/by/4.0/',
+#     'license_name': 'CC BY 4.0',
+#     'metadata_link': 'http://www.ozflux.org.au/monitoringsites/<site>/index.html',
+#     'ozflux_link': 'http://ozflux.org.au/',
+#     'publisher_name': 'TERN Ecosystem ProcessesOzFlux',
+#     'processing_level': 'L1',
+#     'data_link': 'http://data.ozflux.org.au/',
+#     'site_name': '<site>'
+#     }
 
 ALIAS_DICT = {'elevation': 'altitude'}
 
@@ -570,33 +572,33 @@ class PFPL1CntlParser():
 
 #------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-def pfp_std_names_to_yml():
-    """
-    Write yml configuration file of pfp naming conventions.
+# #------------------------------------------------------------------------------
+# def pfp_std_names_to_yml():
+#     """
+#     Write yml configuration file of pfp naming conventions.
 
-    Returns:
-        None.
+#     Returns:
+#         None.
 
-    """
+#     """
 
-    file_path = pm.get_local_resource_path(
-        resource='configs', subdirs=['Globals']
-        )
-    data = (
-        pd.read_excel(
-            io=file_path / 'pfp_std_names.xlsx',
-            sheet_name='names',
-            )
-        .pipe(_selective_strip)
-        .fillna('')
-        .set_index(keys='pfp_name')
-        .T
-        .to_dict()
-        )
-    with open(file=file_path / 'pfp_std_names.yml', mode='w', encoding='utf-8') as f:
-        yaml.dump(data=data, stream=f, sort_keys=False)
-#------------------------------------------------------------------------------
+#     file_path = pm.get_local_resource_path(
+#         resource='configs', subdirs=['Globals']
+#         )
+#     data = (
+#         pd.read_excel(
+#             io=file_path / 'pfp_std_names.xlsx',
+#             sheet_name='names',
+#             )
+#         .pipe(_selective_strip)
+#         .fillna('')
+#         .set_index(keys='pfp_name')
+#         .T
+#         .to_dict()
+#         )
+#     with open(file=file_path / 'pfp_std_names.yml', mode='w', encoding='utf-8') as f:
+#         yaml.dump(data=data, stream=f, sort_keys=False)
+# #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def _selective_strip(df):
@@ -606,60 +608,44 @@ def _selective_strip(df):
     return df
 #------------------------------------------------------------------------------
 
-def PFPL1XlToYml(
-        file_name_xl: pathlib.Path | str,
-        file_name_yml: pathlib.Path | str=None
-        ) -> None:
-    """
-    Read the excel file containing the variable configurations and generate
-    a yaml file.
+def _convert_input_excel_to_yml_output(input_file, output_file):
 
-    Args:
-        site: name of site.
-
-    Returns:
-        None.
-
-    """
-
-    output_vars = [
-        'height', 'instrument', 'statistic_type', 'units', 'name', 'logger',
-        'table'
-        ]
+    output_vars = metadata.REQUISITE_FIELDS.copy()
 
     df = (
-        pd.read_excel(io=file_name_xl, sheet_name='Variable_attrs')
+        pd.read_excel(io=input_file, sheet_name='Variable_attrs', dtype='O')
         .set_index(keys='pfp_name')
         .fillna('')
         )
 
+    # Drop variables we wish to ignore in the excel file
     if 'ignore' in df.columns:
         df = df[~df.ignore.astype(bool)]
+        df = df.drop('ignore', axis=1)
+
+    # If long_name is in the columns, add to list of output variables
     if 'long_name' in df.columns:
         output_vars.insert(4, 'long_name')
+
+    # If diag_type is in the columns, add to list of output variables
+    if 'diag_type' in df.columns:
+        output_vars.append('diag_type')
+
+    # Subset the dataframe
     df = df[output_vars]
 
-    rslt = df.T.to_dict()
-    for var, attrs in rslt.items():
-        try:
-            if len(attrs['long_name']) == 0:
-                attrs.pop('long_name')
-        except KeyError:
-            pass
+    rslt = {}
+    for var in df.index:
+        s = df.loc[var]
+        rslt[var] = (s[s != ''].to_dict())
 
-    if file_name_yml is None:
-        file_name_xl = pathlib.Path(file_name_xl)
-        file_name_yml = file_name_xl.parent / f'{file_name_xl.stem}.yml'
-
-    with open(file=file_name_yml, mode='w', encoding='utf-8') as f:
+    with open(file=output_file, mode='w', encoding='utf-8') as f:
         yaml.dump(data=rslt, stream=f, sort_keys=False)
 
-
-
-def PFPL1XlToYml_old(site: str):
+def convert_excel_to_yml(site: str) -> None:
     """
     Read the excel file containing the variable configurations and generate
-    a yaml file.
+    a yml file.
 
     Args:
         site: name of site.
@@ -669,25 +655,104 @@ def PFPL1XlToYml_old(site: str):
 
     """
 
-    variable_path = pm.get_local_resource_path(
-        resource='config_files', subdirs=['Variables']
-        )
-
-    df = (
-        io.read_excel(
-            file=variable_path / f'{site}_variables.xlsx',
-            sheet_name='Variable_attrs'
+    _convert_input_excel_to_yml_output(
+        input_file=paths.get_local_stream_path(
+            resource='configs', stream='site_xl', file_name=f'{site}.xlsx'
+            ),
+        output_file=paths.get_local_stream_path(
+            resource='configs', stream='variables_pfp', site='Litchfield'
             )
-        .set_index(keys='Variable')
-        .drop(['long_name', 'standard_name'], axis=1)
         )
 
-    breakpoint()
-    with open(
-            file=variable_path / f'{site}_variables.yml', mode='w',
-            encoding='utf-8'
-            ) as f:
-        yaml.dump(data=df.T.to_dict(), stream=f, sort_keys=False)
+    # output_vars = metadata.REQUISITE_FIELDS.copy()
+
+    # df = (
+    #     pd.read_excel(io=file_name_xl, sheet_name='Variable_attrs', dtype='O')
+    #     .set_index(keys='pfp_name')
+    #     .fillna('')
+    #     )
+
+    # # Drop variables we wish to ignore in the excel file
+    # if 'ignore' in df.columns:
+    #     df = df[~df.ignore.astype(bool)]
+    #     df = df.drop('ignore', axis=1)
+
+    # # If long_name is in the columns, add to list of output variables
+    # if 'long_name' in df.columns:
+    #     output_vars.insert(4, 'long_name')
+
+    # # If diag_type is in the columns, add to list of output variables
+    # if 'diag_type' in df.columns:
+    #     output_vars.append('diag_type')
+
+    # # Subset the dataframe
+    # df = df[output_vars]
+
+    # rslt = {}
+    # for var in df.index:
+    #     s = df.loc[var]
+    #     rslt[var] = (s[s != ''].to_dict())
+    #     # for attr in s
+
+    # # diag_types = {'Diag_IRGA': 'invalid_count', 'Diag_SONIC': 'invalid_count'}
+    # # if 'diag_type' in df.columns:
+    # #     for var in ['Diag_IRGA', 'Diag_SONIC']:
+
+    # #     breakpoint()
+    # #     pass
+
+    # # # Truncate to output variables
+    # # rslt = df.T.to_dict()
+
+
+    # # for var, attrs in rslt.items():
+    # #     try:
+    # #         if len(attrs['long_name']) == 0:
+    # #             attrs.pop('long_name')
+    # #     except KeyError:
+    # #         pass
+
+    # if file_name_yml is None:
+    #     file_name_xl = pathlib.Path(file_name_xl)
+    #     file_name_yml = file_name_xl.parent / f'{file_name_xl.stem}.yml'
+
+    # with open(file=file_name_yml, mode='w', encoding='utf-8') as f:
+    #     yaml.dump(data=rslt, stream=f, sort_keys=False)
+
+
+
+# def PFPL1XlToYml_old(site: str):
+#     """
+#     Read the excel file containing the variable configurations and generate
+#     a yaml file.
+
+#     Args:
+#         site: name of site.
+
+#     Returns:
+#         None.
+
+#     """
+
+#     variable_path = pm.get_local_resource_path(
+#         resource='config_files', subdirs=['Variables']
+#         )
+
+#     df = (
+#         io.read_excel(
+#             file=variable_path / f'{site}_variables.xlsx',
+#             sheet_name='Variable_attrs'
+#             )
+#         .set_index(keys='Variable')
+#         .drop(['long_name', 'standard_name'], axis=1)
+#         )
+
+#     breakpoint()
+#     with open(
+#             file=variable_path / f'{site}_variables.yml', mode='w',
+#             encoding='utf-8'
+#             ) as f:
+#         yaml.dump(data=df.T.to_dict(), stream=f, sort_keys=False)
 
 # def get_L1_site_global_attrs(site: str) -> dict:
 #     """
@@ -712,33 +777,33 @@ def PFPL1XlToYml_old(site: str):
 #         .to_dict()
 #         )
 
-def write_L1_generic_global_attrs():
-    """
-    Write the generic global attributes dictionary to a file in json format.
+# def write_L1_generic_global_attrs():
+#     """
+#     Write the generic global attributes dictionary to a file in json format.
 
-    Returns:
-        None.
+#     Returns:
+#         None.
 
-    """
+#     """
 
-    with open(file=_get_generic_globals_file(), mode='w', encoding='utf-8') as f:
-        yaml.dump(data=GENERIC_GLOBAL_ATTRS, stream=f, sort_keys=False)
+#     with open(file=_get_generic_globals_file(), mode='w', encoding='utf-8') as f:
+#         yaml.dump(data=GENERIC_GLOBAL_ATTRS, stream=f, sort_keys=False)
 
-def _get_generic_globals_file() -> str | pathlib.Path:
-    """
-    Return the absolute path of the global generic attributes file.
+# def _get_generic_globals_file() -> str | pathlib.Path:
+#     """
+#     Return the absolute path of the global generic attributes file.
 
-    Returns:
-        The path.
+#     Returns:
+#         The path.
 
-    """
+#     """
 
-    return (
-        pm.get_local_resource_path(
-            resource='configs', subdirs=['Globals']
-            ) /
-        'generic_global_attrs.yml'
-        )
+#     return (
+#         pm.get_local_resource_path(
+#             resource='configs', subdirs=['Globals']
+#             ) /
+#         'generic_global_attrs.yml'
+#         )
 
 def convert_xl_variables_to_yml(site):
 

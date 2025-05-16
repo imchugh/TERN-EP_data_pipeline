@@ -38,13 +38,13 @@ from managers.site_details import SiteDetailsManager as sdm
 ###############################################################################
 
 VALID_INSTRUMENTS = ['SONIC', 'IRGA', 'RAD']
-VALID_FLUX_SYSTEMS = {'EF': 'EasyFluxDL', 'EP': 'SmartFlux', 'DL': 'TERN'}
+VALID_FLUX_SYSTEMS = {'EF': 'EasyFlux', 'EP': 'EddyPro', 'DL': 'TERNflux'}
 TURBULENT_FLUX_QUANTITIES = ['Fco2', 'Fe', 'Fh']
 FLUX_FILE_VAR_IND = 'Fco2'
 VALID_LOC_UNITS = ['cm', 'm']
 VALID_SUFFIXES = {
     'Av': 'average', 'Sd': 'standard_deviation', 'Vr': 'variance',
-    'Sum': 'sum', 'Ct': 'count', 'QC': 'quality_control_flag'
+    'Sum': 'sum', 'Ct': 'sum', 'QC': 'quality_control_flag'
     }
 REQUISITE_FIELDS = [
     'height', 'instrument', 'statistic_type', 'units', 'name', 'logger',
@@ -90,13 +90,13 @@ class MetaDataManager():
         # Set basic attrs
         self.site = site
         self.data_path = (
-        paths.get_local_stream_path(
+            paths.get_local_stream_path(
                 site=site, resource='raw_data', stream='flux_slow'
                 )
             )
         self.site_details = (
             sdm(use_local=True)
-            .get_single_site_details(site=self.site)
+            .get_single_site_details_as_dict(site=site)
             )
 
         # Save the basic configs from the yml file
@@ -264,9 +264,9 @@ class MetaDataManager():
             .fillna('')
             )
 
-        # Convert minima and maxima columns to numeric
-        for col in ['plausible_min', 'plausible_max']:
-            props_df[col] = pd.to_numeric(props_df[col])
+        # # Convert minima and maxima columns to numeric
+        # for col in ['plausible_min', 'plausible_max']:
+        #     props_df[col] = pd.to_numeric(props_df[col])
 
         return pd.concat([df, props_df], axis=1)
     #--------------------------------------------------------------------------
@@ -334,11 +334,17 @@ class MetaDataManager():
             None.
 
         """
-        var = [
-            key for key, value in self.map_fluxes_to_standard_names().items()
-            if value == FLUX_FILE_VAR_IND
+
+        # var = [
+        #     key for key, value in self.map_fluxes_to_standard_names().items()
+        #     if value == FLUX_FILE_VAR_IND
+        #     ]
+        var_list = [
+            var for var in
+            self.site_variables[self.site_variables.quantity==FLUX_FILE_VAR_IND]
+            .index.tolist() if len(var.split('_')) == 2
             ]
-        return self.site_variables.loc[var, 'file'].item()
+        return self.site_variables.loc[var_list, 'file'].item()
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -553,6 +559,13 @@ class MetaDataManager():
             .squeeze()
             .to_dict()
             )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def map_fluxes_to_standard_names_2(self) -> dict:
+
+        breakpoint()
+        pass
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -1014,6 +1027,10 @@ class PFPNameParser():
             rslt_dict['standard_units'] = (
                 convert_variance_units(units=rslt_dict['standard_units'])
                 )
+        if rslt_dict['process'] == 'Ct':
+            edit_count_info(info=rslt_dict)
+        if rslt_dict['process'] == 'QC':
+            edit_QC_info(info=rslt_dict)
 
         # Return results
         return rslt_dict
@@ -1270,6 +1287,46 @@ def convert_variance_units(units: str, to_variance=True) -> str:
     if not to_variance:
         ref_dict = {value: key for key, value in ref_dict.items()}
     return ref_dict[units]
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def edit_count_info(info: dict) -> None:
+    """
+    Edit muteable dict of variable properties
+
+    Args:
+        info (dict): DESCRIPTION.
+
+    Returns:
+        None: DESCRIPTION.
+
+    """
+
+    info['plausible_min'] = 0
+    info['plausible_max'] = None
+    info['standard_units'] = '1'
+    info['long_name'] = 'Number of samples of ' + info['long_name']
+    info['standard_name'] = None
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def edit_QC_info(info: dict) -> None:
+    """
+    Edit muteable dict of variable properties
+
+    Args:
+        info (dict): DESCRIPTION.
+
+    Returns:
+        None: DESCRIPTION.
+
+    """
+
+    info['plausible_min'] = 0
+    info['plausible_max'] = None
+    info['standard_units'] = '1'
+    info['long_name'] = 'QC flag value of ' + info['long_name']
+    info['standard_name'] = None
 #------------------------------------------------------------------------------
 
 ###############################################################################

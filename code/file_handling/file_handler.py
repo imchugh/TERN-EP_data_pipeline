@@ -95,11 +95,16 @@ class DataHandler():
         dupes_mask = dupe_indices | dupe_records
         output_data = output_data.loc[~dupes_mask]
 
-        # Do the resampling
+        # Do the resampling, and force any prior integer values
         if monotonic_index and not resample_intvl:
             resample_intvl = f'{self.interval}min'
         if resample_intvl:
             output_data = output_data.resample(resample_intvl).asfreq()
+            for var in self.data.dtypes[self.data.dtypes == np.int64].index:
+                try:
+                    output_data[var] = output_data[var].astype('Int64')
+                except KeyError:
+                    continue
 
         # If platform-specific formatting not requested, drop non-numerics
         # (if requested) and return
@@ -538,7 +543,7 @@ def merge_data(
             documentation).
         concat_files (optional): concat backup files to current. Defaults to
             False.
-        interval (optional): resample files to passed interval string. 
+        interval (optional): resample files to passed interval string.
             Defaults to None.
         constrain_to_file (optional): if a valid file is passed (i.e. one
             that exists and is present in the passed files), its final
@@ -552,7 +557,7 @@ def merge_data(
 
     data_list, header_list = [], []
     for file in files:
-       
+
         # If type is dict, use dict keys as variable map
         try:
             usecols = files[file]
@@ -581,8 +586,8 @@ def merge_data(
             data_handler.get_conditioned_headers(
                 usecols=usecols, drop_non_numeric=True
                 )
-            )         
-    
+            )
+
     # Concatenate lists
     headers = pd.concat(header_list).fillna('')
     data = pd.concat(data_list, axis=1)

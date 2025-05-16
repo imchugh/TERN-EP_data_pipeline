@@ -231,7 +231,7 @@ def do_system_config(mdm):
         )
 
     time_editor.get_set_element_offset_text(
-        text=str(int(mdm.get_site_details(field='UTC_offset') * -60))
+        text=str(int(mdm.site_details['UTC_offset']) * -60)
         )
 
     # Change the comm status alarm component calculation string
@@ -519,7 +519,7 @@ def main(site, file_name=None):
     # Don't allow overwrite of original template file, or misnaming of extension
     if file_name:
         if file_name == PATH_TO_TEMPLATE.name:
-            raise FileExistsError('Overwite of template not allowed!')
+            raise FileExistsError('Overwrite of template not allowed!')
         if not file_name.split('.')[-1] == 'rtmc2':
             raise RuntimeError('File name must have .rtmc2 suffix!')
         output_path = str(PATH_TO_TEMPLATE.parent / file_name)

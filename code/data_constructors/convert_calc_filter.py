@@ -141,7 +141,7 @@ def convert_CO2_density(data, from_units='mmol/m^3'):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def convert_CO2_signal(data, from_units='frac'):
+def convert_signal_strength(data, from_units='frac'):
 
     if from_units == 'frac':
         return data * 100
@@ -215,7 +215,9 @@ def convert_variable(variable):
 
     conversions_dict = {
         'Fco2': convert_CO2_flux,
-        'Sig_IRGA': convert_CO2_signal,
+        'Sig_IRGA': convert_signal_strength,
+        'CO2Sig_IRGA': convert_signal_strength,
+        'H2OSig_IRGA': convert_signal_strength,
         'RH': convert_RH,
         'CO2c_IRGA': convert_CO2_density,
         'AH_IRGA': convert_H2O_density,

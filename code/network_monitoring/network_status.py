@@ -23,7 +23,10 @@ from network_monitoring import network_status_from_nc as nsnc
 sd_mngr = sd.SiteDetailsManager(use_local=True)
 SUBSET = ['Fco2', 'Fh', 'Fe', 'Fsd']
 logger = logging.getLogger(__name__)
-new_sites = ['Calperum', 'Tumbarumba']
+new_sites = [
+    'AliceSpringsMulga', 'Boyagin', 'Calperum', 'Dookie1', 'Fletcherview',
+    'Litchfield', 'Tumbarumba', 'WombatStateForest'
+    ]
 
 ###############################################################################
 ### BEGIN MAIN FUNCTIONS ###

@@ -18,7 +18,8 @@ import pandas as pd
 
 from paths import paths_manager as pm
 import file_handling.file_io as io
-from utils.site_details import SiteDetails
+# from utils.site_details import SiteDetails
+from managers.site_details import SiteDetailsManager as sdm
 
 SPLIT_CHAR = '_'
 VALID_INSTRUMENTS = ['SONIC', 'IRGA', 'RAD']
@@ -61,7 +62,7 @@ class MetaDataManager():
                 site=site, resource='raw_data', stream='flux_slow'
                 )
             )
-        
+
         # Save the basic configs from the yml file
         self.configs = io.read_yml(
             file=pm.get_local_stream_path(
@@ -73,7 +74,7 @@ class MetaDataManager():
 
         # Create site-based variables table
         self._parse_site_variables()
-       
+
         # Get flux instrument types
         self.instruments = self._get_inst_type()
     #--------------------------------------------------------------------------
@@ -96,7 +97,7 @@ class MetaDataManager():
             .pipe(self._test_variable_conformity)
             .pipe(self._test_file_assignment)
             )
-        
+
         self.site_variables = df[~df.missing]
         self.missing_variables = df[df.missing]
     #--------------------------------------------------------------------------
@@ -126,11 +127,11 @@ class MetaDataManager():
             .set_index(df.index)
             .fillna('')
             )
-        
+
         # Convert minima and maxima columns to numeric
         for col in ['plausible_min', 'plausible_max']:
             props_df[col] = pd.to_numeric(props_df[col])
-        
+
         return pd.concat([df, props_df], axis=1)
     #--------------------------------------------------------------------------
 
@@ -149,13 +150,13 @@ class MetaDataManager():
 
         file_list = []
         df = df.assign(missing=df.name.str.len()==0)
-        
-        # If 'file' keyword is in the configuration, override logger / table 
+
+        # If 'file' keyword is in the configuration, override logger / table
         # filename construction
         if 'file' in df.columns:
             file_list = df.loc[~df.missing, 'file']
 
-        # Otherwise use site, logger and table name to construct filename 
+        # Otherwise use site, logger and table name to construct filename
         elif 'logger' and 'table' in df.columns:
 
             file_list = (
@@ -178,7 +179,7 @@ class MetaDataManager():
                 raise FileNotFoundError(
                     f'File {file} does not exist in the data path'
                     )
-        
+
         # Assign and return
         df['file'] = file_list
         return df.fillna('')
@@ -217,12 +218,12 @@ class MetaDataManager():
     def get_site_details(self, field=None) -> pd.Series:
         """ Get the non-variable site details."""
 
-        return SiteDetails().get_single_site_details(site=self.site, field=field)
+        return sdm().get_single_site_details(site=self.site, field=field)
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
     def get_file_attributes(
-            self, file: str, include_backups=False, include_extended=False, 
+            self, file: str, include_backups=False, include_extended=False,
             return_field=None
             ) -> pd.Series:
         """
@@ -247,7 +248,7 @@ class MetaDataManager():
                 {'backups': io.get_eligible_concat_files(self.data_path / file)}
                 )
         if return_field is None:
-            return pd.Series(rslt)    
+            return pd.Series(rslt)
         if isinstance(return_field, str):
             return rslt[return_field]
         if isinstance(return_field, list):
@@ -256,7 +257,7 @@ class MetaDataManager():
 
     #--------------------------------------------------------------------------
     def _get_file_dates(self, file: str, include_backups: bool=False):
-        
+
         file_list = [self.data_path / file]
         start_dates, end_dates = [], []
         if include_backups:
@@ -662,7 +663,7 @@ class PFPNameParser():
             pd.DataFrame(
                 io.read_yml(
                     file=pm.get_local_stream_path(
-                        resource='configs', 
+                        resource='configs',
                         stream='pfp_std_names'
                         )
                     )
@@ -734,7 +735,7 @@ class PFPNameParser():
             raise RuntimeError(
                 'Unrecognised element remains: checks failed for variable '
                 f'name {variable_name} with the following messages: {errors}'
-                
+
                 )
 
         # Get properties
@@ -820,17 +821,17 @@ class PFPNameParser():
             return {}
 
         elem = parse_list[0]
-        
+
         valid = False
         if elem.isdigit():
             valid = True
         if elem.isalpha():
             valid = True
-            
+
         if valid:
             parse_list.remove(elem)
             return {'replicate': elem}
-            
+
         raise TypeError(
             'Replicate identifier must be a single alphanumeric character! '
             f'You passed "{elem}"!'

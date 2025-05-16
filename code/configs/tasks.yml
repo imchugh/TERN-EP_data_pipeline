@@ -6,6 +6,7 @@ sites:
   - Calperum
   - CowBay
   - CumberlandPlain
+  - Dookie1
   - Fletcherview
   - Gingin
   - GreatWesternWoodlands
@@ -31,14 +32,10 @@ tasks:
   # Data constructors
 
   construct_homogenised_TOA5:
-    - AliceSpringsMulga
-    - Boyagin
     - CumberlandPlain
-    - Fletcherview
     - Gingin
     - GreatWesternWoodlands
     - HowardSprings
-    - Litchfield
     - MyallValeA
     - MyallValeB
     - Ridgefield
@@ -49,7 +46,12 @@ tasks:
     - Yanco
 
   construct_homogenised_TOA5_from_nc:
+    - AliceSpringsMulga
+    - Boyagin
     - Calperum
+    - Dookie1
+    - Fletcherview
+    - Litchfield
     - Tumbarumba
     - WombatStateForest
 
@@ -76,7 +78,14 @@ tasks:
     - Yanco
 
   construct_L1_nc:
+    - AliceSpringsMulga
+    - Boyagin
     - Calperum
+    - Dookie1
+    - Fletcherview
+    - MyallValeA
+    - MyallValeB
+    - Litchfield
     - Tumbarumba
     - WombatStateForest
 
@@ -110,6 +119,7 @@ tasks:
     - Calperum
     - CowBay
     - CumberlandPlain
+    - Dookie1
     - Fletcherview
     - Gingin
     - GreatWesternWoodlands
@@ -133,6 +143,7 @@ tasks:
     - Calperum
     - CowBay
     - CumberlandPlain
+    - Dookie1
     - Fletcherview
     - Gingin
     - GreatWesternWoodlands

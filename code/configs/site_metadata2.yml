@@ -508,21 +508,6 @@ Whroo:
   vegetation: Dry sclerophyll woodland
   time_zone: Australia/Melbourne
   UTC_offset: 10.0
-WombatStateForest:
-  id: https://w3id.org/tern/resources/d37bd453-10c6-44d0-8ff8-ffdf2bbe3b5f
-  fluxnet_id: AU-Wom
-  date_commissioned: '2010-01-01'
-  latitude: -37.4222
-  longitude: 144.0944
-  elevation: 705.0
-  time_step: 30
-  freq_hz: 10
-  canopy_height: '23'
-  soil: silt-clay/clay
-  tower_height: '33'
-  vegetation: dry sclerophyll eucalypt forest
-  time_zone: Australia/Melbourne
-  UTC_offset: 10.0
 WombatStateForest2:
   id: https://w3id.org/tern/resources/bf3daf01-0e7a-4e18-aa9d-460be3fe06cc
   fluxnet_id: AU-Wom

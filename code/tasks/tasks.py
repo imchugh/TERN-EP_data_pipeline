@@ -34,8 +34,31 @@ from managers import paths
 ### BEGIN INITS ###
 ###############################################################################
 
-LOGGER_CONFIGS = paths.get_internal_configs('py_logger')
+logger_configs = paths.get_internal_configs('py_logger')
 logger = logging.getLogger(__name__)
+
+#------------------------------------------------------------------------------
+def _make_task_dataframe() -> pd.DataFrame:
+    """
+    Make a dataframe with tasks x sites matrix.
+
+    """
+
+    task_configs = paths.get_internal_configs(config_name='tasks')
+    tasks_df = pd.DataFrame(
+        data=False,
+        index=task_configs['sites'],
+        columns=list(task_configs['tasks'].keys())
+        )
+    for task in tasks_df.columns:
+        site_list = task_configs['tasks'][task]
+        if not site_list:
+            site_list = task_configs['sites']
+        tasks_df.loc[site_list, task] = True
+    return tasks_df
+#------------------------------------------------------------------------------
+
+tasks_df = _make_task_dataframe()
 
 ###############################################################################
 ### END INITS ###
@@ -47,86 +70,86 @@ logger = logging.getLogger(__name__)
 ### BEGIN TASK MANAGER CLASS ###
 ###############################################################################
 
-#------------------------------------------------------------------------------
-class TaskManager():
-    """
-    Class to allow retrieval of task functions and sites for which tasks are
-    enabled.
+# #------------------------------------------------------------------------------
+# class TaskManager():
+#     """
+#     Class to allow retrieval of task functions and sites for which tasks are
+#     enabled.
 
-    """
+#     """
 
-    #--------------------------------------------------------------------------
-    def __init__(self) -> None:
-        """
-        Initialise manager with tasks x sites matrix and function dicts / lists.
+#     #--------------------------------------------------------------------------
+#     def __init__(self) -> None:
+#         """
+#         Initialise manager with tasks x sites matrix and function dicts / lists.
 
-        """
+#         """
 
-        self.configs = paths.get_internal_configs('tasks')
-        self.site_master_list = self.configs['sites']
-        self.master_tasks = list(self.configs['tasks'].keys())
-        self._make_task_dataframe()
-    #--------------------------------------------------------------------------
+#         self.configs = paths.get_internal_configs('tasks')
+#         self.site_master_list = self.configs['sites']
+#         self.master_tasks = list(self.configs['tasks'].keys())
+#         self._make_task_dataframe()
+#     #--------------------------------------------------------------------------
 
-    #--------------------------------------------------------------------------
-    def _make_task_dataframe(self) -> pd.DataFrame:
-        """
-        Make a dataframe with tasks x sites matrix.
+#     #--------------------------------------------------------------------------
+#     def _make_task_dataframe(self) -> pd.DataFrame:
+#         """
+#         Make a dataframe with tasks x sites matrix.
 
-        """
+#         """
 
-        tasks_df = pd.DataFrame(
-            data=False,
-            index=self.site_master_list,
-            columns=self.master_tasks
-            )
-        for task in tasks_df.columns:
-            site_list = self.configs['tasks'][task]
-            if not site_list:
-                site_list = self.site_master_list
-            tasks_df.loc[site_list, task] = True
-        self.tasks_df = tasks_df
-    #--------------------------------------------------------------------------
+#         tasks_df = pd.DataFrame(
+#             data=False,
+#             index=self.site_master_list,
+#             columns=self.master_tasks
+#             )
+#         for task in tasks_df.columns:
+#             site_list = self.configs['tasks'][task]
+#             if not site_list:
+#                 site_list = self.site_master_list
+#             tasks_df.loc[site_list, task] = True
+#         self.tasks_df = tasks_df
+#     #--------------------------------------------------------------------------
 
-    #--------------------------------------------------------------------------
-    def get_site_list_for_task(self, task: str) -> list:
-        """
-        Return the list of sites for which task is enabled.
+#     #--------------------------------------------------------------------------
+#     def get_site_list_for_task(self, task: str) -> list:
+#         """
+#         Return the list of sites for which task is enabled.
 
-        Args:
-            task: name of task.
+#         Args:
+#             task: name of task.
 
-        Returns:
-            the list.
+#         Returns:
+#             the list.
 
-        """
+#         """
 
-        return self.tasks_df[self.tasks_df[task]==True].index.tolist()
-    #--------------------------------------------------------------------------
+#         return self.tasks_df[self.tasks_df[task]==True].index.tolist()
+#     #--------------------------------------------------------------------------
 
-    #--------------------------------------------------------------------------
-    def get_excluded_sites_for_task(self, task) -> list:
+#     #--------------------------------------------------------------------------
+#     def get_excluded_sites_for_task(self, task) -> list:
 
-        """
-        Return the list of sites for which task is not enabled.
+#         """
+#         Return the list of sites for which task is not enabled.
 
-        Args:
-            task: name of task.
+#         Args:
+#             task: name of task.
 
-        Returns:
-            the list.
+#         Returns:
+#             the list.
 
-        """
+#         """
 
-        return [
-            site for site in self.site_master_list
-            if not site in self.get_site_list_for_task(task=task)
-            ]
-    #--------------------------------------------------------------------------
+#         return [
+#             site for site in self.site_master_list
+#             if not site in self.get_site_list_for_task(task=task)
+#             ]
+#     #--------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
+# #------------------------------------------------------------------------------
 
-tasks_mngr = TaskManager()
+# tasks_mngr = TaskManager()
 
 ###############################################################################
 ### END TASK MANAGER CLASS ###
@@ -156,9 +179,6 @@ def construct_homogenised_TOA5(site: str) -> None:
 #------------------------------------------------------------------------------
 def construct_homogenised_TOA5_from_nc(site: str) -> None:
 
-    # nctoa5 = import_module('data_constructors.nc_toa5_constructor_old')
-    # datacon = nctoa5.NCtoTOA5Constructor(site=site)
-    # datacon.write_to_TOA5()
     nctoa5 = import_module('data_constructors.nc_toa5_constructor')
     nctoa5.construct_visualisation_TOA5(site=site, n_files=3)
 #------------------------------------------------------------------------------
@@ -202,7 +222,7 @@ def construct_status_xlsx() -> None:
 
     ns = import_module('network_monitoring.network_status')
     ns.write_status_xlsx(
-        site_list=tasks_mngr.get_site_list_for_task('construct_status_xlsx')
+        site_list=get_site_list_for_task('construct_status_xlsx')
         )
 #------------------------------------------------------------------------------
 
@@ -212,7 +232,7 @@ def construct_status_geojson() -> None:
 
     ns = import_module('network_monitoring.network_status')
     ns.write_status_geojson(
-        site_list=tasks_mngr.get_site_list_for_task('construct_status_geojson')
+        site_list=get_site_list_for_task('construct_status_geojson')
         )
 #------------------------------------------------------------------------------
 
@@ -273,6 +293,16 @@ def _file_fast_data(site: str, is_aux: bool) -> None:
     fdf = import_module('file_handling.fast_data_filer')
     fdf.move_fast_files(site=site, is_aux=is_aux)
 #------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+### END LOCAL DATA MOVING ###
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+### BEGIN DATA TRANSFERS ###
+#------------------------------------------------------------------------------
+
+
 
 #------------------------------------------------------------------------------
 ### END LOCAL DATA MOVING ###
@@ -351,9 +381,41 @@ def configure_logger(log_path):
 
     if logger.hasHandlers():
         logger.handlers.clear()
-    new_configs = LOGGER_CONFIGS.copy()
+    new_configs = logger_configs.copy()
     new_configs['handlers']['file']['filename'] = str(log_path)
     logging.config.dictConfig(new_configs)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_site_list_for_task(task: str) -> list:
+    """
+    Return the list of sites for which task is enabled.
+
+    Args:
+        task: name of task.
+
+    Returns:
+        the list.
+
+    """
+
+    return tasks_df[tasks_df[task]==True].index.tolist()
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_task_list_for_site(site: str) -> list:
+    """
+    Return the list of tasks enabled for site.
+
+    Args:
+        site: name of site.
+
+    Returns:
+        the list.
+
+    """
+
+    return tasks_df.columns[tasks_df.loc[site]]
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -404,7 +466,7 @@ def run_site_task_from_list(task: str) -> None:
 
     """
 
-    sites = tasks_mngr.get_site_list_for_task(task=task)
+    sites = get_site_list_for_task(task=task)
     for site in sites:
         run_site_task(task=task, site=site)
 #------------------------------------------------------------------------------

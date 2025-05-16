@@ -1,11 +1,27 @@
+AliceSpringsMulga:
+  soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc
+  soil_temperature: Ts_2-6cma, Ts_2-6cmb, Ts_2-6cmc
+  soil_moisture: Sws_0-10cma, Sws_0-10cmb, Sws_0-10cmc
 Boyagin:
   soil_heat_flux: Fg_8cma, Fg_8cmb
-  soil_temperature: Ts_05cma1, Ts_10cma1, Ts_20cma1, Ts_40cma, Ts_80cma
-  soil_moisture: Sws_05cma1, Sws_10cma1, Sws_20cma1, Sws_40cma, Sws_80cma
+  soil_temperature: Ts_05cmb1, Ts_10cmb1, Ts_20cmb1, Ts_40cmb, Ts_80cmb
+  soil_moisture: Sws_05cmb1, Sws_10cmb1, Sws_20cmb1, Sws_40cmb, Sws_80cmb
 Calperum:
   soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc
   soil_temperature: Ts_8cma, Ts_8cmb, Ts_8cmc
   soil_moisture: Sws_10cma, Sws_10cmb, Sws_10cmc
+Dookie1:
+  soil_heat_flux: Fg_16cma
+  soil_temperature: Ts_2-16cma
+  soil_moisture: Sws_8cma
+Fletcherview:
+  soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc, Fg_8cmd
+  soil_temperature: Ts_2-6cma, Ts_2-6cmb, Ts_2-6cmc, Ts_2-6cmd
+  soil_moisture: Sws_0-10cma, Sws_0-10cmb, Sws_0-10cmc, Sws_0-10cmd
+Litchfield:
+  soil_heat_flux: Fg_8cma, Fg_8cmb
+  soil_temperature: Ts_5cmb, Ts_20cmb, Ts_50cmb, Ts_100cmb, Ts_140cmb
+  soil_moisture: Sws_5cmb, Sws_20cmb, Sws_50cmb, Sws_100cmb, Sws_140cmb
 SilverPlains:
   soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc
   soil_temperature: Ts_10cma, Ts_10cmb, Ts_10cmc, Ts_30cma

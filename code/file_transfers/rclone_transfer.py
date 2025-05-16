@@ -245,29 +245,29 @@ def _push_pull_RTMC_images(which):
 #------------------------------------------------------------------------------
 def push_homogenised_TOA5():
 
-    _push_homogenised(stream='TOA5')
+    push_homogenised(stream='TOA5')
 #------------------------------------------------------------------------------
 
 # #------------------------------------------------------------------------------
 # def push_TOA5():
 
-#     _push_homogenised(stream='TOA5')
+#     push_homogenised(stream='TOA5')
 # #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def push_L1_xlsx():
 
-    _push_homogenised(stream='xlsx')
+    push_homogenised(stream='xlsx')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def push_L1_nc():
 
-    _push_homogenised(stream='nc')
+    push_homogenised(stream='nc')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def _push_homogenised(stream):
+def push_homogenised(stream: str) -> None:
 
     allowed_streams = pm.list_local_streams(resource='homogenised_data')
     if not stream in allowed_streams:

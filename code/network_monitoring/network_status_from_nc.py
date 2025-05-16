@@ -10,7 +10,7 @@ import datetime as dt
 import pandas as pd
 import time
 
-from file_handling import nc_reader, file_handler
+from file_handling import nc_io, file_handler
 from data_constructors.convert_calc_filter import filter_range
 from managers import metadata, paths
 
@@ -36,7 +36,7 @@ def get_data_status(site: str, run_time: dt.datetime=None) -> pd.DataFrame:
     # Grab the site-adjusted run time
     run_time = _get_site_time(
         site=site,
-        UTC_offset=md_mngr.site_details.UTC_offset,
+        UTC_offset=md_mngr.site_details['UTC_offset'],
         run_time=run_time
         )
 
@@ -50,7 +50,7 @@ def get_data_status(site: str, run_time: dt.datetime=None) -> pd.DataFrame:
             )
         .glob('*.nc')
         )[-1]
-    reader = nc_reader.NCReader(nc_file=file)
+    reader = nc_io.NCReader(nc_file=file)
     reader.ds = reader.ds.rename(flux_map)
 
     # Create a dataframe and parse the variables inidividually
@@ -58,6 +58,7 @@ def get_data_status(site: str, run_time: dt.datetime=None) -> pd.DataFrame:
     rslt = []
     for variable in md_mngr.list_variables():
         attrs = md_mngr.get_variable_attributes(variable=variable)
+        # try:
         rslt.append(
             attrs[['logger', 'table', 'file']].to_dict() |
             _parse_variable(
@@ -65,6 +66,8 @@ def get_data_status(site: str, run_time: dt.datetime=None) -> pd.DataFrame:
                 var_range=(attrs.plausible_min, attrs.plausible_max)
                 )
             )
+        # except KeyError:
+        #     breakpoint()
 
     # Dump to df and return
     return (
@@ -101,7 +104,7 @@ def get_file_status(
     # Grab the site-adjusted run time
     site_time = _get_site_time(
         site=site,
-        UTC_offset=md_mngr.site_details.UTC_offset,
+        UTC_offset=md_mngr.site_details['UTC_offset'],
         run_time=run_time
         )
 

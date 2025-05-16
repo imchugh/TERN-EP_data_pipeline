@@ -157,7 +157,7 @@ def _get_UTC_offset(df):
 
 #------------------------------------------------------------------------------
 def _parse_dates(date):
-    """Return the passed date string in pydtetime format"""
+    """Return the passed date string in pydatetime format"""
 
     DATE_FORMATS = ['%Y-%m-%d', '%d/%m/%Y']
     try:
@@ -239,6 +239,10 @@ def make_df():
             except KeyError:
                 temp_list.append(None)
         try:
+            # print(field)
+            # if site['label']['value'] == 'Yarramundi Irrigation Flux Station':
+            #     if field == 'date_decommissioned':
+            #         breakpoint()
             result_dict[field] = [funcs_dict[field](x) for x in temp_list]
         except KeyError:
             result_dict[field] = temp_list
@@ -320,13 +324,13 @@ class SiteDetails():
 
     #--------------------------------------------------------------------------
     def export_site_details_to_yml(self, site, output_path=None):
-        
+
         # Set the output path
         if output_path is None:
             output_path = (
                 pm.get_local_stream_path(
                     resource='network', stream='site_metadata'
-                    ) / 
+                    ) /
                 f'{site}_details.yml'
                 )
 
@@ -339,19 +343,19 @@ class SiteDetails():
         with open(file=output_path, mode='w', encoding='utf-8') as f:
             yaml.dump(data=site_data.to_dict(), stream=f, sort_keys=False)
     #--------------------------------------------------------------------------
-    
+
     #--------------------------------------------------------------------------
     def export_all_details_to_yml(self, output_path, operational_sites_only=True):
-        
+
         # Set the output path
         if output_path is None:
             output_path = (
                 pm.get_local_stream_path(
                     resource='network', stream='site_metadata'
-                    ) / 
+                    ) /
                 'site_details.yml'
                 )
-            
+
         if operational_sites_only:
             site_list = self.get_operational_sites(site_name_only=True)
         else:

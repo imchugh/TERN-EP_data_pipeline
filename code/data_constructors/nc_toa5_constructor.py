@@ -152,11 +152,15 @@ def _drop_extraneous_variables(ds: xr.Dataset) -> xr.Dataset:
         'soil_temperature': 'Ts',
         'soil_moisture': 'Sws'
         }
-    vars_to_keep = (
-        paths.get_internal_configs(config_name='soil_variables')
-        [ds.attrs['site_name']]
-        )
-    drop_list = []
+
+    try:
+        vars_to_keep = (
+            paths.get_internal_configs(config_name='soil_variables')
+            [ds.attrs['site_name']]
+            )
+    except KeyError:
+        vars_to_keep = {}
+
     for quantity, keep_variables in vars_to_keep.items():
         quantity_str = soil_keys[quantity] + '_'
         available_variables = [
@@ -176,8 +180,13 @@ def _drop_extraneous_variables(ds: xr.Dataset) -> xr.Dataset:
         }
     keep_var = min(var_dict, key=var_dict.get)
     temp_vars.remove(keep_var)
+    drop_list += temp_vars
     for quantity in ['RH', 'AH']:
-        drop_list += [var.replace('Ta', quantity) for var in temp_vars]
+        expected_vars = [var.replace('Ta', quantity) for var in temp_vars]
+        for var in expected_vars:
+            if var in ds.variables:
+                drop_list.append(var)
+
 
     # Remove all extraneous variables
     return ds.drop(drop_list)
@@ -224,7 +233,10 @@ def _rename_variables(ds: xr.Dataset) -> xr.Dataset:
                 and not 'IRGA' in var
                 }
             )
-    ds = ds.rename(rslt)
+    try:
+        ds = ds.rename(rslt)
+    except ValueError:
+        breakpoint()
 
     # Rename wind data
     ds = ds.rename({'Wd_SONIC': 'Wd', 'Ws_SONIC': 'Ws'})
@@ -234,6 +246,12 @@ def _rename_variables(ds: xr.Dataset) -> xr.Dataset:
     if co2_units == 'mg/m^3':
         rslt = {'CO2_IRGA': 'CO2c_IRGA'}
     ds = ds.rename(rslt)
+
+    # Check for multiple rain replicates, use the first...
+    precip_list = [var for var in ds.variables if 'Precip' in var]
+    precip_var = precip_list[0]
+    if not precip_var == 'Precip':
+        ds = ds.rename({precip_var: 'Precip'})
 
     return ds
 #------------------------------------------------------------------------------
@@ -252,7 +270,6 @@ def _apply_limits(ds: xr.Dataset) -> xr.Dataset:
     """
 
     logger.info('    - Applying variable range limits...')
-
     parser = md.PFPNameParser()
     variables = list(ds.variables)
     for variable in ['latitude','longitude']:
@@ -261,7 +278,10 @@ def _apply_limits(ds: xr.Dataset) -> xr.Dataset:
         try:
             attrs = parser.parse_variable_name(variable_name=variable)
         except TypeError:
-            print(f'Variable {variable} did not pass!')
+            logger.error(
+                f'      Variable {variable} naming does not pass '
+                'standardisation tests!'
+                )
             attrs = {'plausible_min': None, 'plausible_max': None}
         ds[variable] = ccf.filter_range(
             series=ds[variable],

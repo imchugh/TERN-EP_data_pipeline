@@ -34,6 +34,7 @@ def _read_yml(file):
 
 local_paths = _read_yml(file=LOCAL_CONFIG_PATH_FILE)
 remote_paths = _read_yml(file=REMOTE_CONFIG_PATH_FILE)
+ALLOWED_CONFIG_TYPES = ['.yml', '.txt']
 #------------------------------------------------------------------------------
 
 
@@ -43,24 +44,43 @@ remote_paths = _read_yml(file=REMOTE_CONFIG_PATH_FILE)
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def list_internal_config_names():
+def list_internal_config_files():
 
     return [
-        file.stem for file in
-        (pathlib.Path(__file__).resolve().parents[1] / 'configs').glob('*.yml')
+        file for file in
+        (pathlib.Path(__file__).resolve().parents[1] / 'configs').glob('*')
+        if file.suffix in ALLOWED_CONFIG_TYPES
         ]
+    # return [
+    #     file.stem for file in
+    #     (pathlib.Path(__file__).resolve().parents[1] / 'configs').glob(f'*{suffix}')
+    #     for suffix in ALLOWED_CONFIG_TYPES
+    #     ]
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def list_internal_config_names():
+
+    return [file.stem for file in list_internal_config_files()]
+
+    # return [
+    #     file.stem for file in
+    #     (pathlib.Path(__file__).resolve().parents[1] / 'configs').glob(f'*{suffix}')
+    #     for suffix in ALLOWED_CONFIG_TYPES
+    #     ]
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def get_internal_configs(config_name):
 
-    path = (
-        pathlib.Path(__file__).resolve().parents[1] /
-        'configs' /
-        f'{config_name}.yml'
-        )
-    with open(path) as f:
-        return yaml.safe_load(stream=f)
+    files_dict = {file.stem: file for file in list_internal_config_files()}
+    path = files_dict[config_name]
+    if path.suffix == '.txt':
+        with open(path) as f:
+            return f.read()
+    if path.suffix == '.yml':
+        with open(path) as f:
+            return yaml.safe_load(stream=f)
 #------------------------------------------------------------------------------
 
 ###############################################################################

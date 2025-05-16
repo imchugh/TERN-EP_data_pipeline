@@ -45,7 +45,7 @@ import utils.metadata_handlers as mh
 #------------------------------------------------------------------------------
 SITE_DETAIL_ALIASES = {'elevation': 'altitude'}
 SITE_DETAIL_SUBSET = [
-    'fluxnet_id', 'latitude', 'longitude', 'elevation', 'time_step', 
+    'fluxnet_id', 'latitude', 'longitude', 'elevation', 'time_step',
     'time_zone', 'canopy_height', 'tower_height', 'soil', 'vegetation'
     ]
 VAR_METADATA_SUBSET = [
@@ -119,7 +119,7 @@ class L1DataConstructor():
 
         global_attrs = io.read_yml(
             file=pm.get_local_stream_path(
-                resource='configs', 
+                resource='configs',
                 stream='nc_generic_attrs'
                 )
             )
@@ -344,7 +344,7 @@ class L1DataConstructor():
 
         dim_attrs = io.read_yml(
             file=pm.get_local_stream_path(
-                resource='configs', 
+                resource='configs',
                 stream='nc_dim_attrs'
                 )
             )
@@ -405,7 +405,7 @@ class L1DataConstructor():
 
         dim_attrs = io.read_yml(
             file=pm.get_local_stream_path(
-                resource='configs', 
+                resource='configs',
                 stream='nc_dim_attrs'
                 )
             )
@@ -496,11 +496,11 @@ def write_nc_year_file(site: str, year: int=None, overwrite: bool=False) -> None
         None.
 
     """
-    
+
     if year is None:
         year=dt.datetime.now().year
     expected_file = pm.get_local_stream_path(
-        resource='homogenised_data', stream='nc', subdirs=[site], 
+        resource='homogenised_data', stream='nc', subdirs=[site],
         file_name=f'{site}_{year}_L1.nc'
         )
     if expected_file.exists():
@@ -533,7 +533,7 @@ def append_to_current_nc_file(site: str):
 
     year = dt.datetime.now().year
     expected_file = pm.get_local_stream_path(
-        resource='homogenised_data', stream='nc', subdirs=[site], 
+        resource='homogenised_data', stream='nc', subdirs=[site],
         file_name=f'{site}_{year}_L1.nc'
         )
     if not expected_file.exists():
@@ -562,7 +562,7 @@ def append_to_nc_file(site: str, nc_file: pathlib.Path | str):
     md_mngr = mh.MetaDataManager(site=site)
     last_raw_date = min(
         [
-            md_mngr.get_file_attributes(file=file, return_field='end_date') 
+            md_mngr.get_file_attributes(file=file, return_field='end_date')
             for file in md_mngr.list_files()
             ]
         )
@@ -724,7 +724,7 @@ class StdDataConstructor():
     #--------------------------------------------------------------------------
     def __init__(
             self, site: str, concat_files: bool=True, error_on_missing=True,
-            constrain_start_to_flux: bool=False, 
+            constrain_start_to_flux: bool=False,
             constrain_end_to_flux: bool=True
             ) -> None:
         """
@@ -757,15 +757,15 @@ class StdDataConstructor():
                 )
             if constrain_start_to_flux:
                 start_date = self.md_mngr.get_file_attributes(
-                    file=flux_file, include_backups=concat_files, 
+                    file=flux_file, include_backups=concat_files,
                     return_field='start_date'
                     )
             if constrain_end_to_flux:
                 end_date = self.md_mngr.get_file_attributes(
-                    file=flux_file, include_backups=concat_files, 
+                    file=flux_file, include_backups=concat_files,
                     return_field='end_date'
-                    )                
-                      
+                    )
+
         # Merge the raw data to the principle data frequency
         merge_dict = self.md_mngr.translate_variables_by_file(abs_path=True)
         merge_to_int = f'{int(self.md_mngr.get_site_details().time_step)}min'
@@ -1085,13 +1085,13 @@ def generate_std_file(site):
 
 #------------------------------------------------------------------------------
 def _get_std_file_path(site):
-    
+
     return (
         pm.get_local_stream_path(
             resource='homogenised_data',
             stream='TOA5',
             site=site
-            ) / 
+            ) /
         f'{site}_merged_std.dat'
         )
 #------------------------------------------------------------------------------
@@ -1133,10 +1133,10 @@ def merge_data(
         merged data.
 
     """
-        
+
     data_list, header_list = [], []
     for file in files:
-       
+
         # If type is dict, use dict keys as variable map
         try:
             usecols = files[file]
@@ -1165,8 +1165,8 @@ def merge_data(
             data_handler.get_conditioned_headers(
                 usecols=usecols, drop_non_numeric=True
                 )
-            )         
-    
+            )
+
     # Concatenate lists
     headers = pd.concat(header_list).fillna('')
     data = pd.concat(data_list, axis=1)

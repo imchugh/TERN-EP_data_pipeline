@@ -7,95 +7,36 @@ Created on Mon Sep 12 12:34:58 2022
 This script fetches flux station details from TERN's SPARQL endpoint
 """
 
-#------------------------------------------------------------------------------
-### STANDARD IMPORTS ###
+###############################################################################
+### BEGIN IMPORTS ###
+###############################################################################
+
 import datetime as dt
 import numpy as np
 import pandas as pd
+import pathlib
 from pytz import timezone
 import requests
 from timezonefinder import TimezoneFinder
 import yaml
-#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# CUSTOM IMPORTS #
+
 from managers import paths
-#------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-### CONSTANTS ###
-#------------------------------------------------------------------------------
+###############################################################################
+### END IMPORTS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN INITS ###
+###############################################################################
 
 USERNAME = 'site-query'
 PASSWORD = 'password123'
 SPARQL_ENDPOINT = "https://graphdb.tern.org.au/repositories/knowledge_graph_core"
-SPARQL_QUERY = """
-PREFIX tern: <https://w3id.org/tern/ontologies/tern/>
-PREFIX wgs: <http://www.w3.org/2003/01/geo/wgs84_pos#>
-PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>
-PREFIX geosparql: <http://www.opengis.net/ont/geosparql#>
-PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-PREFIX tern-loc: <https://w3id.org/tern/ontologies/loc/>
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-
-SELECT ?id ?label ?fluxnet_id ?date_commissioned ?date_decommissioned ?latitude ?longitude ?elevation ?time_step ?freq_hz ?canopy_height ?soil ?tower_height ?vegetation
-WHERE {
-    ?id a tern:FluxTower ;
-        rdfs:label ?label ;
-        tern:fluxnetID ?fluxnet_id .
-
-    OPTIONAL {
-        ?id tern:dateCommissioned ?date_commissioned .
-    }
-    OPTIONAL {
-        ?id tern:dateDecommissioned ?date_decommissioned .
-    }
-    OPTIONAL {
-        ?id geosparql:hasGeometry ?geo .
-        ?geo wgs:lat ?latitude ;
-             wgs:long ?longitude .
-        OPTIONAL {
-            ?geo tern-loc:elevation ?elevation .
-        }
-    }
-    OPTIONAL {
-        ?id tern:hasAttribute ?time_step_attr .
-        ?time_step_attr tern:attribute <http://linked.data.gov.au/def/tern-cv/ca60779d-4c00-470c-a6b6-70385753dff1> ;
-            tern:hasSimpleValue ?time_step .
-    }
-    OPTIONAL {
-        ?id tern:hasAttribute ?freq_hz_attr .
-        ?freq_hz_attr tern:attribute <http://linked.data.gov.au/def/tern-cv/ce39d9fd-ef90-4540-881d-5b9e779d9842> ;
-            tern:hasSimpleValue ?freq_hz .
-    }
-    OPTIONAL {
-        ?id tern:hasAttribute ?canopy_height_attr .
-        ?canopy_height_attr tern:attribute <http://linked.data.gov.au/def/tern-cv/c1920aed1295ee17a2aa05a9616e9b11d35e05b56f72ccc9a3748eb31c913551> ;
-            tern:hasSimpleValue ?canopy_height .
-    }
-    OPTIONAL {
-        ?id tern:hasAttribute ?soil_attr .
-        ?soil_attr tern:attribute <http://linked.data.gov.au/def/tern-cv/ed2ebb7c-561a-4892-9662-3b3aaa9ec768> ;
-            tern:hasSimpleValue ?soil .
-    }
-    OPTIONAL {
-        ?id tern:hasAttribute ?tower_height_attr .
-        ?tower_height_attr tern:attribute <http://linked.data.gov.au/def/tern-cv/d54e6e12-b9a6-42ac-ad2f-c56fb0d3e5d6> ;
-            tern:hasSimpleValue ?tower_height_double .
-    }
-    OPTIONAL {
-        ?id tern:hasAttribute ?vegetation_attr .
-        ?vegetation_attr tern:attribute <http://linked.data.gov.au/def/tern-cv/1338fc29-53ef-4b27-8903-b824e973807a> ;
-            tern:hasSimpleValue ?vegetation .
-    }
-
-    BIND(xsd:decimal(?tower_height_double) AS ?tower_height)
-
-}
-ORDER BY ?label
-"""
-# LIMIT 2
 ALIAS_DICT = {'Alpine Peatland': 'Alpine Peat',
               'Aqueduct Snow Gum': 'SnowGum',
               'ArcturusEmerald': 'Emerald',
@@ -107,99 +48,96 @@ ALIAS_DICT = {'Alpine Peatland': 'Alpine Peat',
               'Silver Plain': 'SilverPlains',
               'Wellington Research Station Flux Tower': 'Wellington'
               }
-
 HEADERS = {
     "content-type": "application/sparql-query",
     "accept": "application/sparql-results+json"
     }
-
+# DATA_DTYPES_OLD = {
+#     'id': str, 'fluxnet_id': str, 'date_commissioned': 'datetime64[ns]',
+#     'date_decommissioned': 'datetime64[ns]', 'latitude': float,
+#     'longitude': float, 'elevation': float, 'time_step': float,
+#     'freq_hz': float, 'soil': str, 'tower_height': float, 'vegetation': str,
+#     'canopy_height': 'O', 'time_zone': str, 'UTC_offset': float
+#     }
+DATA_DTYPES = {
+    'id': 'string', 'fluxnet_id': 'string', 'date_commissioned': 'datetime64[ns]',
+    'date_decommissioned': 'datetime64[ns]', 'latitude': float,
+    'longitude': float, 'elevation': float, 'time_step': float,
+    'freq_hz': float, 'soil': 'string', 'tower_height': float, 'vegetation': 'string',
+    'canopy_height': 'string', 'time_zone': 'string', 'UTC_offset': float
+    }
 DATE_VARS = ['date_commissioned', 'date_decommissioned']
-NUM_VARS = [
-    'latitude', 'longitude', 'elevation', 'time_step', 'freq_hz',
-    'tower_height', 'UTC_offset', 'canopy_height'
-    ]
-DATE_FORMATS = ['%Y-%m-%d', '%d/%m/%Y']
+INT_VARS = ['time_step', 'freq_hz']
+SPARQL_QUERY = paths.get_internal_configs('sparql_query')
+tf = TimezoneFinder()
+
+###############################################################################
+### END INITS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN FUNCTIONS ###
+###############################################################################
+
+#------------------------------------------------------------------------------
+def import_data_from_db() -> pd.DataFrame:
+    """
+    Query database and return site metadata.
+
+    Raises:
+        RuntimeError: raised if query unsuccessful.
+
+    Returns:
+        The metadata.
+
+    """
+
+    # Query db, parse the response and create dicts for sites
+    response = requests.post(
+        SPARQL_ENDPOINT, data=SPARQL_QUERY, headers=HEADERS,
+        auth=(USERNAME, PASSWORD)
+        )
+    if response.status_code != 200:
+        raise RuntimeError(response.text)
+    json_dict = response.json()
+    rslt = []
+    for data_set in json_dict['results']['bindings']:
+        rslt.append(
+            {key: sub_dict['value'] for key, sub_dict in data_set.items()}
+            )
+
+    # Construct and index the dataframe
+    data = pd.DataFrame(rslt, dtype='O')
+    data.index = pd.Index(
+        data=[_parse_labels(label) for label in data.label],
+        name='Site'
+        )
+    data = data.drop('label', axis=1)
+
+    # Format the data
+    data = _format_data(data=data)
+
+    # Create new variables and return
+    data['time_zone'] = data.apply(_get_timezone, axis=1)
+    data['UTC_offset'] = data.time_zone.apply(_get_UTC_offset)
+
+    return data
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-### PRIVATE FUNCTIONS ###
-#------------------------------------------------------------------------------
+def _parse_labels(label: str) -> str:
+    """
+    Rebuild labels to match standard site names.
 
-#------------------------------------------------------------------------------
-def _get_timezones(df):
-    """Get the timezone (as region/city)"""
+    Args:
+        label: the site name label to edit.
 
-    tf = TimezoneFinder()
-    tz_list = []
-    for site in df.index:
-        try:
-            tz = tf.timezone_at(
-                lng=df.loc[site, 'longitude'],
-                lat=df.loc[site, 'latitude']
-                )
-        except ValueError:
-            tz = np.nan
-        tz_list.append(tz)
-    return tz_list
-#------------------------------------------------------------------------------
+    Returns:
+        the edited site name label.
 
-#------------------------------------------------------------------------------
-def _get_UTC_offset(df):
-    """Get the UTC offset (local standard time)"""
-
-    offset_list = []
-    date = dt.datetime.now()
-    for site in df.index:
-        try:
-            tz_obj = timezone(df.loc[site, 'time_zone'])
-            utc_offset = tz_obj.utcoffset(date)
-            utc_offset -= tz_obj.dst(date)
-            utc_offset = utc_offset.seconds / 3600
-        except AttributeError:
-            utc_offset = np.nan
-        offset_list.append(utc_offset)
-    return offset_list
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def _parse_str_2_date(date):
-    """Return the passed date string in pydatetime format"""
-
-    try:
-        return dt.datetime.strptime(date, DATE_FORMATS[0]).date()
-    except ValueError:
-        return dt.datetime.strptime(date, DATE_FORMATS[1]).date()
-    except TypeError:
-        return
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def _parse_date_2_str(date):
-
-    try:
-        return date.strftime(DATE_FORMATS[0])
-    except AttributeError:
-        return
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def _parse_nums(float_str):
-    """Return float or int as appropriate"""
-
-    try:
-        the_float = float(float_str)
-        if int(the_float) == the_float:
-            return int(the_float)
-        return the_float
-    except ValueError:
-        return float_str
-    except TypeError:
-        return
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def _parse_labels(label):
-    """Format site name"""
+    """
 
     new_label = label.replace(' Flux Station', '')
     try:
@@ -210,145 +148,225 @@ def _parse_labels(label):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-### PRIVATE FUNCTIONS ###
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def make_df_from_db():
+def _get_timezone(row: pd.Series) -> str:
     """
-    Query SPARQL endpoint for site data
+    Use lat / long to find timezone name.
 
-    Raises
-    ------
-    RuntimeError
-        If no response to request at server end.
+    Args:
+        row: series containing latitude and longitude.
 
-    Returns
-    -------
-    df : pd.core.Frame.DataFrame
-        Dataframe containing site details.
+    Returns:
+        timezone name.
 
     """
 
-    # Inits
-    funcs_dict = (
-        {'label': _parse_labels} |
-        {var: _parse_str_2_date for var in DATE_VARS} |
-        {var: _parse_nums for var in NUM_VARS}
+    try:
+        return tf.timezone_at(lng=row['longitude'], lat=row['latitude'])
+    except ValueError:
+        return np.nan
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def _get_UTC_offset(time_zone: str) -> float:
+    """
+    Find the offset in decimal hours from UTC.
+
+    Args:
+        time_zone: name of time zone (format: `city/country`).
+
+    Returns:
+        the offset.
+
+    """
+
+    date = dt.datetime.now()
+    try:
+        tz_obj = timezone(time_zone)
+        utc_offset = tz_obj.utcoffset(date)
+        utc_offset -= tz_obj.dst(date)
+        utc_offset = utc_offset.seconds / 3600
+    except AttributeError:
+        utc_offset = np.nan
+    return utc_offset
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def import_data_from_yml() -> pd.DataFrame:
+    """
+    Import the site metadata from the local yml file (written from the db).
+
+    Returns:
+        the metadata.
+
+    """
+
+    return _format_data(
+        data=(
+            pd.DataFrame(paths.get_internal_configs(
+                config_name='site_metadata')
+                )
+            )
+        .T
+        )
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def _format_data(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Format the data.
+
+    Args:
+        data: the unformatted data.
+
+    Returns:
+        the formatted data.
+
+    """
+
+    # Handle possible missing variables
+    types = {
+        key: value for key, value in DATA_DTYPES.items()
+        if key in data.columns
+        }
+
+    # For string variables, replace missing with ''
+    str_types = {
+        key: value for key, value in types.items() if value == 'string'
+        }
+    data[list(str_types.keys())] = (
+        data[str_types.keys()].replace((None, np.nan), '')
         )
 
-    # Query db
-    response = requests.post(
-        SPARQL_ENDPOINT, data=SPARQL_QUERY, headers=HEADERS,
-        auth=(USERNAME, PASSWORD)
+    # Format and return
+    return (
+        data
+        .astype(types)
+        .astype({var: 'Int64' for var in INT_VARS})
         )
-    if response.status_code != 200:
-        raise RuntimeError(response.text)
-    json_dict = response.json()
-
-    # Parse returned fields
-    fields = json_dict['head']['vars']
-    result_dict = {}
-    for field in fields:
-        temp_list = []
-        for site in json_dict['results']['bindings']:
-            try:
-                temp_list.append(site[field]['value'])
-            except KeyError:
-                temp_list.append(None)
-        try:
-            result_dict[field] = [funcs_dict[field](x) for x in temp_list]
-        except KeyError:
-            result_dict[field] = temp_list
-    names = result_dict.pop('label')
-
-    # Build df
-    df = pd.DataFrame(data=result_dict, index=names).sort_index()
-    df.dropna(subset=['elevation', 'latitude', 'longitude'], inplace=True)
-    df = df.assign(time_zone = _get_timezones(df))
-    df = df.assign(UTC_offset = _get_UTC_offset(df))
-
-    # Done
-    return df
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def make_df_from_yml():
+def export_data_to_yml(
+        output_path: pathlib.Path | str=None, operational_sites_only: bool=True
+        ):
+    """
+    Collect the data from the db and spit out to yml.
 
-    # Inits
-    funcs_dict = (
-        {'label': _parse_labels} |
-        {var: _parse_str_2_date for var in DATE_VARS} |
-        {var: _parse_nums for var in NUM_VARS}
+    Args:
+        output_path (optional): output path for the yml file. Defaults to None.
+        operational_sites_only (optional): only output the operational sites.
+        Defaults to True.
+
+    Returns:
+        None.
+
+    """
+
+    # Set the output path
+    if output_path is None:
+        output_path = (
+            paths.get_local_stream_path(
+                resource='network', stream='site_metadata'
+                ) /
+            'site_details.yml'
+            )
+
+    # Get the data and truncate to operational sites only
+    data = import_data_from_db()
+    drop_vars = []
+    if operational_sites_only:
+        data = (
+        data[pd.isnull(data.date_decommissioned)]
         )
+        drop_vars = ['date_decommissioned']
 
-    data = paths.get_internal_configs(config_name='site_metadata')
+     # Convert date variables back to string
+    data = data.astype({label: 'str' for label in DATE_VARS})
 
-    rslt = {}
-    for key, vars_dict in data.items():
-        for this_variable in vars_dict.keys():
-            try:
-                func = funcs_dict[this_variable]
-                vars_dict[this_variable] = func(vars_dict[this_variable])
-            except KeyError:
-                pass
-        rslt[key] = vars_dict
+    # Drop date decommissioned if only operational sites returned
+    data = data.drop(drop_vars, axis=1)
 
-    return pd.DataFrame(rslt).T
-    # return df
+    # Convert null values to None, which should be null in yaml
+    site_data = {
+        site: _format_canopy_height(
+            in_dict=data.loc[site].replace((np.nan, 'nan'), None).to_dict()
+            )
+        for site in data.index
+        }
+
+    # Output to yaml
+    with open(file=output_path, mode='w', encoding='utf-8') as f:
+        yaml.dump(data=site_data, stream=f, sort_keys=False)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-### CLASSES ###
+def _format_canopy_height(in_dict):
+    """
+    Convert canopy heights to floats where there are valid data.
+
+    Args:
+        in_dict: dictionary containing canopy_height as str.
+
+    Returns:
+        Dictionary containing canopy height as float.
+
+    """
+
+    # Try to convert canopy height to a float.
+    try:
+        in_dict.update({'canopy_height': float(in_dict['canopy_height'])})
+    except (ValueError, TypeError):
+        pass
+    return in_dict
 #------------------------------------------------------------------------------
+
+###############################################################################
+### END FUNCTIONS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN CLASSES ###
+###############################################################################
 
 #------------------------------------------------------------------------------
 class SiteDetailsManager():
-
     """Class to retrieve site data from SPARQL endpoint"""
 
-    def __init__(self, use_local=False):
+    #--------------------------------------------------------------------------
+    def __init__(self, use_local: bool=False) -> None:
+        """
+        Populate class with database content.
+
+        Args:
+            use_local (optional): if true, populate from local yml file.
+            If false, populate from remote db. Defaults to False.
+
+        Returns:
+            None.
+
+        """
 
         if use_local:
-            self.df = make_df_from_yml()
+            self.df = import_data_from_yml()
         else:
-            self.df = make_df_from_db()
-
-    #--------------------------------------------------------------------------
-    def export_to_excel(self, output_path, operational_sites_only=True):
-
-        """
-
-        Parameters
-        ----------
-        path : str
-            Output path for excel spreadsheet.
-        operational_sites_only : Boolean, optional
-            Drop non-operational sites. The default is True.
-
-        Returns
-        -------
-        None.
-
-        """
-
-        if operational_sites_only:
-            df = self.get_operational_sites()
-        else:
-            df = self.df
-        df.to_excel(output_path, index_label='Site')
+            self.df = import_data_from_db()
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_operational_sites(self, site_name_only=False):
-
+    def get_operational_sites(
+            self, site_name_only: bool=False
+            ) -> pd.DataFrame | list:
         """
         Get the operational subset of sites.
 
-        Returns
-        -------
-        pandas dataframe
-            Dataframe containing information only for operational sites.
+        Args:
+            site_name_only (optional): if True, returns only the list of |
+            operational sites (no metadata). Defaults to False.
+
+        Returns:
+            dataframe containing operation site data or list of operation sites.
 
         """
 
@@ -362,53 +380,68 @@ class SiteDetailsManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_single_site_details(self, site, field=None):
+    def get_single_site_details(
+            self, site: str, field: str=None
+            ) -> pd.Series | str:
+        """
+        Return fields for a single site.
 
+        Args:
+            site: name of site.
+            field (optional): name of field to return. Defaults to None.
+
+        Returns:
+            series of fields as series or individual field as str.
+
+        """
+
+        # Format the output data
         if not field:
             return self.df.loc[site]
         return self.df.loc[site, field]
     #--------------------------------------------------------------------------
 
-    # #--------------------------------------------------------------------------
-    # def export_site_details_to_yml(self, site, output_path=None):
-
-    #     # Set the output path
-    #     if output_path is None:
-    #         output_path = (
-    #             paths.get_local_stream_path(
-    #                 resource='network', stream='site_metadata'
-    #                 ) /
-    #             f'{site}_details.yml'
-    #             )
-
-    #     # Format the data
-    #     site_data = (
-    #         _format_site_data(site_data=self.df.loc[site].fillna('')).to_dict()
-    #         )
-
-    #     # Output the data
-    #     with open(file=output_path, mode='w', encoding='utf-8') as f:
-    #         yaml.dump(data=site_data.to_dict(), stream=f, sort_keys=False)
-    # #--------------------------------------------------------------------------
-
     #--------------------------------------------------------------------------
-    def export_all_details_to_yml(self, output_path, operational_sites_only=True):
+    def get_single_site_details_as_dict(
+        self, site: str, field: str=None
+        ) -> pd.Series | str:
+        """
 
-        # Set the output path
-        if output_path is None:
-            output_path = (
-                paths.get_local_stream_path(
-                    resource='network', stream='site_metadata'
-                    ) /
-                'site_details.yml'
-                )
 
-        if operational_sites_only:
-            site_list = self.get_operational_sites(site_name_only=True)
-        else:
-            site_list = self.df.index.tolist()
+        Args:
+            site (str): DESCRIPTION.
+            field (str, optional): DESCRIPTION. Defaults to None.
 
-        site_data = {site: self.df.loc[site].to_dict() for site in site_list}
-        with open(file=output_path, mode='w', encoding='utf-8') as f:
-            yaml.dump(data=site_data, stream=f, sort_keys=False)
+        Returns:
+            rslt (TYPE): DESCRIPTION.
+
+        """
+
+        # Get the data series and convert to dict, and subset if field requested
+        rslt = self.df.loc[site].to_dict()
+        if field:
+            rslt = {field: rslt.pop(field)}
+
+        try:
+            rslt['canopy_height'] = float(rslt['canopy_height'])
+        except KeyError:
+            pass
+        except ValueError:
+            pass
+
+        for date_var in ['date_commissioned', 'date_decommissioned']:
+            try:
+                rslt[date_var] = rslt[date_var].to_pydatetime()
+            except KeyError:
+                continue
+
+        if len(rslt) == 1:
+            return list(rslt.values())[0]
+        return rslt
     #--------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+
+###############################################################################
+### END CLASSES ###
+###############################################################################

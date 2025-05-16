@@ -32,7 +32,6 @@ import xarray as xr
 from data_constructors import convert_calc_filter as ccf
 from managers import metadata as md
 from managers import paths
-import file_handling.file_io as io
 import file_handling.file_handler as fh
 
 ###############################################################################
@@ -138,12 +137,7 @@ class L1DataConstructor():
 
         # Merge the raw data
         merge_dict = self.md_mngr.translate_variables_by_file(abs_path=True)
-        # merge_dict = {
-        #     file: self.md_mngr.translate_variables_by_table(table=table)
-        #     for table, file in self.md_mngr.map_tables_to_files(abs_path=True).items()
-        #     }
-
-        merge_to_int = f'{int(self.md_mngr.site_details.time_step)}min'
+        merge_to_int = f'{self.md_mngr.site_details["time_step"]}min'
         return (
             fh.merge_data(
                 files=merge_dict,
@@ -195,8 +189,8 @@ class L1DataConstructor():
 
         # Apply diagnostic conversions
         n_samples = (
-            self.md_mngr.site_details.freq_hz *
-            self.md_mngr.site_details.time_step *
+            self.md_mngr.site_details['freq_hz'] *
+            self.md_mngr.site_details['time_step'] *
             60
             )
         for diag_var, units in self.md_mngr.diag_types.items():
@@ -268,12 +262,8 @@ class L1DataConstructor():
 
         """
 
-        global_attrs = io.read_yml(
-            file=paths.get_local_stream_path(
-                resource='configs',
-                stream='nc_generic_attrs'
-                )
-            )
+        # Get generic global attributes
+        global_attrs = paths.get_internal_configs('generic_global_attrs')
         new_dict = {
             'metadata_link':
                 global_attrs['metadata_link'].replace('<site>', self.site),
@@ -281,13 +271,25 @@ class L1DataConstructor():
             }
         global_attrs.update(new_dict)
 
-        site_specific_attrs = (
-            self.md_mngr.site_details
-            [SITE_DETAIL_SUBSET]
-            .rename(SITE_DETAIL_ALIASES)
-            .to_dict()
-            )
-        return global_attrs | site_specific_attrs
+        # Get site-specific global attributes
+        site_specific_attrs = {
+            attr: self.md_mngr.site_details[attr]
+            for attr in SITE_DETAIL_SUBSET
+            }
+        for old_name, new_name in SITE_DETAIL_ALIASES.items():
+            site_specific_attrs[new_name] = site_specific_attrs.pop(old_name)
+
+        # Get custom global site attributes (any shared keys are overriden)
+        try:
+            custom_attrs = (
+                paths.get_internal_configs(config_name='site_custom_metadata')
+                [self.site]
+                )
+        except KeyError:
+            custom_attrs = {}
+
+        # Combine and return
+        return global_attrs | site_specific_attrs | custom_attrs
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -358,7 +360,8 @@ class L1DataConstructor():
                 )
         bounds = self._get_year_bounds(
             year=year,
-            time_step=self.global_attrs['time_step']
+            time_step=self.md_mngr.site_details['time_step']
+            # time_step=self.global_attrs['time_step']
             )
         return self._build_xarray_dataset(
             df=self.data.loc[bounds[0]: bounds[1]]
@@ -482,7 +485,7 @@ class L1DataConstructor():
         year_list = (
             (
                 pd.to_datetime(ds.time.values) -
-                dt.timedelta(minutes=self.global_attrs['time_step'])
+                dt.timedelta(minutes=self.md_mngr.site_details['time_step'])
                 )
             .year
             .unique()
@@ -529,12 +532,7 @@ class L1DataConstructor():
 
         """
 
-        dim_attrs = io.read_yml(
-            file=paths.get_local_stream_path(
-                resource='configs',
-                stream='nc_dim_attrs'
-                )
-            )
+        dim_attrs = paths.get_internal_configs('nc_dim_attrs')
         for dim in ds.dims:
             ds[dim].attrs = dim_attrs[dim]
     #--------------------------------------------------------------------------
@@ -552,7 +550,7 @@ class L1DataConstructor():
 
         """
 
-        ds.time.encoding['units']='days since 1800-01-01 00:00:00.0'
+        ds.time.encoding['units']='seconds since 1800-01-01 00:00:00.0'
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -602,12 +600,7 @@ class L1DataConstructor():
 
         """
 
-        dim_attrs = io.read_yml(
-            file=paths.get_local_stream_path(
-                resource='configs',
-                stream='nc_dim_attrs'
-                )
-            )
+        dim_attrs = paths.get_internal_configs('nc_dim_attrs')
         ds['crs'] = (
             ['time', 'latitude', 'longitude'],
             np.tile(np.nan, (len(ds.time), 1, 1)),

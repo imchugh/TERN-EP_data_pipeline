@@ -58,101 +58,12 @@ def _make_task_dataframe() -> pd.DataFrame:
     return tasks_df
 #------------------------------------------------------------------------------
 
+# Instantiate tasks_df at top level, since for site-based tasks, it must be
+# repeatedly called.
 tasks_df = _make_task_dataframe()
 
 ###############################################################################
 ### END INITS ###
-###############################################################################
-
-
-
-###############################################################################
-### BEGIN TASK MANAGER CLASS ###
-###############################################################################
-
-# #------------------------------------------------------------------------------
-# class TaskManager():
-#     """
-#     Class to allow retrieval of task functions and sites for which tasks are
-#     enabled.
-
-#     """
-
-#     #--------------------------------------------------------------------------
-#     def __init__(self) -> None:
-#         """
-#         Initialise manager with tasks x sites matrix and function dicts / lists.
-
-#         """
-
-#         self.configs = paths.get_internal_configs('tasks')
-#         self.site_master_list = self.configs['sites']
-#         self.master_tasks = list(self.configs['tasks'].keys())
-#         self._make_task_dataframe()
-#     #--------------------------------------------------------------------------
-
-#     #--------------------------------------------------------------------------
-#     def _make_task_dataframe(self) -> pd.DataFrame:
-#         """
-#         Make a dataframe with tasks x sites matrix.
-
-#         """
-
-#         tasks_df = pd.DataFrame(
-#             data=False,
-#             index=self.site_master_list,
-#             columns=self.master_tasks
-#             )
-#         for task in tasks_df.columns:
-#             site_list = self.configs['tasks'][task]
-#             if not site_list:
-#                 site_list = self.site_master_list
-#             tasks_df.loc[site_list, task] = True
-#         self.tasks_df = tasks_df
-#     #--------------------------------------------------------------------------
-
-#     #--------------------------------------------------------------------------
-#     def get_site_list_for_task(self, task: str) -> list:
-#         """
-#         Return the list of sites for which task is enabled.
-
-#         Args:
-#             task: name of task.
-
-#         Returns:
-#             the list.
-
-#         """
-
-#         return self.tasks_df[self.tasks_df[task]==True].index.tolist()
-#     #--------------------------------------------------------------------------
-
-#     #--------------------------------------------------------------------------
-#     def get_excluded_sites_for_task(self, task) -> list:
-
-#         """
-#         Return the list of sites for which task is not enabled.
-
-#         Args:
-#             task: name of task.
-
-#         Returns:
-#             the list.
-
-#         """
-
-#         return [
-#             site for site in self.site_master_list
-#             if not site in self.get_site_list_for_task(task=task)
-#             ]
-#     #--------------------------------------------------------------------------
-
-# #------------------------------------------------------------------------------
-
-# tasks_mngr = TaskManager()
-
-###############################################################################
-### END TASK MANAGER CLASS ###
 ###############################################################################
 
 
@@ -299,13 +210,143 @@ def _file_fast_data(site: str, is_aux: bool) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-### BEGIN DATA TRANSFERS ###
+### BEGIN RCLONE DATA TRANSFERS ###
 #------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+def pull_profile_raw(site: str) -> None:
 
+    logger.info('Downloading data from remote location...')
+    rct.move_site_data_stream(
+        site=site, resource='raw_data', stream='profile',
+        which_way='from_remote'
+        )
+    logger.info('Done!')
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-### END LOCAL DATA MOVING ###
+def pull_RTMC_images():
+
+    rct.push_pull_RTMC_images(which='pull')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def pull_slow_flux(site):
+
+    logger.info(f'Begin retrieval of {site} slow data from UQRDM')
+    rct.move_site_data_stream(
+        site=site, resource='raw_data', stream='flux_slow',
+        which_way='from_remote'
+        )
+    logger.info('Done')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_aux_fast_flux(site):
+
+    logger.info(f'Begin move of {site} fast data to UQRDM flux archive')
+    rct.move_site_data_stream(
+        site=site, resource='raw_data', stream='flux_fast_aux',
+        exclude_dirs=['TMP'], timeout=1200
+        )
+    logger.info('Done.')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_homogenised_TOA5():
+
+    rct.push_homogenised(stream='TOA5')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_L1_nc():
+
+    rct.push_homogenised(stream='nc')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_L1_xlsx():
+
+    rct.push_homogenised(stream='xlsx')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_main_fast_flux(site):
+
+    logger.info(f'Begin move of {site} fast data to UQRDM flux archive')
+    rct.move_site_data_stream(
+        site=site, resource='raw_data', stream='flux_fast',
+        exclude_dirs=['TMP'], timeout=1200
+        )
+    logger.info('Done.')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_profile_processed(site):
+
+    logger.info(f'Begin move of {site} processed profile data to UQRDM')
+    rct.move_site_data_stream(
+        site=site, resource='processed_data', stream='profile'
+        )
+    logger.info('Done.')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_profile_raw(site: str) -> None:
+
+    logger.info('Uploading data to remote location...')
+    rct.move_site_data_stream(
+        site=site, resource='raw_data', stream='profile', which_way='to_remote'
+        )
+    logger.info('Done!')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_RTMC_images():
+
+    rct.push_pull_RTMC_images(which='push')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_slow_flux(site):
+
+    logger.info(f'Begin move of {site} slow flux data to UQRDM')
+    rct.move_site_data_stream(
+        site=site, resource='raw_data', stream='flux_slow'
+        )
+    logger.info('Done.')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_status_geojson() -> None:
+    """Use Rclone to push data to rdm"""
+
+    rct.push_status_file(which='geojson')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_status_xlsx() -> None:
+    """Use Rclone to push data to rdm"""
+
+    rct.push_status_file(which='xlsx')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+### END RCLONE DATA TRANSFERS ###
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+### BEGIN SFTP DATA TRANSFERS ###
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_cosmoz(site) -> None:
+
+    sftpt.push_cosmoz(site=site)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+### END SFTP DATA TRANSFERS ###
 #------------------------------------------------------------------------------
 
 ###############################################################################
@@ -335,10 +376,10 @@ class FunctionFinder():
 
         """
 
-        task_functions = (
-            dict(inspect.getmembers(sys.modules[__name__], inspect.isfunction)) |
-            dict(inspect.getmembers(rct, inspect.isfunction)) |
-            dict(inspect.getmembers(sftpt, inspect.isfunction))
+        task_functions = dict(
+            inspect.getmembers(
+                sys.modules[__name__], inspect.isfunction
+                )
             )
         task_functions = {
             name: func for name, func in task_functions.items()
@@ -361,8 +402,8 @@ class FunctionFinder():
 
 #------------------------------------------------------------------------------
 
-# Instantiate finder at top level, since for site-based tasks, the finder must
-# be repeatedly called.
+# Instantiate finder at top level, since for site-based tasks, it must be
+# repeatedly called.
 func_finder = FunctionFinder()
 
 ###############################################################################

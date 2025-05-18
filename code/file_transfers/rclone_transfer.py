@@ -5,110 +5,46 @@ Created on Wed Oct 12 11:25:28 2022
 @author: jcutern-imchugh
 """
 
-#------------------------------------------------------------------------------
-# STANDARD IMPORTS
+###############################################################################
+### BEGIN IMPORTS ###
+###############################################################################
+
 import logging
 import pathlib
 import subprocess as spc
-#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# CUSTOM IMPORTS
+
 from paths import paths_manager as pm
-#------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-# INITS
+###############################################################################
+### END IMPORTS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN INITS ###
+###############################################################################
+
 APP_PATH = 'rclone'
 ARGS_LIST = [
     'copy', '--transfers', '10', '--progress', '--checksum', '--timeout', '0'
     ]
 logger = logging.getLogger(__name__)
-#------------------------------------------------------------------------------
+
+###############################################################################
+### END INITS ###
+###############################################################################
+
 
 
 ###############################################################################
-### RAW DATA (SITE-SPECIFIC LOCATION FOR RAW DATA PRODUCT) ###
+### BEGIN FUNCTIONS ###
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def push_slow_flux(site):
-
-    logger.info(f'Begin move of {site} slow flux data to UQRDM')
-    _move_site_data_stream(site=site, resource='raw_data', stream='flux_slow')
-    logger.info('Done.')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def pull_slow_flux(site):
-
-    logger.info(f'Begin retrieval of {site} slow data from UQRDM')
-    _move_site_data_stream(
-        site=site, resource='raw_data', stream='flux_slow',
-        which_way='from_remote'
-        )
-    logger.info('Done')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def push_main_fast_flux(site):
-
-    logger.info(f'Begin move of {site} fast data to UQRDM flux archive')
-    _move_site_data_stream(
-        site=site, resource='raw_data', stream='flux_fast',
-        exclude_dirs=['TMP'], timeout=1200
-        )
-    logger.info('Done.')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def push_aux_fast_flux(site):
-
-    logger.info(f'Begin move of {site} fast data to UQRDM flux archive')
-    _move_site_data_stream(
-        site=site, resource='raw_data', stream='flux_fast_aux',
-        exclude_dirs=['TMP'], timeout=1200
-        )
-    logger.info('Done.')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def push_profile_raw(site: str) -> None:
-
-    logger.info('Uploading data to remote location...')
-    _move_site_data_stream(
-        site=site, resource='raw_data', stream='profile', which_way='to_remote'
-        )
-    logger.info('Done!')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def pull_profile_raw(site: str) -> None:
-
-    logger.info('Downloading data from remote location...')
-    _move_site_data_stream(
-        site=site, resource='raw_data', stream='profile',
-        which_way='from_remote'
-        )
-    logger.info('Done!')
-#------------------------------------------------------------------------------
-
-###############################################################################
-### PROCESSED DATA (SITE-SPECIFIC LOCATION FOR RAW DATA PRODUCT) ###
-###############################################################################
-
-#------------------------------------------------------------------------------
-def push_profile_processed(site):
-
-    logger.info(f'Begin move of {site} processed profile data to UQRDM')
-    _move_site_data_stream(
-        site=site, resource='processed_data', stream='profile'
-        )
-    logger.info('Done.')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def _move_site_data_stream(
+def move_site_data_stream(
         site: str, stream: str, resource: str='raw_data',
         exclude_dirs: list=None, which_way: str='to_remote', timeout: int=600
         ) -> None:
@@ -143,27 +79,18 @@ def _move_site_data_stream(
         )
 #------------------------------------------------------------------------------
 
-###############################################################################
-### STATUS MONITORING (POOLED FILES MONITORING SITE STATUS) ###
-###############################################################################
-
 #------------------------------------------------------------------------------
-def push_status_geojson() -> None:
-    """Use Rclone to push data to rdm"""
+def push_status_file(which) -> None:
+    """
 
-    _push_status_file(which='geojson')
-#------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-def push_status_xlsx() -> None:
-    """Use Rclone to push data to rdm"""
+    Args:
+        which (TYPE): DESCRIPTION.
 
-    _push_status_file(which='xlsx')
-#------------------------------------------------------------------------------
+    Returns:
+        None: DESCRIPTION.
 
-#------------------------------------------------------------------------------
-def _push_status_file(which) -> None:
-    """Helper function"""
+    """
 
     resource = 'network'
     stream = f'status_{which}'
@@ -180,35 +107,17 @@ def _push_status_file(which) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# def push_status_files():
+def push_pull_RTMC_images(which):
+    """
 
-#     logger.info('Begin move of status files to UQRDM')
-#     generic_move(
-#         local_location=pm.get_local_resource_path(resource='network_status'),
-#         remote_location=pm.get_remote_data_path(data_stream='epcn_share'),
-#         timeout=180
-#         )
-#     logger.info('Done.')
-# #------------------------------------------------------------------------------
 
-###############################################################################
-### RTMC IMAGES (FROM WINDOWS VM, TO DSA) ###
-###############################################################################
+    Args:
+        which (TYPE): DESCRIPTION.
 
-#------------------------------------------------------------------------------
-def pull_RTMC_images():
+    Returns:
+        None.
 
-    _push_pull_RTMC_images(which='pull')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def push_RTMC_images():
-
-    _push_pull_RTMC_images(which='push')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def _push_pull_RTMC_images(which):
+    """
 
     if which == 'push':
         remote_stream = 'RTMC_image_dest'
@@ -240,34 +149,21 @@ def _push_pull_RTMC_images(which):
     logger.info('Done.')
 #------------------------------------------------------------------------------
 
-### HOMOGENISED DATA (POOLED LOCATION FOR INDIVIDUAL SITE DATA PRODUCTS) ###
-
-#------------------------------------------------------------------------------
-def push_homogenised_TOA5():
-
-    push_homogenised(stream='TOA5')
-#------------------------------------------------------------------------------
-
-# #------------------------------------------------------------------------------
-# def push_TOA5():
-
-#     push_homogenised(stream='TOA5')
-# #------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def push_L1_xlsx():
-
-    push_homogenised(stream='xlsx')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def push_L1_nc():
-
-    push_homogenised(stream='nc')
-#------------------------------------------------------------------------------
-
 #------------------------------------------------------------------------------
 def push_homogenised(stream: str) -> None:
+    """
+
+
+    Args:
+        stream (str): DESCRIPTION.
+
+    Raises:
+        KeyError: DESCRIPTION.
+
+    Returns:
+        None: DESCRIPTION.
+
+    """
 
     allowed_streams = pm.list_local_streams(resource='homogenised_data')
     if not stream in allowed_streams:
@@ -287,16 +183,33 @@ def push_homogenised(stream: str) -> None:
     logger.info('Done.')
 #------------------------------------------------------------------------------
 
-### GENERIC FUNCTIONS ###
-
 #------------------------------------------------------------------------------
 def generic_move(
         local_location, remote_location, which_way='to_remote',
         exclude_dirs=None, mod_time=True, timeout=600
         ):
+    """
+
+
+    Args:
+        local_location (TYPE): DESCRIPTION.
+        remote_location (TYPE): DESCRIPTION.
+        which_way (TYPE, optional): DESCRIPTION. Defaults to 'to_remote'.
+        exclude_dirs (TYPE, optional): DESCRIPTION. Defaults to None.
+        mod_time (TYPE, optional): DESCRIPTION. Defaults to True.
+        timeout (TYPE, optional): DESCRIPTION. Defaults to 600.
+
+    Raises:
+        KeyError: DESCRIPTION.
+        FileNotFoundError: DESCRIPTION.
+
+    Returns:
+        None.
+
+    """
 
     # Check direction is valid
-    if not which_way in ['to_remote', 'from_remote']:
+    if which_way not in ['to_remote', 'from_remote']:
         raise KeyError('Arg "which_way" must be "to_remote" or "from_remote"')
 
 
@@ -351,6 +264,16 @@ def generic_move(
 
 #------------------------------------------------------------------------------
 def check_remote_available(remote_path):
+    """
+
+
+    Args:
+        remote_path (TYPE): DESCRIPTION.
+
+    Returns:
+        None.
+
+    """
 
     _run_subprocess(
         run_list=[APP_PATH, 'lsd', str(remote_path)],
@@ -360,6 +283,16 @@ def check_remote_available(remote_path):
 
 #------------------------------------------------------------------------------
 def _add_rclone_exclude(exclude_dirs):
+    """
+
+
+    Args:
+        exclude_dirs (TYPE): DESCRIPTION.
+
+    Returns:
+        this_list (TYPE): DESCRIPTION.
+
+    """
 
     this_list = []
     for this_dir in exclude_dirs:
@@ -370,14 +303,39 @@ def _add_rclone_exclude(exclude_dirs):
 
 #------------------------------------------------------------------------------
 def _reformat_path_str(path_str):
+    """
+
+
+    Args:
+        path_str (TYPE): DESCRIPTION.
+
+    Returns:
+        None.
+
+    """
 
     return path_str.replace('\\', '/')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def _run_subprocess(run_list, timeout=5):
+    """
+
+
+    Args:
+        run_list (TYPE): DESCRIPTION.
+        timeout (TYPE, optional): DESCRIPTION. Defaults to 5.
+
+    Returns:
+        TYPE: DESCRIPTION.
+
+    """
 
     return spc.run(
         run_list, capture_output=True, timeout=timeout, check=True
         )
 #------------------------------------------------------------------------------
+
+###############################################################################
+### END FUNCTIONS ###
+###############################################################################

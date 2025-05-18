@@ -44,8 +44,19 @@ logger = logging.getLogger(__name__)
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def push_cosmoz(site):
+def push_cosmoz(site: str) -> None:
+    """
+    Push local cosmoz data to CSIRO SFTP server.
 
+    Args:
+        site: name of site.
+
+    Returns:
+        None.
+
+    """
+
+    # Check for aliases
     try:
         remote_alias = CSIRO_ALIASES[site]
     except KeyError:
@@ -65,7 +76,19 @@ def push_cosmoz(site):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def _run_subprocess(run_list, timeout=120):
+def _run_subprocess(run_list: list, timeout: int=120) -> None:
+    """
+    Spawn external sftp subprocess (run shell script).
+
+    Args:
+        run_list: list of str args for command.
+        timeout (optional): number of seconds to wait for response.
+        Defaults to 120.
+
+    Returns:
+        None.
+
+    """
 
     return spc.run(
         run_list, capture_output=True, timeout=timeout, check=True

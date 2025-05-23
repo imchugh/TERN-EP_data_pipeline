@@ -282,16 +282,18 @@ def get_last_formatted_fast_file(
         name of file.
 
     """
-
-    rslt = (
-        sorted(
-            [
-                x for x in get_site_output_directory(site=site, is_aux=is_aux)
-                .rglob(f'TOB3_{site}*.dat') if 'TMP' not in str(x.parent)
-                ]
+    try:
+        rslt = (
+            sorted(
+                [
+                    x for x in get_site_output_directory(site=site, is_aux=is_aux)
+                    .rglob(f'TOB3_{site}*.dat') if 'TMP' not in str(x.parent)
+                    ]
+                )
+            [-1]
             )
-        [-1]
-        )
+    except IndexError:
+        raise FileNotFoundError('No files')
     if abs_path:
         return rslt
     return rslt.name

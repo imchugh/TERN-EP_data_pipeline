@@ -14,6 +14,153 @@ from file_handling import nc_io, file_handler
 from data_constructors.convert_calc_filter import filter_range
 from managers import metadata, paths
 
+class SiteStatusParser():
+
+    #--------------------------------------------------------------------------
+    def __init__(self, site):
+
+        self.site = site
+
+        # Get and edit the metadata manager to reflect the fact that variances
+        # are converted during netcdf production
+        md_mngr = metadata.MetaDataManager(site=site)
+        renamer = {
+            var: var.replace('Vr', 'Sd')
+            for var in md_mngr.list_variance_variables()
+            }
+        md_mngr.site_variables.loc[renamer.keys(), 'statistic_type'] = (
+            'standard_deviation'
+            )
+        md_mngr.site_variables.loc[renamer.keys(), 'process'] = (
+            'Sd'
+            )
+        md_mngr.site_variables = md_mngr.site_variables.rename(renamer)
+        self.md_mngr = md_mngr
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_data_status(self, run_time: dt.datetime=None) -> pd.DataFrame:
+
+        # Grab the site-adjusted run time
+        run_time = _get_site_time(
+            site=self.site,
+            UTC_offset=self.md_mngr.site_details['UTC_offset'],
+            run_time=run_time
+            )
+
+        # Get and read the data, then rename it to erase the system-specific
+        # turbulent flux names
+        file = sorted(
+            paths.get_local_stream_path(
+                resource='homogenised_data',
+                stream='nc',
+                subdirs=[self.site]
+                )
+            .glob('*.nc')
+            )[-1]
+        reader = nc_io.NCReader(nc_file=file)
+        # reader.ds = reader.ds.rename(flux_map)
+
+        # Create a dataframe and parse the variables inidividually
+        df = reader.get_dataframe()
+        rslt = []
+        for variable in self.md_mngr.list_variables():
+            attrs = self.md_mngr.get_variable_attributes(variable=variable)
+            rslt.append(
+                attrs[['logger', 'table', 'file']].to_dict() |
+                _parse_variable(
+                    variable=df[variable],
+                    var_range=(attrs.plausible_min, attrs.plausible_max)
+                    )
+                )
+
+        # Dump to df and return
+        return (
+            pd.DataFrame(
+                data=rslt,
+                index=self.md_mngr.list_variables())
+            .rename_axis('variable')
+            .reset_index()
+            )
+    #--------------------------------------------------------------------------
+
+    #------------------------------------------------------------------------------
+    def get_file_status(self, run_time: dt.datetime=None) -> pd.DataFrame:
+        """
+        Get the file attributes of each file mapped in the metadata manager.
+
+        Args:
+            site: name of site.
+            md_mngr: metadata manager from which to draw file info. Defaults to None.
+
+        Returns:
+            Dataframe containing the info for all listed files.
+
+        """
+
+        # Grab the site-adjusted run time
+        site_time = _get_site_time(
+            site=self.site,
+            UTC_offset=self.md_mngr.site_details['UTC_offset'],
+            run_time=run_time
+            )
+
+        # Get the logger / file particulars (currently must handle sites with no
+        # logger or table)
+        files_df = (
+            self.md_mngr.site_variables[['logger', 'table', 'file']]
+            .drop_duplicates()
+            .reset_index(drop=True)
+            .set_index(keys='file')
+            )
+
+        # Get the file attributes
+        attrs_df = (
+            pd.concat(
+                [
+                    self.md_mngr.get_file_attributes(x)
+                    for x in self.md_mngr.list_files()
+                    ],
+                axis=1
+                )
+            .T
+            .drop(['station_name', 'table_name'], axis=1)
+            )
+        attrs_df.index = self.md_mngr.list_files()
+
+        # Get the percentage missing data for each file
+        # Note that here, we DONT try to concatenate if the file is an EP master
+        # file because the concatenation is already handled
+        missing_list = []
+        do_concat = False
+        for file in self.md_mngr.list_files(abs_path=True):
+            do_concat = True
+            if attrs_df.loc[file.name, 'format'] != 'TOA5':
+                do_concat = False
+            missing_list.append(
+                file_handler.DataHandler(file=file, concat_files=do_concat)
+                .get_missing_records()
+                )
+        missing_df = pd.DataFrame(
+            data=missing_list, index=self.md_mngr.list_files()
+            )
+
+        # Combine all and return
+        combined_df = pd.concat([files_df, attrs_df, missing_df], axis=1)
+        combined_df.index.name = 'file'
+        return (
+            combined_df
+            .assign(
+                days_since_last_record = (
+                    (site_time - combined_df.end_date).apply(lambda x: x.days)
+                    )
+                )
+            .assign(site=self.site)
+            .reset_index()
+            .set_index(keys=['site', 'logger', 'table'])
+            )
+    #------------------------------------------------------------------------------
+
 def get_data_status(site: str, run_time: dt.datetime=None) -> pd.DataFrame:
     """
     Read netcdf file to get data status.
@@ -58,16 +205,16 @@ def get_data_status(site: str, run_time: dt.datetime=None) -> pd.DataFrame:
     rslt = []
     for variable in md_mngr.list_variables():
         attrs = md_mngr.get_variable_attributes(variable=variable)
-        # try:
-        rslt.append(
-            attrs[['logger', 'table', 'file']].to_dict() |
-            _parse_variable(
-                variable=df[variable],
-                var_range=(attrs.plausible_min, attrs.plausible_max)
+        try:
+            rslt.append(
+                attrs[['logger', 'table', 'file']].to_dict() |
+                _parse_variable(
+                    variable=df[variable],
+                    var_range=(attrs.plausible_min, attrs.plausible_max)
+                    )
                 )
-            )
-        # except KeyError:
-        #     breakpoint()
+        except KeyError:
+            breakpoint()
 
     # Dump to df and return
     return (

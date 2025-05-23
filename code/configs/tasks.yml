@@ -33,8 +33,7 @@ tasks:
 
   construct_homogenised_TOA5:
     - CumberlandPlain
-    - Gingin
-    - GreatWesternWoodlands
+#    - Gingin
     - HowardSprings
     - MyallValeA
     - MyallValeB
@@ -51,6 +50,8 @@ tasks:
     - Calperum
     - Dookie1
     - Fletcherview
+    - GreatWesternWoodlands
+    - Gingin
     - Litchfield
     - Tumbarumba
     - WombatStateForest
@@ -83,6 +84,8 @@ tasks:
     - Calperum
     - Dookie1
     - Fletcherview
+    - Gingin
+    - GreatWesternWoodlands
     - MyallValeA
     - MyallValeB
     - Litchfield

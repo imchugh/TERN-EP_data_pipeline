@@ -362,8 +362,8 @@ def push_cosmoz(site) -> None:
 #------------------------------------------------------------------------------
 class FunctionFinder():
     """
-    Puts all public functions (both local and in called modules) in dictionary
-    and sorts them into site-based and network-based functions.
+    Puts all public functions in dictionary and sorts them into site-based and
+    network-based functions.
     """
 
     #--------------------------------------------------------------------------

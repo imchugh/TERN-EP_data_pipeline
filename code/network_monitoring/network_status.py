@@ -67,8 +67,10 @@ def write_status_xlsx(site_list) -> None:
 
         # Or new continuously appending netcdf
         else:
-            slow_file_status = nsnc.get_file_status(site=site)
-            slow_data_status = nsnc.get_data_status(site=site)
+
+            parser = nsnc.SiteStatusParser(site=site)
+            slow_file_status = parser.get_file_status()
+            slow_data_status = parser.get_data_status()
 
         slow_file_status_list.append(slow_file_status)
         site_data_status_dict[site] = slow_data_status

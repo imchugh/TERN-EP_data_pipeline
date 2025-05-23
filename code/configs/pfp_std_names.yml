@@ -304,6 +304,12 @@ SVP:
   plausible_min: null
   standard_name: null
   standard_units: kPa
+Swp:
+  long_name: Soil water potential
+  plausible_max: 0
+  plausible_min: -10000
+  standard_name: null
+  standard_units: kPa
 Sws:
   long_name: Soil water content
   plausible_max: 100.0

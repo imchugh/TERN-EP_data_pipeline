@@ -15,7 +15,7 @@ import pandas as pd
 
 #------------------------------------------------------------------------------
 
-import utils.metadata_handlers as mh
+# import utils.metadata_handlers as mh
 from file_handling import file_handler as fh, fast_data_filer as fdf
 from data_constructors.convert_calc_filter import TimeFunctions
 from file_handling import file_io as io
@@ -64,7 +64,8 @@ def write_site_info(site: str) -> None:
     # Get site info
     logger.info('Getting site information...')
     site_info = (
-        paths.get_local_config_file(config_stream='all_site_metadata')[site]
+        paths.get_internal_configs(config_name='site_metadata')[site]
+        # paths.get_local_config_file(config_stream='all_site_metadata')[site]
         )
     site_info['start_year'] = str(
         dt.datetime.strptime(site_info['date_commissioned'], '%Y-%m-%d').year
@@ -107,9 +108,17 @@ def write_site_info(site: str) -> None:
 
     # Get flux logger info
     logger.info('Getting flux logger information...')
-    md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
-    file = md_mngr.get_variable_attributes(variable='Fco2', return_field='file')
-    logger_info = md_mngr.get_file_attributes(file=file)[LOGGER_SUBSET].to_dict()
+    nc_file_list = paths.get_internal_configs('tasks')['tasks']['construct_L1_nc']
+    if site in nc_file_list:
+        from managers import metadata
+        md_mngr = metadata.MetaDataManager(site=site)
+        file = md_mngr.data_path / md_mngr.flux_file
+        logger_info = md_mngr.get_file_attributes(file=md_mngr.flux_file)[LOGGER_SUBSET].to_dict()
+    else:
+        from utils import metadata_handlers as mh
+        md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
+        file = md_mngr.get_variable_attributes(variable='Fco2', return_field='file')
+        logger_info = md_mngr.get_file_attributes(file=file)[LOGGER_SUBSET].to_dict()
 
     # Get missing data info
     logger.info('Getting missing data percentage...')

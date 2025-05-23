@@ -56,7 +56,30 @@ suffix_vars = ['Fco2', 'Fe', 'Fh', 'Fm']
 ###############################################################################
 
 #------------------------------------------------------------------------------
-class SiteL1ConfigGenerator():
+class UniqueL1ConfigGenerator():
+
+    #--------------------------------------------------------------------------
+    def __init__(self, site):
+
+        self.site = site
+        self.variable_configs = (
+            read_site_config_xl(site=site, sub_dir=['complete'])
+            )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def write_configs_to_yml(self):
+
+        _write_configs_to_yml(
+            df=self.variable_configs,
+            file_name=f'{self.site}_pfp_variables.yml'
+            )
+    #--------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+class TemplateL1ConfigGenerator():
 
     #--------------------------------------------------------------------------
     def __init__(self, site: str) -> None:
@@ -129,6 +152,27 @@ class SiteL1ConfigGenerator():
         _write_to_yml(data=data, file=file)
     #--------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def _write_configs_to_yml(
+        df: pd.DataFrame, file_name: str | pathlib.Path
+        ) -> None:
+
+    data = {}
+    for var in df.index:
+        s = df.loc[var]
+        data[var] = (s[~pd.isnull(s)].to_dict())
+
+    # Set output_path
+    file = paths.get_local_stream_path(
+        resource='configs_new',
+        stream='site_yml',
+        file_name=file_name
+        )
+
+    # Dump to yml
+    _write_to_yml(data=data, file=file)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -272,19 +316,26 @@ def read_config_template_xl(template_name: str) -> pd.DataFrame:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def read_site_config_xl(site: str):
+def read_site_config_xl(site: str, sub_dir:list=['custom_only']):
 
     dfs = _read_config_xl(
         path=paths.get_local_stream_path(
             resource='configs_new',
             stream='site_xl',
+            subdirs=sub_dir,
             file_name=f'{site}_configs.xlsx',
             check_exists=True
             ),
         sheet=None
         )
-    dfs['configs'] = dfs['configs'].set_index(keys='key')
+    if not 'variables' in dfs.keys():
+        raise KeyError('Workbook must contain a sheet named `variables`')
     dfs['variables'] = dfs['variables'].set_index(keys='pfp_name')
+    if len(dfs.keys()) == 1:
+        return dfs['variables']
+    if not 'configs' in dfs.keys():
+        raise KeyError('Workbook must contain a sheet named `configs`')
+    dfs['configs'] = dfs['configs'].set_index(keys='key')
     return dfs
 #------------------------------------------------------------------------------
 

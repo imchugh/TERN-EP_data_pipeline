@@ -182,11 +182,20 @@ def _drop_extraneous_variables(ds: xr.Dataset) -> xr.Dataset:
     temp_vars.remove(keep_var)
     drop_list += temp_vars
     for quantity in ['RH', 'AH']:
-        expected_vars = [var.replace('Ta', quantity) for var in temp_vars]
-        for var in expected_vars:
-            if var in ds.variables:
+        keep_this_var = keep_var.replace('Ta', quantity)
+        for var in ds.variables:
+            if var == keep_this_var:
+                continue
+            if 'IRGA' in var:
+                continue
+            if var.startswith(quantity):
                 drop_list.append(var)
 
+    # for quantity in ['RH', 'AH']:
+    #     expected_vars = [var.replace('Ta', quantity) for var in temp_vars]
+    #     for var in expected_vars:
+    #         if var in ds.variables:
+    #             drop_list.append(var)
 
     # Remove all extraneous variables
     return ds.drop(drop_list)
@@ -211,9 +220,11 @@ def _rename_variables(ds: xr.Dataset) -> xr.Dataset:
     rslt = {}
     for flux_var in md.TURBULENT_FLUX_QUANTITIES:
         for var in ds.variables:
-            if var.startswith(flux_var):
+            elems = var.split('_')
+            if elems[0] == flux_var and len(elems) == 2:
                 rslt.update({var: flux_var})
     ds = ds.rename(rslt)
+
 
     # Remove average suffixes from ALL variables
     ds = ds.rename(
@@ -233,10 +244,7 @@ def _rename_variables(ds: xr.Dataset) -> xr.Dataset:
                 and not 'IRGA' in var
                 }
             )
-    try:
-        ds = ds.rename(rslt)
-    except ValueError:
-        breakpoint()
+    ds = ds.rename(rslt)
 
     # Rename wind data
     ds = ds.rename({'Wd_SONIC': 'Wd', 'Ws_SONIC': 'Ws'})

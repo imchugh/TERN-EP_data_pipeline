@@ -319,6 +319,18 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
+    def _test_variable_assignment(df: pd.DataFrame) -> pd.DataFrame:
+
+        """
+        In here test whether each variable is found in the header of its
+        file
+
+        """
+
+        pass
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
     def _get_flux_file(self) -> str:
         """
         Use the FLUX_FILE_VAR_IND constant to set the system type and flux

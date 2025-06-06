@@ -18,6 +18,7 @@ sites:
   - RobsonCreek
   - SnowGum
   - SturtPlains
+  - TiTreeEast
   - Tumbarumba
   - Wellington
   - Whroo
@@ -33,15 +34,11 @@ tasks:
 
   construct_homogenised_TOA5:
     - CumberlandPlain
-#    - Gingin
     - HowardSprings
-    - MyallValeA
-    - MyallValeB
     - Ridgefield
     - SnowGum
     - SturtPlains
     - Wellington
-    - Whroo
     - Yanco
 
   construct_homogenised_TOA5_from_nc:
@@ -53,7 +50,11 @@ tasks:
     - GreatWesternWoodlands
     - Gingin
     - Litchfield
+    - MyallValeA
+    - MyallValeB
+    - TiTreeEast
     - Tumbarumba
+    - Whroo
     - WombatStateForest
 
   construct_L1_xlsx:
@@ -89,8 +90,10 @@ tasks:
     - MyallValeA
     - MyallValeB
     - Litchfield
+    - TiTreeEast
     - Tumbarumba
     - WombatStateForest
+    - Whroo
 
   update_EddyPro_master:
     - CumberlandPlain
@@ -134,6 +137,7 @@ tasks:
     - RobsonCreek
     - SnowGum
     - SturtPlains
+    - TiTreeEast
     - Tumbarumba
     - Wellington
     - Whroo
@@ -158,6 +162,7 @@ tasks:
     - RobsonCreek
     - SnowGum
     - SturtPlains
+    - TiTreeEast
     - Tumbarumba
     - Wellington
     - Whroo
@@ -235,3 +240,4 @@ tasks:
     - Litchfield
     - MyallValeA
     - GreatWesternWoodlands
+    - Tumbarumba

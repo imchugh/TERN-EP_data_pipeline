@@ -99,7 +99,9 @@ def construct_L1_nc(site: str) -> None:
     """Construct the L1 NetCDF file"""
 
     nccon = import_module('data_constructors.nc_constructors')
-    L1con = nccon.L1DataConstructor(site=site, constrain_start_to_flux=True)
+    L1con = nccon.L1DataConstructor(
+        site=site, constrain_start_to_flux=True, concat_files=True
+        )
     this_year = dt.datetime.now().year
     if max(L1con.data_years) == this_year:
         L1con.write_nc_file_by_year(year=this_year, overwrite=True)

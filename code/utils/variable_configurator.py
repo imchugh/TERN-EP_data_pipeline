@@ -11,13 +11,14 @@ Created on Thu May  1 15:01:13 2025
 ###############################################################################
 
 from configobj import ConfigObj
+import numpy as np
 import pandas as pd
 import pathlib
 import yaml
 
 #------------------------------------------------------------------------------
 
-from managers import paths
+from managers import paths, metadata
 
 ###############################################################################
 ### END IMPORTS ###
@@ -34,7 +35,7 @@ reference_vars = {
     'radflux': 'Fsd',
     'logger': 'Tpanel',
     'TandRH': 'Ta',
-    'rain': 'Precip'
+    'rain': 'Precip',
     }
 
 system_suffixes = {
@@ -103,22 +104,10 @@ class TemplateL1ConfigGenerator():
     #--------------------------------------------------------------------------
     def compile_configs(self):
 
-        template = self.template_configs.copy()
-        template.update(self.variable_configs)
-
-        # Create and format the dataframe
-        df = pd.DataFrame(data=template, dtype='O').T
-        df.index.name = 'pfp_name'
-        df['ignore'] = df['ignore'].astype(bool)
-        df.loc[self.variable_configs.keys(), 'ignore'] = False
-        df = df[~df.ignore]
-        df = df.drop('ignore', axis=1)
-
-        # Amend heights
-        for key in reference_vars:
-            inst_name = df.loc[reference_vars[key], 'instrument']
-            height = self.system_configs[f'{key}_height']
-            df.loc[df['instrument'] == inst_name, 'height'] = height
+        # template = self.template_configs.copy()
+        template_df = self._build_template_df()
+        custom_df = self._build_custom_df()
+        df = self._merge_dfs(template_df=template_df, custom_df=custom_df)
 
         # Attach flux suffixes
         rslt = {}
@@ -129,6 +118,79 @@ class TemplateL1ConfigGenerator():
         df = df.rename(rslt)
 
         return df
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _build_custom_df(self):
+
+        # Create and format the dataframe
+        df = pd.DataFrame(data=self.variable_configs, dtype='O').T
+        df.index.name = 'pfp_name'
+        return df
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _build_template_df(self):
+
+        # Create and format the dataframe
+        df = pd.DataFrame(data=self.template_configs, dtype='O').T
+        df.index.name = 'pfp_name'
+        df['ignore'] = df['ignore'].astype(bool)
+        df = df[~df.ignore]
+        df = df.drop('ignore', axis=1)
+
+        # Amend heights
+        local_refs = reference_vars.copy()
+        if 'press_height' in self.system_configs:
+            local_refs.update({'press': 'ps'})
+        for key in local_refs:
+            inst_name = df.loc[local_refs[key], 'instrument']
+            height = self.system_configs[f'{key}_height']
+            df.loc[df['instrument'] == inst_name, 'height'] = height
+
+        # Add explicit height to T and RH variables
+        rslt = {}
+        for variable in ['Ta', 'RH', 'AH']:
+            try:
+                inst_height = df.loc[variable, 'height']
+                rslt.update({variable: f'{variable}_{inst_height}'})
+            except KeyError:
+                continue
+        df = df.rename(rslt)
+
+        return df
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _merge_dfs(self, template_df, custom_df):
+
+        rslt = {}
+        for generic_var in ['Ta', 'RH', 'AH']:
+            for var in template_df.index:
+                if generic_var not in var:
+                    continue
+                if 'IRGA' in var:
+                    continue
+                if var in custom_df.index:
+                    raise KeyError(
+                        'Variable already in template! If it is a replicate, '
+                        'add a replicate number for clarity!'
+                        )
+                reps_list = sorted([
+                    custom_var for custom_var in custom_df.index
+                    if var in custom_var
+                    ])
+                if len(reps_list) == 0:
+                    continue
+                nums = [int(name.split(var)[-1]) for name in reps_list]
+                compare_with = np.arange(start=2, stop=2 + len(nums)).tolist()
+                if not nums == compare_with:
+                    raise ValueError(
+                        f'Replicates for variable {var} must begin at '
+                        'replicate `2` and increase in steps of exactly 1!'
+                        )
+                rslt.update({var: var + '1'})
+        return pd.concat([template_df.rename(rslt), custom_df])
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------

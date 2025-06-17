@@ -199,6 +199,7 @@ class MetaDataManager():
             .rename_axis('std_name')
             .pipe(self._test_variable_conformity)
             .pipe(self._test_file_assignment)
+            # .pipe(self._test_variable_assignment)
             )
     #--------------------------------------------------------------------------
 
@@ -319,7 +320,7 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _test_variable_assignment(df: pd.DataFrame) -> pd.DataFrame:
+    def _test_variable_assignment(self, df: pd.DataFrame) -> pd.DataFrame:
 
         """
         In here test whether each variable is found in the header of its
@@ -327,7 +328,17 @@ class MetaDataManager():
 
         """
 
-        pass
+        groups = df.groupby(df.file)
+        for this_tuple in groups:
+            file_path = self.data_path / this_tuple[0]
+            check_vars = this_tuple[1].name.tolist()
+            header_df = io.get_header_df(file=file_path)
+            for var in check_vars:
+                if not var in header_df.index:
+                    raise KeyError(
+                        f'Variable {var} not found in file {this_tuple[0]}'
+                        )
+        return df
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -706,6 +717,26 @@ class MetaDataManager():
             )
         attrs.name = attrs.name.replace('Vr', 'Sd')
         return attrs
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_variables_by_file(self, file: str) -> list:
+        """
+        Get the untranslated list of variable names.
+
+        Args:
+            file: name of file.
+
+        Returns:
+            list: list of untranslated variable names.
+
+        """
+
+        return (
+            self.site_variables.loc[self.site_variables.file == file]
+            .index
+            .tolist()
+            )
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------

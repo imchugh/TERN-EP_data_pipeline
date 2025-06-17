@@ -274,6 +274,12 @@ RH:
   plausible_min: 0.0
   standard_name: relative_humidity
   standard_units: percent
+RH_IRGA:
+  long_name: Relative humidity
+  plausible_max: 100.0
+  plausible_min: 0.0
+  standard_name: relative_humidity
+  standard_units: percent
 SH:
   long_name: Specific humidity
   plausible_max: null
@@ -395,6 +401,12 @@ Tv_SONIC_Sd:
 #   standard_name: virtual_temperature
 #   standard_units: degC^2
 U:
+  long_name: Wind speed, east component
+  plausible_max: null
+  plausible_min: null
+  standard_name: eastward_wind
+  standard_units: m/s
+U_SONIC:
   long_name: Wind speed, east component
   plausible_max: null
   plausible_min: null
@@ -550,6 +562,12 @@ V:
   plausible_min: null
   standard_name: northward_wind
   standard_units: m/s
+V_SONIC:
+  long_name: Wind speed, north component
+  plausible_max: null
+  plausible_min: null
+  standard_name: northward_wind
+  standard_units: m/s
 VP:
   long_name: Vapour pressure
   plausible_max: null
@@ -569,6 +587,12 @@ Vbat:
   standard_name: null
   standard_units: V
 W:
+  long_name: Wind speed, vertical component
+  plausible_max: null
+  plausible_min: null
+  standard_name: null
+  standard_units: m/s
+W_SONIC:
   long_name: Wind speed, vertical component
   plausible_max: null
   plausible_min: null

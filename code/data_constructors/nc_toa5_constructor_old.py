@@ -14,6 +14,7 @@ write back to a TOA5 output file for visualisation.
 ###############################################################################
 
 import logging
+import numpy as np
 import pandas as pd
 import pathlib
 import xarray as xr
@@ -170,35 +171,46 @@ def _drop_extraneous_variables(ds: xr.Dataset) -> xr.Dataset:
             var for var in available_variables if not var in keep_variables
             ]
 
-    # Drop extraneous T and RH variables
-    drop_list += _get_extraneous_met(ds=ds)
+
+    # Get flux measurement height
+    int_extractor = lambda height: float(height.replace('m', ''))
+    target_height = int_extractor(ds[FLUX_FILE_VAR_IND].attrs['height'])
+
+    # Drop extraneous temp / RH / AH variables
+    temp_vars = [var for var in ds.variables if var.startswith('Ta')]
+    var_dict = {
+        var: abs(target_height - int_extractor(ds[var].attrs['height']))
+        for var in temp_vars
+        }
+    keep_var = min(var_dict, key=var_dict.get)
+    temp_vars.remove(keep_var)
+    drop_list += temp_vars
+    for quantity in ['RH', 'AH']:
+        keep_this_var = keep_var.replace('Ta', quantity)
+        for var in ds.variables:
+            if var == keep_this_var:
+                continue
+            if 'IRGA' in var:
+                continue
+            if var.startswith(quantity):
+                drop_list.append(var)
+
+    # for quantity in ['RH', 'AH']:
+    #     expected_vars = [var.replace('Ta', quantity) for var in temp_vars]
+    #     for var in expected_vars:
+    #         if var in ds.variables:
+    #             drop_list.append(var)
 
     # Remove all extraneous variables
     return ds.drop(drop_list)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def _get_extraneous_met(ds: xr.Dataset) -> list:
-    """
-    Choose a set of T / RH / AH variables to remove. Selectthose to keep on the
-    basis of two considerations: i) same instrument; ii) closest to flux
-    height. Then remove all else.
-
-    Args:
-        ds: the dataset.
-
-    Raises:
-        RuntimeError: raised if no candidates are found that meet criteria.
-
-    Returns:
-        drop_list: list of the variables that are extraneous.
-
-    """
+def test(ds, target_height):
 
     # Inits
     not_ends_with = ['QCFlag', 'Sd', 'Ct']
     int_extractor = lambda height: float(height.replace('m', ''))
-    target_height = int_extractor(ds[FLUX_FILE_VAR_IND].attrs['height'])
 
     # Make df
     df = pd.DataFrame(
@@ -277,6 +289,222 @@ def _get_extraneous_met(ds: xr.Dataset) -> list:
 
     return drop_list
 #------------------------------------------------------------------------------
+
+# #------------------------------------------------------------------------------
+# def _sort_met_vars(ds: xr.Dataset, target_height) -> xr.Dataset:
+
+#     # Inits
+#     not_ends_with = ['QCFlag', 'Sd', 'Ct']
+#     int_extractor = lambda height: float(height.replace('m', ''))
+#     rslt = {}
+
+#     def get_df(quantity):
+
+#         rslt = []
+#         for var in ds.variables:
+#             if not var.startswith(quantity):
+#                 continue
+#             if any([var.endswith(this) for this in not_ends_with]):
+#                 continue
+#             rslt.append(
+#                 {
+#                     'variable': var,
+#                     'height_diff': abs(
+#                         target_height -
+#                         int_extractor(ds[var].attrs['height'])
+#                         ),
+#                     'instrument': ds[var].attrs['instrument']
+#                     }
+#                 )
+
+#         if len(rslt) != 0:
+#             return (
+#                 pd.DataFrame(rslt)
+#                 .set_index(keys='variable')
+#                 .sort_values('height_diff')
+#                 )
+
+#     ta_df = get_df(quantity='Ta')
+#     rh_df = get_df(quantity='RH')
+#     ah_df = get_df(quantity='AH')
+
+
+#     for var in ah_df.index:
+#         if 'IRGA' in var:
+#             ah_df = ah_df.drop(var)
+
+#     keep_ta, keep_rh, keep_ah = None, None, None
+#     for diff in ta_df.height_diff:
+
+#         ta_subdf = ta_df.loc[ta_df.height_diff==diff]
+#         keep_ta = ta_subdf.index.item()
+
+#         try:
+#             rh_subdf = rh_df.loc[rh_df.height_diff==diff]
+#             if ta_subdf.instrument.item() == rh_subdf.instrument.item():
+#                 keep_rh = rh_subdf.index.item()
+#         except (KeyError, ValueError):
+#             pass
+
+#         try:
+#             ah_subdf = ah_df.loc[ah_df.height_diff==diff]
+#             if ta_subdf.instrument.item() == ah_subdf.instrument.item():
+#                 keep_ah = ah_subdf.index.item()
+#         except (KeyError, ValueError):
+#             pass
+
+#         if keep_rh is not None or keep_ah is not None:
+#             break
+
+#     if keep_rh is None and keep_ah is None:
+#         raise RuntimeError(
+#             'An independent temperature and humidity probe is required!'
+#             )
+
+#     return {'Ta': keep_ta, 'RH': keep_rh, 'AH': keep_ah}
+
+#     #     heights = [
+#     #         abs(target_height - int_extractor(ds[var].attrs['height']))
+#     #         for var in var_list
+#     #         ]
+#     #     return (
+#     #         pd.DataFrame(
+#     #             data={
+#     #                 'height_diff': [
+#     #                     [
+#     #                         abs(target_height - int_extractor(ds[var].attrs['height']))
+#     #                         for var in var_list
+#     #                         ],
+#     #                 'instrument': [ds[var].attrs['instrument'] for var in ta_vars]
+#     #                 },
+#     #             index=ta_vars
+#     #             )
+#     #         .sort_values('height_diff')
+#     #         )
+
+#     # ta_vars = get_vars('Ta')
+#     # df = (
+#     #     pd.DataFrame(
+#     #         data={
+#     #             'height_diff': get_heights(var_list=ta_vars),
+#     #             'instrument': [ds[var].attrs['instrument'] for var in ta_vars]
+#     #             },
+#     #         index=ta_vars
+#     #         )
+#     #     .sort_values('height_diff')
+#     #     )
+
+#     # breakpoint()
+
+#     # height_list = get_heights(var_list=ta_vars)
+#     # idx = np.argsort(height_list)
+#     # ta_vars = np.array(ta_vars)[idx].tolist()
+
+
+#     # for quantity in ['RH', 'AH']:
+#     #     var_list = get_vars(quantity=quantity)
+#     #     # for var in var_list:
+
+
+
+
+
+#     # Get all the temperature variables
+#     for var in ds.variables:
+#         if var.startswith('Ta'):
+#             if not any([var.endswith(this) for this in not_ends_with]):
+#                 pass
+
+
+#     #             ta_dict[var] = (
+#     #                 target_height - int_extractor(ds[var].attrs['height'])
+#     #                 )
+#     # ta_dict = {
+#     #     key: value for key, value in sorted(
+#     #         ta_dict.items(), key= lambda item: item[1]
+#     #         )
+#     #     }
+
+#     # for var in ta_dict.keys():
+
+
+#     # return ta_dict
+
+
+
+#     # Find the met variables in each dataset - exclude IRGA measurements of AH
+#     # (deal with separately)
+#     for var in ['Ta', 'RH', 'AH']:
+#          temp_list = []
+#          for ds_var in ds.variables:
+#              if var == 'AH':
+#                  if 'IRGA' in ds_var:
+#                      continue
+#              if ds_var.startswith(var):
+#                  if not any(
+#                      [ds_var.endswith(not_this) for not_this in not_ends_with]
+#                      ):
+#                      temp_list.append(ds_var)
+
+#          # Move on if not variables
+#          if len(temp_list) == 0:
+#              continue
+
+#          # Otherwise calculate heights
+#          heights_list = [
+#              target_height - int_extractor(ds[var].attrs['height'])
+#              for var in temp_list
+#              ]
+
+#          # Sort ascending by height
+#          idx = np.argsort(heights_list)
+#          rslt[var] = dict(zip(
+#              np.array(heights_list)[idx].tolist(),
+#              np.array(temp_list)[idx].tolist()
+#              ))
+
+#     # Check first height has an equivalent for each of RH and AH
+#     Ta_dict = rslt.pop('Ta')
+
+#     for height, var in Ta_dict.items():
+#         inst = ds[var].attrs['instrument']
+#         for quantity in rslt.keys():
+#             try:
+#                 var_name = rslt[quantity][height]
+#                 this_inst = ds[var_name]['instrument']
+
+#             except KeyError:
+#                 pass
+
+
+
+
+
+#          # temp_rslt = dict(zip(temp_list, heights_list))
+#          # rslt[var] = {
+#          #     key: value for key, value in sorted(
+#          #         temp_rslt.items(), key= lambda item: item[1]
+#          #         )
+#          #     }
+
+#     # # Sort each
+#     # for var in rslt:
+#     #     rslt[var] = {
+#     #         key: value for key, value in sorted(
+#     #             rslt['Ta'].items(), key= lambda item: item[1]
+#     #             )
+#     #         }
+
+
+
+#     # keep_var = min(var_dict, key=var_dict.get)
+#     # for key in list(rslt['AH'].keys()):
+#     #     if 'IRGA' in key:
+#     #         rslt['AH'].pop(key)
+#     # if len(rslt['AH']) == 0:
+#     #     rslt.pop('AH')
+#     return rslt
+# #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def _rename_variables(ds: xr.Dataset) -> xr.Dataset:

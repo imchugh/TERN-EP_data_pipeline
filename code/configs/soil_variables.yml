@@ -26,6 +26,10 @@ GreatWesternWoodlands:
   soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc
   soil_temperature: Ts_10cma, Ts_10cmb
   soil_moisture: Sws_5cma, Sws_10cma, Sws_30cma, Sws_50cma, Sws_70cma, Sws_110cma
+HowardSprings:
+  soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc, Fg_8cmd
+  soil_temperature: Ts_8cma
+  soil_moisture: Sws_10cma, Sws_40cma, Sws_100cma, Sws_120cma, Sws_140cma
 Litchfield:
   soil_heat_flux: Fg_8cma, Fg_8cmb
   soil_temperature: Ts_5cmb, Ts_20cmb, Ts_50cmb, Ts_100cmb, Ts_140cmb
@@ -42,6 +46,10 @@ SilverPlains:
   soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc
   soil_temperature: Ts_10cma, Ts_10cmb, Ts_10cmc, Ts_30cma
   soil_moisture: Sws_10cma, Sws_10cmb, Sws_10cmc, Sws_30cma
+SnowGum:
+  soil_heat_flux: Fg8cma, Fg_8cmb
+  soil_temperature: Ts_10cma, Ts_10cmb
+  soil_moisture: Sws_10cma, Sws_10cmb, Sws_30cma
 TiTreeEast:
   soil_heat_flux: Fg_16cma
   soil_temperature: Ts_10cma

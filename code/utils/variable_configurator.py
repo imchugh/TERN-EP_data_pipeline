@@ -144,9 +144,10 @@ class TemplateL1ConfigGenerator():
         if 'press_height' in self.system_configs:
             local_refs.update({'press': 'ps'})
         for key in local_refs:
-            inst_name = df.loc[local_refs[key], 'instrument']
+            inst_list = df.loc[local_refs[key], 'instrument'].split(',')
             height = self.system_configs[f'{key}_height']
-            df.loc[df['instrument'] == inst_name, 'height'] = height
+            for inst_name in inst_list:
+                df.loc[df['instrument'] == inst_name, 'height'] = height
 
         # Add explicit height to T and RH variables
         rslt = {}

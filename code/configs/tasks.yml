@@ -34,9 +34,7 @@ tasks:
 
   construct_homogenised_TOA5:
     - CumberlandPlain
-    - HowardSprings
     - Ridgefield
-    - SnowGum
     - SturtPlains
     - Wellington
     - Yanco
@@ -49,9 +47,12 @@ tasks:
     - Fletcherview
     - GreatWesternWoodlands
     - Gingin
+    - HowardSprings
     - Litchfield
     - MyallValeA
     - MyallValeB
+    - RobsonCreek
+    - SnowGum
     - TiTreeEast
     - Tumbarumba
     - Whroo
@@ -71,7 +72,6 @@ tasks:
     - MyallValeA
     - MyallValeB
     - Ridgefield
-    - RobsonCreek
     - SnowGum
     - SturtPlains
     - Wellington
@@ -87,9 +87,12 @@ tasks:
     - Fletcherview
     - Gingin
     - GreatWesternWoodlands
+    - HowardSprings
     - MyallValeA
     - MyallValeB
     - Litchfield
+    - RobsonCreek
+    - SnowGum
     - TiTreeEast
     - Tumbarumba
     - WombatStateForest
@@ -179,9 +182,7 @@ tasks:
     - CumberlandPlain
 
   pull_slow_flux:
-    - CowBay
     - CumberlandPlain
-    - RobsonCreek
 
   pull_RTMC_images: []
 

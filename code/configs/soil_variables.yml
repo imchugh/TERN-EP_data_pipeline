@@ -1,7 +1,7 @@
 AliceSpringsMulga:
   soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc
-  soil_temperature: Ts_2-6cma, Ts_2-6cmb, Ts_2-6cmc
-  soil_moisture: Sws_0-10cma, Sws_0-10cmb, Sws_0-10cmc
+  soil_temperature: Ts_4cma, Ts_4cmb, Ts_4cmc
+  soil_moisture: Sws_5cma, Sws_5cmb, Sws_5cmc
 Boyagin:
   soil_heat_flux: Fg_8cma, Fg_8cmb
   soil_temperature: Ts_05cmb1, Ts_10cmb1, Ts_20cmb1, Ts_40cmb, Ts_80cmb
@@ -10,6 +10,10 @@ Calperum:
   soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc
   soil_temperature: Ts_8cma, Ts_8cmb, Ts_8cmc
   soil_moisture: Sws_10cma, Sws_10cmb, Sws_10cmc
+CumberlandPlain:
+  soil_heat_flux: Fg_8cma, Fg_8cmb
+  soil_temperature: Ts_8cma, Ts_8cmb
+  soil_moisture: Sws_8cma, Sws_8cmb, Sws_20cma, Sws_20cmb
 Dookie1:
   soil_heat_flux: Fg_16cma
   soil_temperature: Ts_2-16cma
@@ -42,14 +46,26 @@ MyallValeB:
   soil_heat_flux: Fg_16cma, Fg_16cmb, Fg_16cmc
   soil_temperature: Ts_8cma, Ts_8cmb, Ts_8cmc
   soil_moisture: Sws_8cma, Sws_8cmb, Sws_8cmc
+Ridgefield:
+  soil_heat_flux: Fg_10cma, Fg_10cmb, Fg_10cmc
+  soil_temperature: Ts_10cmd, Ts_20cmd, Ts_40cmd, Ts_80cmd
+  soil_moisture: Sws_10cmd, Sws_20cmd, Sws_40cmd, Sws_80cmd
+RobsonCreek:
+  soil_heat_flux: Fg_10cma, Fg_10cmb
+  soil_temperature: Ts_5cma, Ts_5cmb
+  soil_moisture: Sws_10cm, Sws_25cm, Sws_150cm, Sws_200cm
 SilverPlains:
   soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc
   soil_temperature: Ts_10cma, Ts_10cmb, Ts_10cmc, Ts_30cma
   soil_moisture: Sws_10cma, Sws_10cmb, Sws_10cmc, Sws_30cma
 SnowGum:
-  soil_heat_flux: Fg8cma, Fg_8cmb
+  soil_heat_flux: Fg_8cma, Fg_8cmb
   soil_temperature: Ts_10cma, Ts_10cmb
   soil_moisture: Sws_10cma, Sws_10cmb, Sws_30cma
+SturtPlains:
+  soil_heat_flux: Fg_8cma, Fg_8cmb
+  soil_temperature: Ts_5cm, Ts_8cm, Ts_50cm
+  soil_moisture: Sws_5cm, Sws_50cm
 TiTreeEast:
   soil_heat_flux: Fg_16cma
   soil_temperature: Ts_10cma
@@ -58,6 +74,10 @@ Tumbarumba:
   soil_heat_flux: Fg_16cma, Fg_16cmb
   soil_temperature: Ts_2-16cma, Ts_2-16cmb
   soil_moisture: Sws_0-30cma, Sws_50cma, Sws_70cma, Sws_110-140cma
+Wellington:
+  soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc, Fg_8cmd
+  soil_temperature: Ts_4cma, Ts_4cmb, Ts_4cmc, Ts_4cmd
+  soil_moisture: Sws_5cma, Sws_5cmb, Sws_5cmc, Sws_5cmd
 Whroo:
   soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmd
   soil_temperature: Ts_8cma, Ts_8cmb, Ts_8cmc, Ts_8cmd
@@ -66,3 +86,7 @@ WombatStateForest:
   soil_heat_flux: Fg_13cma, Fg_16cmb
   soil_temperature: Ts_5-18cma, Ts_5-18cmb
   soil_moisture: Sws_10cma, Sws_20cma, Sws_40cma, Sws_60cma
+Yanco:
+  soil_heat_flux: Fg_8cma, Fg_8cmb, Fg_8cmc, Fg_8cmd, Fg_8cme
+  soil_temperature: Ts_5cma, Ts_5cmb, Ts_5cmc, Ts_5cmd, Ts_5cme
+  soil_moisture: Sws_10cma, Sws_10cmb, Sws_10cmc, Sws_10cmd, Sws_10cme

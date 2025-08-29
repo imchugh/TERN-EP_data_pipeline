@@ -15,7 +15,8 @@ import subprocess as spc
 
 #------------------------------------------------------------------------------
 
-from paths import paths_manager as pm
+# from paths import paths_manager as pm
+from managers import paths
 
 ###############################################################################
 ### END IMPORTS ###
@@ -64,12 +65,12 @@ def move_site_data_stream(
     """
 
     local_path = _reformat_path_str(
-        pm.get_local_stream_path(
+        paths.get_local_stream_path(
             resource='raw_data', stream=stream, site=site, as_str=True
             )
         )
     remote_path = _reformat_path_str(
-        pm.get_remote_stream_path(
+        paths.get_remote_stream_path(
             resource='raw_data', stream=stream, site=site, as_str=True
             )
         )
@@ -95,15 +96,46 @@ def push_status_file(which) -> None:
     resource = 'network'
     stream = f'status_{which}'
     generic_move(
-        local_location=pm.get_local_stream_path(
+        local_location=paths.get_local_stream_path(
             resource=resource, stream=stream, as_str=True
             ),
-        remote_location=pm.get_remote_stream_path(
+        remote_location=paths.get_remote_stream_path(
             resource=resource, stream=stream, as_str=True
             ),
         which_way='to_remote',
         mod_time=False
         )
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_details_json() -> None:
+
+    """
+
+
+    Args:
+        which (TYPE): DESCRIPTION.
+
+    Returns:
+        None: DESCRIPTION.
+
+    """
+
+    resource = 'network'
+    stream = 'status'
+    generic_move(
+        local_location=paths.get_local_stream_path(
+            resource=resource,
+            stream=stream,
+            as_str=True
+            ),
+        remote_location=paths.get_remote_stream_path(
+            resource=resource, stream=stream, as_str=True
+            ),
+        which_way='to_remote',
+        mod_time=False
+        )
+
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -131,13 +163,13 @@ def push_pull_RTMC_images(which):
     logger.info(f'Begin transfer of RTMC images {msg}')
     generic_move(
         local_location=(
-            pm.get_local_stream_path(
+            paths.get_local_stream_path(
                 resource='network',
                 stream='RTMC_images'
                 )
             ),
             remote_location=(
-                pm.get_remote_stream_path(
+                paths.get_remote_stream_path(
                     resource='network',
                     stream=remote_stream
                 )
@@ -165,7 +197,7 @@ def push_homogenised(stream: str) -> None:
 
     """
 
-    allowed_streams = pm.list_local_streams(resource='homogenised_data')
+    allowed_streams = paths.list_local_streams(resource='homogenised_data')
     if not stream in allowed_streams:
         raise KeyError(f'`stream` must be one of {allowed_streams}')
     logger.info(f'Begin move of homogenised data {stream}')
@@ -173,10 +205,10 @@ def push_homogenised(stream: str) -> None:
     stream = stream
     generic_move(
         local_location=(
-            pm.get_local_stream_path(resource=resource, stream=stream)
+            paths.get_local_stream_path(resource=resource, stream=stream)
             ),
         remote_location=(
-            pm.get_remote_stream_path(resource=resource, stream=stream)
+            paths.get_remote_stream_path(resource=resource, stream=stream)
             ),
         timeout=180
         )

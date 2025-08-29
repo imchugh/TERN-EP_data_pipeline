@@ -7,6 +7,10 @@ Add a way to fill unknown variables with NaN to the function getter
 @author: jcutern-imchugh
 """
 
+###############################################################################
+### BEGIN IMPORTS ###
+###############################################################################
+
 import ephem
 import inspect
 import numpy as np
@@ -14,17 +18,40 @@ import pandas as pd
 from pytz import timezone
 from timezonefinder import TimezoneFinder
 
-#------------------------------------------------------------------------------
-### CONSTANTS ###
-#------------------------------------------------------------------------------
+###############################################################################
+### END IMPORTS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN INITS ###
+###############################################################################
 
 CO2_MOL_MASS = 44
 H2O_MOL_MASS = 18
 K = 273.15
 R = 8.3143
 
+VARIANCE_CONVERSIONS = {
+    'g/m^3': 'g^2/m^6',
+    'umol/mol': 'umol/mol',
+    'mg/m^3': 'mg^2/m^6',
+    'degC': 'degC^2',
+    'm/s': 'm^2/s^2',
+    'mmol/m^3': 'mmol^2/m^6',
+    'mmol/mol': 'mmol/mol',
+    'K': 'K^2'
+    }
+
 ###############################################################################
-### BEGIN TIME CLASSES / FUNCTIONS ###
+### END INITS ###
+###############################################################################
+
+
+
+###############################################################################
+### BEGIN CLASSES ###
 ###############################################################################
 
 #------------------------------------------------------------------------------
@@ -107,7 +134,7 @@ def get_timezone_utc_offset(tz, date, dst=False):
 #------------------------------------------------------------------------------
 
 ###############################################################################
-### END TIME CLASSES / FUNCTIONS ###
+### END CLASSES ###
 ###############################################################################
 
 
@@ -216,6 +243,8 @@ def convert_variable(variable):
     conversions_dict = {
         'Fco2': convert_CO2_flux,
         'Sig_IRGA': convert_signal_strength,
+        'SigCO2_IRGA': convert_signal_strength,
+        'SigH2O_IRGA': convert_signal_strength,
         'CO2Sig_IRGA': convert_signal_strength,
         'H2OSig_IRGA': convert_signal_strength,
         'RH': convert_RH,
@@ -223,6 +252,7 @@ def convert_variable(variable):
         'AH_IRGA': convert_H2O_density,
         'AH': convert_H2O_density,
         'Ta': convert_temperature,
+        'Tv_SONIC': convert_temperature,
         'ps': convert_pressure,
         'Sws': convert_Sws,
         'VPD': convert_pressure,
@@ -230,6 +260,17 @@ def convert_variable(variable):
         'Tbody_RAD': convert_temperature
         }
     return conversions_dict[variable]
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def convert_variance(variable, data, variance_units):
+
+    reverse_units = {
+        value: key for key, value in VARIANCE_CONVERSIONS.items()
+        }
+    from_units = reverse_units[variance_units]
+    func = convert_variable(variable=variable)
+    return func(data=data**(1/2), from_units=from_units)**2
 #------------------------------------------------------------------------------
 
 ###############################################################################

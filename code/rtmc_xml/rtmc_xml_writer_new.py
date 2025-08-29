@@ -235,31 +235,41 @@ def do_system_config(mdm):
         )
 
     # Change the comm status alarm component calculation string
-    temp_logger_name = mdm.get_variable_attributes(
-        variable='Fco2', return_field='logger'
-        )
-    logger_name = f'{mdm.site}_{temp_logger_name}'
 
-    comm_status_editor = parser.get_editor_by_component_name(
-        screen=SCREEN, component_name=component_aliases['Comm Status Alarm']
-        )
 
-    comm_status_editor.get_set_element_calculation_text(
-        text=syntax_generator.get_comm_status_string(logger_name=logger_name)
-        )
+    try:
+        temp_logger_name = mdm.get_variable_attributes(
+            variable='Fco2', return_field='logger'
+            )
+        logger_name = f'{mdm.site}_{temp_logger_name}'
+
+        comm_status_editor = parser.get_editor_by_component_name(
+            screen=SCREEN, component_name=component_aliases['Comm Status Alarm']
+            )
+
+        comm_status_editor.get_set_element_calculation_text(
+            text=syntax_generator.get_comm_status_string(logger_name=logger_name)
+            )
+
+    except KeyError:
+        pass
 
     # Change the no data alarm component calculation string
-    table_name = mdm.get_variable_attributes(
-        variable='Fco2', return_field='table'
-        )
-    no_data_editor = parser.get_editor_by_component_name(
-        screen=SCREEN, component_name=component_aliases['No Data Alarm']
-        )
-    no_data_editor.get_set_element_calculation_text(
-        text=syntax_generator.get_no_data_status_string(
-            logger_name=logger_name, table_name=table_name
+    try:
+        table_name = mdm.get_variable_attributes(
+            variable='Fco2', return_field='table'
             )
-        )
+        no_data_editor = parser.get_editor_by_component_name(
+            screen=SCREEN, component_name=component_aliases['No Data Alarm']
+            )
+        no_data_editor.get_set_element_calculation_text(
+            text=syntax_generator.get_no_data_status_string(
+                logger_name=logger_name, table_name=table_name
+                )
+            )
+
+    except KeyError:
+        pass
 
     # Reconfigure the figure sources for:
     # Contour image...

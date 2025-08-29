@@ -44,7 +44,7 @@ class NCReader():
         else:
             self.files = [nc_file]
             ds = xr.open_dataset(nc_file, chunks=chunks)
-        self.ds = ds
+        self.ds = ds.load()
         ds.close()
         self.labels_to_drop = (
             ['crs'] + [x for x in self.ds if 'QCFlag' in x]

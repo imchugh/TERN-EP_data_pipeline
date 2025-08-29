@@ -5,147 +5,39 @@ Created on Thu Jul 11 14:42:54 2024
 @author: jcutern-imchugh
 """
 
-###############################################################################
-### BEGIN INITS ###
-###############################################################################
-
 import datetime as dt
 import geojson
 import logging
 import numpy as np
 import pandas as pd
-import pathlib
 import time
 
-#------------------------------------------------------------------------------
-
-from csi_loggers import logger_functions as lf
-from data_constructors.convert_calc_filter import filter_range
-from file_handling.nc_io import NCReader
-from file_handling.file_handler import DataHandler
-from file_handling import fast_data_filer as fdf
-from managers import paths
+import file_handling.file_io as io
+import file_handling.file_handler as fh
+from paths import paths_manager as pm
+import utils.metadata_handlers as mh
 from managers import site_details as sd
-from managers.metadata import PFPNameParser, MetaDataManager
-
-###############################################################################
-### END INITS ###
-###############################################################################
-
-
-
-###############################################################################
-### BEGIN INITS ###
-###############################################################################
+from file_handling import fast_data_filer as fdf
+from network_monitoring import network_status_from_nc as nsnc
 
 sd_mngr = sd.SiteDetailsManager(use_local=True)
-name_parser = PFPNameParser()
 SUBSET = ['Fco2', 'Fh', 'Fe', 'Fsd']
 logger = logging.getLogger(__name__)
-
-###############################################################################
-### END INITS ###
-###############################################################################
-
-
+new_sites = [
+    'AliceSpringsMulga', 'Boyagin', 'Calperum', 'Dookie1', 'Fletcherview',
+    'Litchfield', 'Tumbarumba', 'WombatStateForest'
+    ]
 
 ###############################################################################
 ### BEGIN MAIN FUNCTIONS ###
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def write_status_geojson(site_list: list) -> None:
-    """
-    Write status information to a geojson file.
-
-    Args:
-        site_list: list of sites to process.
-
-    Returns:
-        None.
-
-    """
-
-    # Inits
-    input_path = paths.get_local_stream_path(
-        resource='homogenised_data',
-        stream='nc',
-        )
-    output_path = paths.get_local_stream_path(
-        resource='network',
-        stream='status',
-        file_name='network_status.json'
-        )
-    rslt_list = []
-
-    logger.info('Scanning network: ')
-
-    # Iterate over sites
-    for site in site_list:
-
-        logger.info(f'    - retrieving status for site {site}...')
-
-        # Get the file name
-        try:
-            file = _get_file(target_dir=input_path, site=site)
-        except FileNotFoundError:
-            logger.error(msg='There was a problem: ', exc_info=True)
-            continue
-
-        logger.info(f'      - Parsing file {file.name}...')
-
-        # Parse the variables
-        df = parse_slow_data_status_4_geojson(file=file, site_time=_get_site_time(site))
-        rslt = {'days_since_last_record': df.days_since_last_record.max()}
-        rslt.update(df.days_since_last_valid_record.to_dict())
-        rslt_list.append(
-            geojson.Feature(
-                id=site,
-                geometry=geojson.Point(coordinates=[
-                    sd_mngr.df.loc[site, 'latitude'],
-                    sd_mngr.df.loc[site, 'longitude']
-                    ]),
-                properties=rslt
-                )
-            )
-
-        logger.info('      - Successfully parsed...')
-
-        logger.info('    ... done!')
-
-    logger.info('Scan complete - dumping to file...')
-
-    json_obj = geojson.FeatureCollection(rslt_list)
-    json_obj['metadata'] = {
-        'rundatetime': dt.datetime.strftime(
-            dt.datetime.now(), '%Y-%m-%d %H:%M:%S'
-            )
-        }
-    with open(file=output_path, mode='w', encoding='utf-8') as f:
-        geojson.dump(json_obj,f,indent=4)
-
-    logger.info('... done!')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
 def write_status_xlsx(site_list) -> None:
-    """
-    Write status information to an xlsx file.
-
-    Args:
-        site_list: list of sites to process.
-
-    Returns:
-        None.
-
-    """
+    """Evaluate status of all sites and write to xlsx. Returns None."""
 
     # Inits
-    nc_input_path = paths.get_local_stream_path(
-        resource='homogenised_data',
-        stream='nc',
-        )
-    output_path = paths.get_local_stream_path(
+    output_path = pm.get_local_stream_path(
         resource='network',
         stream='status',
         file_name='network_status.xlsx'
@@ -163,34 +55,23 @@ def write_status_xlsx(site_list) -> None:
 
         logger.info(f'    - {site}')
 
-        # Parse the slow data from the netcdf file
-        try:
-            file = _get_file(target_dir=nc_input_path, site=site)
-        except FileNotFoundError:
-            logger.error(msg='There was a problem: ', exc_info=True)
-            continue
+        # Handle sites not yet generating netcdf and usaing old metadata manager
+        if not site in new_sites:
 
-        # Get the site time
-        site_time = _get_site_time(site, run_time=run_time)
-
-        # Get the status of the variables inside the netcdf file
-        slow_data_status = parse_slow_data_status_4_xlsx(
-            file=file,
-            site_time=site_time
-            )
-
-        # Get the status of the files that contributed the data to the netcdf
-        # file
-        try:
-            slow_file_status = parse_file_status_4_xlsx(
-                site=site,
-                site_time=site_time
+            md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
+            slow_file_status = get_slow_file_status(site=site, md_mngr=md_mngr)
+            slow_data_status = (
+                get_slow_data_status(site=site, md_mngr=md_mngr)
+                .reset_index()
                 )
-        except FileNotFoundError:
-            logger.error(msg='There was a problem: ', exc_info=True)
-            continue
 
-        # Append them to the list
+        # Or new continuously appending netcdf
+        else:
+
+            parser = nsnc.SiteStatusParser(site=site)
+            slow_file_status = parser.get_file_status()
+            slow_data_status = parser.get_data_status()
+
         slow_file_status_list.append(slow_file_status)
         site_data_status_dict[site] = slow_data_status
         fast_file_status_list.append(
@@ -220,94 +101,109 @@ def write_status_xlsx(site_list) -> None:
         # Write the individual slow data site sheets
         for site in site_list:
 
-            try:
-
-                _write_site_data_status(
-                    site=site,
-                    data_df=site_data_status_dict[site],
-                    writer=writer,
-                    site_time=_get_site_time(site, run_time=run_time)
-                    )
-
-            except KeyError:
-
-                continue
+            _write_site_data_status(
+                site=site,
+                data_df=site_data_status_dict[site],
+                writer=writer,
+                run_time=run_time
+                )
 
         # Write key
         _write_key(writer=writer)
-#------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-def _get_file(target_dir: pathlib.Path, site: str) -> pathlib.Path:
-    """
-    Find the newest .nc file to import.
-
-    Args:
-        target_dir: base directory to search.
-        site: name of site.
-
-    Raises:
-        FileNotFoundError: raised if either directory does not exist or no
-        files found.
-
-    Returns:
-        absolute path to file.
-
-    """
-
-    # Get the file name
-    site_dir = target_dir / site
-    if not site_dir.exists():
-        raise FileNotFoundError(
-            f'Directory {str(site_dir)} does not exist!'
-            )
-    file_list = sorted(list(site_dir.glob('*.nc')))
-    if len(file_list) == 0:
-        raise FileNotFoundError(
-            f'No .nc files found for site {site} in directory {site_dir}!'
-            )
-    return file_list[-1]
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def check_sites_online():
+def write_status_geojson(site_list):
 
-    logger.info('Running logger clock checks')
-
-    sites = pd.DataFrame(
-        data = paths.get_internal_configs('vpn_ip'),
-        index = 'ip'
+    rslt_list = []
+    output_path = pm.get_local_stream_path(
+        resource='network',
+        stream='status',
+        file_name='network_status.json'
         )
-    breakpoint()
-    rslt = {}
-    for site in sites.keys():
-        print(site)
-        ip_addr = f'192.168.{sites[site]}.100'
-        time = dt.datetime.now()
-        try:
-            site_rslt = (
-                {'response': 'True'} |
-                check_logger_online(ip_addr=ip_addr)
+
+    logger.info('Scanning network: ')
+    for site in site_list:
+
+        logger.info(f'    - retrieving status for site {site}...')
+
+        file = (
+            pm.get_local_stream_path(
+                resource='homogenised_data', stream='TOA5', site=site
+                ) /
+            f'{site}_merged_std.dat'
+            )
+        df = slow_data_test(file=file, use_subset=SUBSET)
+        rslt = {'days_since_last_record': df.days_since_last_record.max()}
+        rslt.update(df.days_since_last_valid_record.to_dict())
+        rslt_list.append(
+            geojson.Feature(
+                id=site,
+                geometry=geojson.Point(coordinates=[
+                    sd_mngr.df.loc[site, 'latitude'],
+                    sd_mngr.df.loc[site, 'longitude']
+                    ]),
+                properties=rslt
                 )
-            site_rslt['time'] = (
-                dt.datetime.strptime(site_rslt['time'], '%Y-%m-%dT%H:%M:%S.%f')
-                )
-            breakpoint()
-            site_rslt['offset'] = (time - site_rslt['time']).seconds
-            expected_offset = None
-            rslt[site] = site_rslt
-        except ConnectionError:
-            rslt[site] = {'response': False}
-    return pd.DataFrame(rslt).T
+            )
+
+        logger.info('    ... done!')
+
+    logger.info('Scan complete - dumping to file...')
+
+    json_obj = geojson.FeatureCollection(rslt_list)
+    json_obj['metadata'] = {
+        'rundatetime': dt.datetime.strftime(
+            dt.datetime.now(), '%Y-%m-%d %H:%M:%S'
+            )
+        }
+    with open(file=output_path, mode='w', encoding='utf-8') as f:
+        geojson.dump(json_obj,f,indent=4)
+
+    logger.info('... done!')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def check_logger_online(ip_addr):
+def slow_data_test(file, use_subset=None):
 
-    return (
-        {'time': lf.clock_check(ip_addr=ip_addr).pop('time')} |
-        lf.get_used_space(ip_addr=ip_addr, source='CRD')
-        )
+    dummy_dict = {
+        'last_valid_value': None,
+        'last_valid_record_datetime': None,
+        'last_24hr_pct_valid': 0,
+        'days_since_last_valid_record': 'N/A'
+        }
+    now = dt.datetime.now()
+    rslt_list = []
+
+    df = io.get_data(file=file, usecols=use_subset).drop('TIMESTAMP', axis=1)
+    dt_last_rec = (now - df.index[-1]).days
+    for var in SUBSET:
+        s = df[var].dropna()
+        if len(s) == 0:
+            rslt_list.append(dummy_dict)
+            continue
+
+        lvr = s.iloc[-1]
+        dt_lvr = s.index[-1]
+        how_old = (now - dt_lvr).days
+        pct_valid = 0
+        if not how_old > 0:
+            pct_valid = round(
+                len(s.loc[now - dt.timedelta(days=1): now]) /
+                len(df[var].loc[now - dt.timedelta(days=1): now]) *
+                100
+                )
+        rslt_list.append(
+            {
+                'days_since_last_record': dt_last_rec,
+                'last_valid_value': lvr,
+                'last_valid_record_datetime': dt_lvr,
+                'last_24hr_pct_valid': pct_valid,
+                'days_since_last_valid_record': how_old
+                }
+            )
+    return pd.DataFrame(rslt_list, index=SUBSET)
 #------------------------------------------------------------------------------
 
 ###############################################################################
@@ -321,164 +217,71 @@ def check_logger_online(ip_addr):
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def parse_slow_data_status_4_geojson(file, site_time):
-    """
-    Read netcdf file to get data status for .nc status file.
-
-    Args:
-        site_time: time to use for comparison of data age.
-
-    Returns:
-        dataframe containing results.
-
-    """
-
-    # Get the data
-    df = NCReader(nc_file=file).get_dataframe()
-
-    # Iterate over the substrings to collect the import flux quantities
-    rslt_list = []
-    for substr in SUBSET:
-
-        # Handle multiple replicates
-        variable = sorted(
-            var for var in df.columns if var.startswith(substr)
-            )[0]
-
-        # Get the maxima and minima
-        info = name_parser.parse_variable_name(variable_name=substr)
-        valid_range = (info['plausible_min'], info['plausible_max'])
-
-        # Parse the variable
-        rslt_list.append(
-            _parse_variable(
-                variable=df[variable],
-                var_range=valid_range,
-                site_time=site_time
-                )
-            )
-
-    return pd.DataFrame(rslt_list, index=SUBSET)
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def parse_slow_data_status_4_xlsx(
-        file: pathlib.Path, site_time: dt.datetime
+def get_slow_file_status(
+        site: str, md_mngr: mh.MetaDataManager=None, run_time: dt.datetime=None
         ) -> pd.DataFrame:
     """
-    Read netcdf file to get data status for xlsx status file.
-
-    Args:
-        site_time: time to use for comparison of data age.
-
-    Returns:
-        dataframe containing results.
-
-    """
-
-    # Get the data
-    df = NCReader(nc_file=file).get_dataframe()
-
-    # Iterate over the substrings to collect the import flux quantities
-    rslt_list = []
-
-    # Iterate over all variables
-    for variable in df.columns:
-
-        # Get the maxima and minima (some non-standard variableas are allowed
-        # when not recognised by the parser, so handle TypeErrors by setting
-        # the valid range to nans, which will leave the range unchanged)
-        try:
-            info = name_parser.parse_variable_name(variable_name=variable)
-            valid_range = (info['plausible_min'], info['plausible_max'])
-        except TypeError:
-            valid_range = (-9999, 9999)
-
-        # Parse the variable
-        rslt_list.append(
-            _parse_variable(
-                variable=df[variable],
-                var_range=valid_range,
-                site_time=site_time
-                )
-            )
-
-    # Format and return the results
-    output_df = pd.DataFrame(rslt_list, index=df.columns)
-    output_df.index.name = 'variable'
-    return output_df.reset_index()
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def parse_file_status_4_xlsx(site: str, site_time: dt.datetime) -> pd.DataFrame:
-    """
-    Read raw files to get raw file status for xlsx status file.
+    Get the file attributes of each file mapped in the metadata manager.
 
     Args:
         site: name of site.
-        site_time: time to use for comparison of data age.
+        md_mngr: metadata manager from which to draw file info. Defaults to None.
 
     Returns:
-        dataframe containing results.
+        Dataframe containing the info for all listed files.
 
     """
 
-    # Get the metadata manager
-    mdm = MetaDataManager(site=site)
-
-    # Grab the site-adjusted run time
-    site_time = _get_site_time(site=site, run_time=site_time)
+    # Inits
+    if md_mngr is None:
+        md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
+    site_time = _get_site_time(site=site, run_time=run_time)
 
     # Get the logger / file particulars (currently must handle sites with no
     # logger or table)
     try:
         files_df = (
-            mdm.site_variables[['logger', 'table', 'file']]
+            md_mngr.site_variables[['logger', 'table', 'file']]
             .drop_duplicates()
             .reset_index(drop=True)
-            .set_index(keys='file')
             )
     except KeyError:
         files_df = (
-            mdm.site_variables[['file']]
-            .drop_duplicates()
+            md_mngr.site_variables[['file']]
+            .assign(logger='', table='')
+            [['logger','table','file']]
             .reset_index(drop=True)
-            .set_index(keys='file')
-            .assign(logger=None, table=None)
             )
 
     # Get the file attributes
     attrs_df = (
         pd.concat(
-            [mdm.get_file_attributes(x) for x in mdm.list_files()],
+            [md_mngr.get_file_attributes(x) for x in files_df.file],
             axis=1
             )
         .T
         .drop(['station_name', 'table_name'], axis=1)
         )
-    attrs_df.index = mdm.list_files()
 
     # Get the percentage missing data for each file
     # Note that here, we DONT try to concatenate if the file is an EP master
     # file because the concatenation is already handled
     missing_list = []
     do_concat = False
-    for file in mdm.list_files(abs_path=True):
-        do_concat = True
-        if attrs_df.loc[file.name, 'format'] != 'TOA5':
+    for file in md_mngr.list_files(abs_path=True):
+        if md_mngr.get_file_attributes(file.name)['format'] == 'TOA5':
+            do_concat = True
+        else:
             do_concat = False
         missing_list.append(
-            DataHandler(file=file, concat_files=do_concat)
+            fh.DataHandler(file=file, concat_files=do_concat)
             .get_missing_records()
             )
-    missing_df = pd.DataFrame(
-        data=missing_list, index=mdm.list_files()
-        )
+    missing_df = pd.DataFrame(missing_list)
 
-    # Combine all
+    # Combine all and return
     combined_df = pd.concat([files_df, attrs_df, missing_df], axis=1)
-    combined_df.index.name = 'file'
-    output_df = (
+    return (
         combined_df
         .assign(
             days_since_last_record = (
@@ -486,74 +289,105 @@ def parse_file_status_4_xlsx(site: str, site_time: dt.datetime) -> pd.DataFrame:
                 )
             )
         .assign(site=site)
-        .reset_index()
+        .set_index(keys=['site', 'logger', 'table'])
         )
-
-    return output_df.set_index(keys=['site', 'logger', 'table'])
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def _parse_variable(
-        variable: pd.Series, var_range: tuple, site_time: dt.datetime
-        ) -> dict:
+def get_slow_data_status(
+        site: str, md_mngr=None, run_time=None, use_subset=None
+        ) -> pd.DataFrame:
     """
-    Parse the variable for statistics.
+    Get the status of variables mapped in the metadata manager.
 
     Args:
-        variable: variable data to parse.
-        var_range: lower and upper range limits.
+        site: name of site.
+        md_mngr (optional): metadata manager from which to draw file info.
+            Defaults to None.
+        run_time (optional): the time to use for calculation of time since
+            valid variables reported. If not supplied, system time at runtime is
+            used. Defaults to None.
+        use_subset (optional): the subset of columns to include when extracting
+            data from file. Defaults to None.
 
     Returns:
-        dicitionary containing status results.
+        Dataframe containing the status of all mapped variables.
 
     """
 
-    # Before anything, get the last record (valid or not)
-    try:
-        dt_last_rec = (site_time - variable.index[-1]).days
-    except IndexError:
-        dt_last_rec = 'N/A'
-
-    # Filter the data
-    filtered_variable = (
-        filter_range(
-            series=variable.copy(),
-            min_val=var_range[0], max_val=var_range[1]
-            )
-        .dropna()
-        )
-
-    # If no good data, return the dummy
-    if len(filtered_variable) == 0:
-
-        return {
-            'days_since_last_record': dt_last_rec,
-            'last_valid_value': None,
-            'last_valid_record_datetime': None,
-            'last_24hr_pct_valid': 0,
-            'days_since_last_valid_record': 'N/A'
-            }
-
-    # If good data do the stats
-    lvr = filtered_variable.iloc[-1]
-    dt_lvr = filtered_variable.index[-1]
-    how_old = (site_time - dt_lvr).days
-    pct_valid = 0
-    if not how_old > 0:
-        pct_valid = round(
-            len(filtered_variable.loc[site_time - dt.timedelta(days=1): site_time]) /
-            len(variable.loc[site_time - dt.timedelta(days=1): site_time]) *
-            100
-            )
-
-    # Populate the dict and return
-    return {
-        'days_since_last_record': dt_last_rec,
-        'last_valid_value': lvr,
-        'last_valid_record_datetime': dt_lvr,
-        'last_24hr_pct_valid': pct_valid,
-        'days_since_last_valid_record': how_old
+    # Inits
+    if md_mngr is None:
+        md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
+    run_time = _get_site_time(site=site, run_time=run_time)
+    dummy_dict = {
+        'last_valid_value': None,
+        'last_valid_record_datetime': None,
+        'last_24hr_pct_valid': 0,
+        'days_since_last_valid_record': 'N/A'
         }
+    data_file = pm.get_local_stream_path(
+        resource='homogenised_data',
+        stream='TOA5',
+        site=site,
+        file_name=f'{site}_merged_std.dat',
+        check_exists=True
+        )
+    data_df = (
+        io.get_data(file=data_file)
+        .drop('TIMESTAMP', axis=1)
+        )
+    l = []
+    now = dt.datetime.now()
+
+    # Iterate over columns (or subset if passed)
+    if use_subset is not None:
+        var_list = use_subset
+    else:
+        var_list = data_df.columns
+    for var in var_list:
+
+        # If the variable is constructed, it will not have any attributes
+        try:
+            attrs_dict = (
+                md_mngr.get_variable_attributes(variable=var)
+                [['logger', 'table', 'file']]
+                .to_dict()
+                )
+        except KeyError:
+            attrs_dict = {}
+
+        # If the variable has no valid data, use the dummy outputs
+        # Otherwise, calculate the last valid values etc.
+        s = data_df[var].dropna()
+        if len(s) == 0:
+            attrs_dict.update(dummy_dict)
+        else:
+            lvr = s.iloc[-1]
+            dt_lvr = s.index[-1]
+            how_old = (now - dt_lvr).days
+            pct_valid = 0
+            if not how_old > 0:
+                pct_valid = round(
+                    len(s.loc[now - dt.timedelta(days=1): now]) /
+                    len(data_df[var].loc[now - dt.timedelta(days=1): now]) *
+                    100
+                    )
+            attrs_dict.update(
+                {
+                    'last_valid_value': lvr,
+                    'last_valid_record_datetime': dt_lvr,
+                    'last_24hr_pct_valid': pct_valid,
+                    'days_since_last_valid_record': how_old
+                    }
+                )
+        l.append(attrs_dict)
+
+    return (
+        pd.DataFrame(
+            data=l,
+            index=var_list)
+        .rename_axis('variable')
+        )
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -590,35 +424,6 @@ def get_fast_file_status(site: str) -> dict:
         .days - 1
         )
     return {'file_name': rslt, 'days_since_last_record': days}
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def _get_site_time(site: str, run_time: dt.datetime=None) -> dt.datetime:
-    """
-    Correct server time to site-based local standard time.
-
-    Args:
-        site: name of site.
-        run_time (optional): the time to use for calculation of time since
-            valid variables reported. If not supplied, system time at runtime is
-            used. Defaults to None.
-
-    Returns:
-        site local standard time equivalent of AEST server time.
-
-    """
-
-    server_utc_offset = time.localtime().tm_gmtoff / 3600
-    if run_time is None:
-        run_time = dt.datetime.now()
-    return (
-        run_time -
-        dt.timedelta(
-            hours=
-            server_utc_offset -
-            sd_mngr.get_single_site_details(site, 'UTC_offset')
-            )
-        )
 #------------------------------------------------------------------------------
 
 ###############################################################################
@@ -673,7 +478,7 @@ def _write_file_status(
 #------------------------------------------------------------------------------
 def _write_site_data_status(
         site: str, data_df: pd.DataFrame, writer: pd.ExcelWriter,
-        site_time: dt.datetime
+        run_time: dt.datetime
         ) -> None:
     """
     Write the data status of an individual site to a spreadsheet.
@@ -695,7 +500,7 @@ def _write_site_data_status(
     _write_time_frame(
         xl_writer=writer,
         sheet=site,
-        run_time=site_time
+        run_time=_get_site_time(site=site, run_time=run_time)
         )
 
     # Apply the formatting
@@ -729,6 +534,35 @@ def _write_key(writer) -> None:
         )
     _set_column_widths(
         df=key_df, xl_writer=writer, sheet=sheet_name
+        )
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def _get_site_time(site, run_time=None):
+    """
+    Correct server time to site-based local standard time.
+
+    Args:
+        site: name of site.
+        run_time (optional): the time to use for calculation of time since
+            valid variables reported. If not supplied, system time at runtime is
+            used. Defaults to None.
+
+    Returns:
+        TYPE: DESCRIPTION.
+
+    """
+
+    server_utc_offset = time.localtime().tm_gmtoff / 3600
+    if run_time is None:
+        run_time = dt.datetime.now()
+    return (
+        run_time -
+        dt.timedelta(
+            hours=
+            server_utc_offset -
+            sd_mngr.get_single_site_details(site, 'UTC_offset')
+            )
         )
 #------------------------------------------------------------------------------
 

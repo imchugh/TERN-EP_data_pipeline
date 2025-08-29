@@ -150,6 +150,12 @@ class MetaDataManager():
                     zip(REQUISITE_FIELDS, fields_in_metadata)
                     if not field_in_metadata
                     ]
+
+                # Allow override if file name directly supplied.
+                if len(missing_fields) == 2:
+                    if 'logger' and 'table' in missing_fields:
+                        if 'file' in fields:
+                            continue
                 raise KeyError(
                     f'The following fields were missing from entry {variable}: '
                     f'{", ".join(missing_fields)}'
@@ -301,12 +307,15 @@ class MetaDataManager():
 
         """
 
-        # Make file names
-        file_list = (
-            f'{self.site}_' +
-            df[['logger', 'table']]
-            .agg('_'.join, axis=1) + '.dat'
-            )
+        # Make file names (use 'file' column if exists)
+        if 'file' in df.columns:
+            file_list = df.file.copy()
+        else:
+            file_list = (
+                f'{self.site}_' +
+                df[['logger', 'table']]
+                .agg('_'.join, axis=1) + '.dat'
+                )
 
         # Check file paths are valid
         for file in file_list.unique():
@@ -1324,7 +1333,9 @@ def convert_variance_units(units: str, to_variance=True) -> str:
         'umol/mol': 'umol/mol',
         'mg/m^3': 'mg^2/m^6',
         'degC': 'degC^2',
-        'm/s': 'm^2/s^2'
+        'm/s': 'm^2/s^2',
+        'mmol/m^3': 'mmol^2/m^6',
+        'mmol/mol': 'mmol/mol'
         }
 
     if not to_variance:

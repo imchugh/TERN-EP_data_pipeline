@@ -2,6 +2,7 @@
 
 sites:
   - AliceSpringsMulga
+  - AlpinePeat
   - Boyagin
   - Calperum
   - CowBay
@@ -20,6 +21,7 @@ sites:
   - SturtPlains
   - TiTreeEast
   - Tumbarumba
+  - Wedgetail
   - Wellington
   - Whroo
   - WombatStateForest
@@ -32,17 +34,15 @@ tasks:
 
   # Data constructors
 
-  construct_homogenised_TOA5:
-    - CumberlandPlain
-    - Ridgefield
-    - SturtPlains
-    - Wellington
-    - Yanco
+  # construct_homogenised_TOA5:
+    # - CumberlandPlain
 
   construct_homogenised_TOA5_from_nc:
+    - AlpinePeat
     - AliceSpringsMulga
     - Boyagin
     - Calperum
+    - CumberlandPlain
     - Dookie1
     - Fletcherview
     - GreatWesternWoodlands
@@ -51,12 +51,17 @@ tasks:
     - Litchfield
     - MyallValeA
     - MyallValeB
+    - Ridgefield
     - RobsonCreek
+    - SturtPlains
     - SnowGum
     - TiTreeEast
     - Tumbarumba
+    - Wedgetail
+    - Wellington
     - Whroo
     - WombatStateForest
+    - Yanco
 
   construct_L1_xlsx:
     - AliceSpringsMulga
@@ -80,9 +85,11 @@ tasks:
     - Yanco
 
   construct_L1_nc:
+    - AlpinePeat
     - AliceSpringsMulga
     - Boyagin
     - Calperum
+    - CumberlandPlain
     - Dookie1
     - Fletcherview
     - Gingin
@@ -91,12 +98,17 @@ tasks:
     - MyallValeA
     - MyallValeB
     - Litchfield
+    - Ridgefield
     - RobsonCreek
     - SnowGum
+    - SturtPlains
     - TiTreeEast
     - Tumbarumba
-    - WombatStateForest
+    - Wellington
+    - Wedgetail
     - Whroo
+    - WombatStateForest
+    - Yanco
 
   update_EddyPro_master:
     - CumberlandPlain
@@ -176,6 +188,32 @@ tasks:
 
   construct_site_details: []
 
+  construct_site_details_json:
+    - AlpinePeat
+    - AliceSpringsMulga
+    - Boyagin
+    - Calperum
+    - CumberlandPlain
+    - Dookie1
+    - Fletcherview
+    - Gingin
+    - GreatWesternWoodlands
+    - HowardSprings
+    - MyallValeA
+    - MyallValeB
+    - Litchfield
+    - Ridgefield
+    - RobsonCreek
+    - SnowGum
+    - SturtPlains
+    - TiTreeEast
+    - Tumbarumba
+    - Wellington
+    - Wedgetail
+    - Whroo
+    - WombatStateForest
+    - Yanco
+
   # Rclone transfers - pull tasks
 
   pull_profile_raw:
@@ -232,6 +270,8 @@ tasks:
   push_status_geojson: []
 
   push_status_xlsx: []
+
+  push_details_json: []
 
   # s/ftp - push tasks
 

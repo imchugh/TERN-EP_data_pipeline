@@ -40,7 +40,7 @@ STATISTIC_ALIASES = {
     'sum': 'Tot'
     }
 ADD_VARIABLES = ['AH', 'RH', 'CO2_IRGA', 'Td', 'VPD']
-FLUX_FILE_VAR_IND = 'Uz_SONIC_Av'
+FLUX_FILE_VAR_IND = ['Uz_SONIC_Av', 'Tv_SONIC_Av']
 logger = logging.getLogger(__name__)
 
 ###############################################################################
@@ -102,6 +102,9 @@ def construct_visualisation_TOA5(site: str, n_files=None) -> None:
         ds.to_dataframe()
         .droplevel(['latitude', 'longitude'])
         )
+
+    # Close dataset
+    ds.close()
 
     # Generate output headers
     headers = _build_headers(ds=ds)
@@ -198,7 +201,17 @@ def _get_extraneous_met(ds: xr.Dataset) -> list:
     # Inits
     not_ends_with = ['QCFlag', 'Sd', 'Ct']
     int_extractor = lambda height: float(height.replace('m', ''))
-    target_height = int_extractor(ds[FLUX_FILE_VAR_IND].attrs['height'])
+    target_height = None
+    for var in FLUX_FILE_VAR_IND:
+        try:
+            target_height = int_extractor(ds[var].attrs['height'])
+        except KeyError:
+            continue
+    if target_height is None:
+        raise KeyError(
+            'Neither of the flux file indicator variables '
+            f'{", ".join(FLUX_FILE_VAR_IND)} were found in the file!'
+            )
 
     # Make df
     df = pd.DataFrame(
@@ -213,7 +226,7 @@ def _get_extraneous_met(ds: xr.Dataset) -> list:
                 continue
             if any(var.endswith(this) for this in not_ends_with):
                 continue
-            if 'IRGA' in var:
+            if 'IRGA' in var or 'SONIC' in var:
                 continue
             df.loc[var] = [
                 abs(int_extractor(ds[var].attrs['height']) - target_height),
@@ -318,6 +331,7 @@ def _rename_variables(ds: xr.Dataset) -> xr.Dataset:
                 var: met_var for var in ds.variables
                 if var.startswith(met_var)
                 and not 'IRGA' in var
+                and not 'SONIC' in var
                 }
             )
     ds = ds.rename(rslt)
@@ -329,7 +343,7 @@ def _rename_variables(ds: xr.Dataset) -> xr.Dataset:
     co2_units = ds.variables['CO2_IRGA'].attrs['units']
     if co2_units == 'mg/m^3':
         rslt = {'CO2_IRGA': 'CO2c_IRGA'}
-    ds = ds.rename(rslt)
+        ds = ds.rename(rslt)
 
     # Check for multiple rain replicates, use the first...
     precip_list = [var for var in ds.variables if 'Precip' in var]

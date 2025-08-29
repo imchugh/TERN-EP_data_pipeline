@@ -30,14 +30,13 @@ from numpy.typing import ArrayLike
 import pandas as pd
 import pathlib
 
-# from paths import paths_manager as pm
-from utils import configs_getters as cg
+from managers import paths
 
 ###############################################################################
 ### CONSTANTS ###
 ###############################################################################
 
-FILE_CONFIGS = cg.get_configs(config_name='raw_file_format')
+FILE_CONFIGS = paths.get_internal_configs('raw_file_format')
 INFO_FIELD_NAMES = [
     'format', 'station_name', 'logger_type', 'serial_num', 'OS_version',
     'program_name', 'program_sig', 'table_name'

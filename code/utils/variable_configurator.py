@@ -104,7 +104,6 @@ class TemplateL1ConfigGenerator():
     #--------------------------------------------------------------------------
     def compile_configs(self):
 
-        # template = self.template_configs.copy()
         template_df = self._build_template_df()
         custom_df = self._build_custom_df()
         df = self._merge_dfs(template_df=template_df, custom_df=custom_df)
@@ -276,21 +275,35 @@ class PFPL1CntlParser():
 
         """
 
+        parse_list = []
+        for variable in self.config['Variables'].keys():
+            if 'xl' in self.config['Variables'][variable]:
+                parse_list.append(variable)
+
         df = (
             pd.concat(
                 [
+                    # pd.DataFrame(
+                    #     [self.config['Variables'][key]['Attr'] for key in
+                    #      self.config['Variables'].keys()]
+                    #     ),
+                    # pd.DataFrame(
+                    #     [self.config['Variables'][key]['xl'] for key in
+                    #      self.config['Variables'].keys()]
+                    #     )
                     pd.DataFrame(
                         [self.config['Variables'][key]['Attr'] for key in
-                         self.config['Variables'].keys()]
+                         parse_list]
                         ),
                     pd.DataFrame(
                         [self.config['Variables'][key]['xl'] for key in
-                         self.config['Variables'].keys()]
+                         parse_list]
                         )
                     ],
                 axis=1
                 )
-            .set_index(key for key in self.config['Variables'].keys())
+            # .set_index(key for key in self.config['Variables'].keys())
+            .set_index(key for key in parse_list)
             .rename({'sheet': 'table'}, axis=1)
             .fillna('')
             )

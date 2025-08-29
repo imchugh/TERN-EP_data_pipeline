@@ -130,12 +130,24 @@ def construct_site_details(site: str) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+def construct_site_details_json() -> None:
+    """Construct the details file for the Grafana dash"""
+
+    deetcon = import_module('data_constructors.details_constructor')
+    this_task = inspect.stack()[0][3]
+    deetcon.site_info_2_json(
+        site_list=get_site_list_for_task(task=this_task)
+        )
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
 def construct_status_xlsx() -> None:
     """Construct the status xlsx seeded with site list"""
 
     ns = import_module('network_monitoring.network_status')
+    this_task = inspect.stack()[0][3]
     ns.write_status_xlsx(
-        site_list=get_site_list_for_task('construct_status_xlsx')
+        site_list=get_site_list_for_task(task=this_task)
         )
 #------------------------------------------------------------------------------
 
@@ -144,8 +156,9 @@ def construct_status_geojson() -> None:
     """Construct the status geojson seeded with site list"""
 
     ns = import_module('network_monitoring.network_status')
+    this_task = inspect.stack()[0][3]
     ns.write_status_geojson(
-        site_list=get_site_list_for_task('construct_status_geojson')
+        site_list=get_site_list_for_task(task=this_task)
         )
 #------------------------------------------------------------------------------
 
@@ -203,8 +216,9 @@ def file_aux_fast_data(site: str) -> None:
 #------------------------------------------------------------------------------
 def _file_fast_data(site: str, is_aux: bool) -> None:
 
-    fdf = import_module('file_handling.fast_data_filer')
-    fdf.move_fast_files(site=site, is_aux=is_aux)
+    pf = import_module('file_handling.package_fast')
+    pf.file_fast_data(site=site, is_aux=is_aux)
+    # fdf.move_fast_files(site=site, is_aux=is_aux)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -252,6 +266,12 @@ def push_aux_fast_flux(site):
         exclude_dirs=['TMP'], timeout=1200
         )
     logger.info('Done.')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def push_details_json():
+
+    rct.push_details_json()
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

@@ -493,6 +493,21 @@ Wellington:
   vegetation: null
   time_zone: Australia/Sydney
   UTC_offset: 10.0
+Wedgetail:
+  id: https://w3id.org/tern/resources/629caa53-59a4-4aab-a11c-e02db141fb21
+  fluxnet_id: AU-Wgt
+  date_commissioned: '2023-12-01'
+  latitude: -42.09138889
+  longitude: 147.0794444
+  elevation: 860.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: 0.1
+  soil: Organosol
+  tower_height: 2.5
+  vegetation: Species rich highland grassland/sedgeland
+  time_zone: Australia/Hobart
+  UTC_offset: 10.0
 Whroo:
   id: https://w3id.org/tern/resources/b512e2dc-98a6-40d5-a91c-ad8f47d1ace7
   fluxnet_id: AU-Whr

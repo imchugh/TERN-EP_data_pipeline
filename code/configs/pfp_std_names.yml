@@ -46,6 +46,18 @@ APAR:
   plausible_min: null
   standard_name: null
   standard_units: umol/m^2/s
+AC:
+  long_name: Covariance of H2O and CO2
+  plausible_max: null
+  plausible_min: null
+  standard_name: null
+  standard_units: mg.g/m^6
+AT:
+  long_name: Covariance of H2O and T
+  plausible_max: null
+  plausible_min: null
+  standard_name: null
+  standard_units: K.g/m^3
 CO2:
   long_name: CO2 mole fraction
   plausible_max: 1500.0
@@ -94,6 +106,12 @@ CO2c_IRGA:
   plausible_min: 400.0
   standard_name: mass_concentration_of_carbon_dioxide_in_air
   standard_units: mg/m^3
+CT:
+  long_name: Covariance of H2O and T
+  plausible_max: null
+  plausible_min: null
+  standard_name: null
+  standard_units: K.mg/m^3
 Diag_IRGA:
   long_name: IRGA diagnostic value
   plausible_max: 36000.0
@@ -184,6 +202,12 @@ Fn:
   plausible_min: -300.0
   standard_name: surface_net_downward_radiative_flux
   standard_units: W/m^2
+Fn_RAD:
+  long_name: Net radiation
+  plausible_max: 1000.0
+  plausible_min: -300.0
+  standard_name: surface_net_downward_radiative_flux
+  standard_units: W/m^2
 Fpard:
   long_name: Downwelling photosynthetically active radiation
   plausible_max: null
@@ -232,6 +256,12 @@ H2O:
   plausible_min: 80.0
   standard_name: mole_fraction_of_water_vapor_in_air
   standard_units: mmol/mol
+H2O_IRGA:
+  long_name: H2O concentration
+  plausible_max: 0.0
+  plausible_min: 80.0
+  standard_name: mole_fraction_of_water_vapor_in_air
+  standard_units: mmol/mol
 H2OSig_IRGA:
   long_name: H2O signal strength
   plausible_max: 102.5
@@ -262,6 +292,12 @@ PAR:
   plausible_min: null
   standard_name: surface_downwelling_photosynthetic_photon_flux_in_air
   standard_units: umol/m^2/s
+pitch_SONIC:
+  long_name: sonic anemometer pitch angle
+  plausible_max: 90.0
+  plausible_min: 0.0
+  standard_name: null
+  standard_units: deg
 Precip:
   long_name: Rainfall
   plausible_max: 100.0
@@ -274,12 +310,36 @@ RH:
   plausible_min: 0.0
   standard_name: relative_humidity
   standard_units: percent
+Rhoa:
+  long_name: Density of moist air
+  plausible_max: 1.4
+  plausible_min: 0.4
+  standard_name: null
+  standard_units: kg/m^3
+Rhod:
+  long_name: Density of dry air
+  plausible_max: 1.6
+  plausible_min: 0.6
+  standard_name: null
+  standard_units: kg/m^3
 RH_IRGA:
   long_name: Relative humidity
   plausible_max: 100.0
   plausible_min: 0.0
   standard_name: relative_humidity
   standard_units: percent
+RHint_SONIC:
+  long_name: Sonic anemometer internal relative humidity
+  plausible_max: 100.0
+  plausible_min: 0.0
+  standard_name: null
+  standard_units: percent
+roll_SONIC:
+  long_name: sonic anemometer roll angle
+  plausible_max: 90.0
+  plausible_min: 0.0
+  standard_name: null
+  standard_units: deg
 SH:
   long_name: Specific humidity
   plausible_max: null
@@ -300,6 +360,18 @@ Sco2:
   standard_units: umol/m^2/s
 Sig_IRGA:
   long_name: Signal strength
+  plausible_max: 102.5
+  plausible_min: 0.0
+  standard_name: null
+  standard_units: percent
+SigCO2_IRGA:
+  long_name: CO2 signal strength
+  plausible_max: 102.5
+  plausible_min: 0.0
+  standard_name: null
+  standard_units: percent
+SigH2O_IRGA:
+  long_name: CO2 signal strength
   plausible_max: 102.5
   plausible_min: 0.0
   standard_name: null
@@ -334,6 +406,12 @@ Ta_SONIC:
   plausible_min: -40.0
   standard_name: null
   standard_units: degC
+tau:
+  long_name: Momentum flux
+  plausible_max: 5.0
+  plausible_min: 0.0
+  standard_name: surface_downward_momentum_flux
+  standard_units: kg/m/s^2
 Tbody_RAD:
   long_name: Radiometer body temperature
   plausible_max: 60.0
@@ -357,6 +435,12 @@ Td_IRGA:
   plausible_max: 40.0
   plausible_min: -65.0
   standard_name: dew_point_temperature
+  standard_units: degC
+Tint_SONIC:
+  long_name: Sonic anemometer internal temperature
+  plausible_max: 60.0
+  plausible_min: -40.0
+  standard_name: null
   standard_units: degC
 Tpanel:
   long_name: Logger panel temperature

@@ -14,6 +14,8 @@ from file_handling import nc_io, file_handler
 from data_constructors.convert_calc_filter import filter_range
 from managers import metadata, paths
 
+DUMMY_DICT = {'logger': 'N/A', 'table': 'N/A'}
+
 class SiteStatusParser():
 
     #--------------------------------------------------------------------------
@@ -40,6 +42,17 @@ class SiteStatusParser():
 
     #--------------------------------------------------------------------------
     def get_data_status(self, run_time: dt.datetime=None) -> pd.DataFrame:
+        """
+        Read netcdf file to get data status.
+
+        Args:
+            run_time (optional): time to use for comparison of data age.
+            Defaults to None.
+
+        Returns:
+            dataframe containing results.
+
+        """
 
         # Grab the site-adjusted run time
         run_time = _get_site_time(
@@ -59,15 +72,19 @@ class SiteStatusParser():
             .glob('*.nc')
             )[-1]
         reader = nc_io.NCReader(nc_file=file)
-        # reader.ds = reader.ds.rename(flux_map)
 
         # Create a dataframe and parse the variables inidividually
         df = reader.get_dataframe()
         rslt = []
         for variable in self.md_mngr.list_variables():
             attrs = self.md_mngr.get_variable_attributes(variable=variable)
+            try:
+                sub_attrs = attrs[['logger', 'table', 'file']].to_dict()
+            except KeyError:
+                sub_attrs = DUMMY_DICT | {'file': attrs['file']}
+
             rslt.append(
-                attrs[['logger', 'table', 'file']].to_dict() |
+                sub_attrs |
                 _parse_variable(
                     variable=df[variable],
                     var_range=(attrs.plausible_min, attrs.plausible_max)
@@ -90,8 +107,8 @@ class SiteStatusParser():
         Get the file attributes of each file mapped in the metadata manager.
 
         Args:
-            site: name of site.
-            md_mngr: metadata manager from which to draw file info. Defaults to None.
+            run_time (optional): time to use for comparison of data age.
+            Defaults to None.
 
         Returns:
             Dataframe containing the info for all listed files.
@@ -107,12 +124,20 @@ class SiteStatusParser():
 
         # Get the logger / file particulars (currently must handle sites with no
         # logger or table)
-        files_df = (
-            self.md_mngr.site_variables[['logger', 'table', 'file']]
-            .drop_duplicates()
-            .reset_index(drop=True)
-            .set_index(keys='file')
-            )
+        try:
+            files_df = (
+                self.md_mngr.site_variables[['logger', 'table', 'file']]
+                .drop_duplicates()
+                .reset_index(drop=True)
+                .set_index(keys='file')
+                )
+        except KeyError:
+            files_df = (
+                self.md_mngr.site_variables[['file']]
+                .drop_duplicates()
+                .reset_index(drop=True)
+                .set_index(keys='file')
+                )
 
         # Get the file attributes
         attrs_df = (
@@ -145,10 +170,10 @@ class SiteStatusParser():
             data=missing_list, index=self.md_mngr.list_files()
             )
 
-        # Combine all and return
+        # Combine all
         combined_df = pd.concat([files_df, attrs_df, missing_df], axis=1)
         combined_df.index.name = 'file'
-        return (
+        output_df = (
             combined_df
             .assign(
                 days_since_last_record = (
@@ -157,162 +182,27 @@ class SiteStatusParser():
                 )
             .assign(site=self.site)
             .reset_index()
-            .set_index(keys=['site', 'logger', 'table'])
             )
-    #------------------------------------------------------------------------------
 
-def get_data_status(site: str, run_time: dt.datetime=None) -> pd.DataFrame:
-    """
-    Read netcdf file to get data status.
-
-    Args:
-        site: name of site.
-        run_time (optional): time to use for comparison of data age. Defaults to None.
-
-    Returns:
-        TYPE: DESCRIPTION.
-
-    """
-
-    # Get the metadata manager and rename the system-specific turbulent flux
-    # names to standard names.
-    md_mngr = metadata.MetaDataManager(site=site)
-    flux_map = md_mngr.map_fluxes_to_standard_names()
-    md_mngr.site_variables = md_mngr.site_variables.rename(flux_map)
-
-    # Grab the site-adjusted run time
-    run_time = _get_site_time(
-        site=site,
-        UTC_offset=md_mngr.site_details['UTC_offset'],
-        run_time=run_time
-        )
-
-    # Get and read the data, then rename it to erase the system-specific
-    # turbulent flux names
-    file = sorted(
-        paths.get_local_stream_path(
-            resource='homogenised_data',
-            stream='nc',
-            subdirs=[site]
-            )
-        .glob('*.nc')
-        )[-1]
-    reader = nc_io.NCReader(nc_file=file)
-    reader.ds = reader.ds.rename(flux_map)
-
-    # Create a dataframe and parse the variables inidividually
-    df = reader.get_dataframe()
-    rslt = []
-    for variable in md_mngr.list_variables():
-        attrs = md_mngr.get_variable_attributes(variable=variable)
         try:
-            rslt.append(
-                attrs[['logger', 'table', 'file']].to_dict() |
-                _parse_variable(
-                    variable=df[variable],
-                    var_range=(attrs.plausible_min, attrs.plausible_max)
-                    )
-                )
+            return output_df.set_index(keys=['site', 'logger', 'table'])
         except KeyError:
-            breakpoint()
-
-    # Dump to df and return
-    return (
-        pd.DataFrame(
-            data=rslt,
-            index=md_mngr.list_variables())
-        .rename_axis('variable')
-        .reset_index()
-        )
-
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def get_file_status(
-        site: str, md_mngr: metadata.MetaDataManager=None,
-        run_time: dt.datetime=None
-        ) -> pd.DataFrame:
-    """
-    Get the file attributes of each file mapped in the metadata manager.
-
-    Args:
-        site: name of site.
-        md_mngr: metadata manager from which to draw file info. Defaults to None.
-
-    Returns:
-        Dataframe containing the info for all listed files.
-
-    """
-
-    # Inits
-    if md_mngr is None:
-        md_mngr = metadata.MetaDataManager(site=site)
-
-    # Grab the site-adjusted run time
-    site_time = _get_site_time(
-        site=site,
-        UTC_offset=md_mngr.site_details['UTC_offset'],
-        run_time=run_time
-        )
-
-    # Get the logger / file particulars (currently must handle sites with no
-    # logger or table)
-    try:
-        files_df = (
-            md_mngr.site_variables[['logger', 'table', 'file']]
-            .drop_duplicates()
-            .reset_index(drop=True)
-            )
-    except KeyError:
-        files_df = (
-            md_mngr.site_variables[['file']]
-            .assign(logger='', table='')
-            [['logger','table','file']]
-            .reset_index(drop=True)
-            )
-
-    # Get the file attributes
-    attrs_df = (
-        pd.concat(
-            [md_mngr.get_file_attributes(x) for x in files_df.file],
-            axis=1
-            )
-        .T
-        .drop(['station_name', 'table_name'], axis=1)
-        )
-
-    # Get the percentage missing data for each file
-    # Note that here, we DONT try to concatenate if the file is an EP master
-    # file because the concatenation is already handled
-    missing_list = []
-    do_concat = False
-    for file in md_mngr.list_files(abs_path=True):
-        if md_mngr.get_file_attributes(file.name)['format'] == 'TOA5':
-            do_concat = True
-        else:
-            do_concat = False
-        missing_list.append(
-            file_handler.DataHandler(file=file, concat_files=do_concat)
-            .get_missing_records()
-            )
-    missing_df = pd.DataFrame(missing_list)
-
-    # Combine all and return
-    combined_df = pd.concat([files_df, attrs_df, missing_df], axis=1)
-    return (
-        combined_df
-        .assign(
-            days_since_last_record = (
-                (site_time - combined_df.end_date).apply(lambda x: x.days)
-                )
-            )
-        .assign(site=site)
-        .set_index(keys=['site', 'logger', 'table'])
-        )
-#------------------------------------------------------------------------------
+            return output_df.set_index(keys='file')
+    #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def _parse_variable(variable: pd.Series, var_range: tuple) -> dict:
+    """
+
+
+    Args:
+        variable (pd.Series): DESCRIPTION.
+        var_range (tuple): DESCRIPTION.
+
+    Returns:
+        dict: DESCRIPTION.
+
+    """
 
     # If the variable has no valid data, use the dummy outputs
     # Otherwise, calculate the last valid values etc.

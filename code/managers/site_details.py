@@ -34,8 +34,9 @@ from managers import paths
 ### BEGIN INITS ###
 ###############################################################################
 
-USERNAME = 'site-query'
-PASSWORD = 'password123'
+creds = paths.get_local_config_file(config_stream='secrets')['SITE_DETAILS']
+USERNAME = creds['USERNAME']
+PASSWORD = creds['PASSWORD']
 SPARQL_ENDPOINT = "https://graphdb.tern.org.au/repositories/knowledge_graph_core"
 ALIAS_DICT = {'Alpine Peatland': 'Alpine Peat',
               'Aqueduct Snow Gum': 'SnowGum',

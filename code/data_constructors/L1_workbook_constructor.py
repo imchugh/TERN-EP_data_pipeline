@@ -9,18 +9,20 @@ import logging
 import pandas as pd
 import sys
 
-import utils.metadata_handlers as mh
+# import utils.metadata_handlers as mh
+from managers.metadata import MetaDataManager
 from file_handling import file_handler as fh
-from paths import paths_manager as pm
+from managers import paths
 
 logger = logging.getLogger(__name__)
 
 def construct_L1_xlsx(site):
 
     logger.info('Getting variable information')
-    md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
-    time_step = str(int(md_mngr.get_site_details().time_step)) + 'min'
-    output_path = pm.get_local_stream_path(
+    # md_mngr = mh.MetaDataManager(site=site, variable_map='vis')
+    md_mngr = MetaDataManager(site=site)
+    time_step = str(int(md_mngr.site_details['time_step'])) + 'min'
+    output_path = paths.get_local_stream_path(
         resource='homogenised_data',
         stream='xlsx',
         file_name=f'{site}_L1.xlsx'

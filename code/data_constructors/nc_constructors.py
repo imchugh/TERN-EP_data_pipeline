@@ -56,7 +56,6 @@ VAR_METADATA_SUBSET = [
     'height', 'instrument', 'long_name', 'standard_name', 'statistic_type',
     'standard_units'
     ]
-# STATISTIC_ALIASES = {'average': 'Avg', 'variance': 'Vr', 'sum': 'Tot'}
 TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 HIST_STR = 'instrument_history'
 logger = logging.getLogger(__name__)
@@ -77,10 +76,10 @@ class L1DataConstructor():
 
     #--------------------------------------------------------------------------
     def __init__(
-            self, site: str, use_alternate_configs: pathlib.Path | str=None,
-            concat_files: bool=False, constrain_start_to_flux: bool=False,
-            constrain_end_to_flux: bool=True
-            ) -> None:
+        self, site: str, use_alternate_configs: pathlib.Path | str=None,
+        concat_files: bool=False, constrain_start_to_flux: bool=False,
+        constrain_end_to_flux: bool=True
+        ) -> None:
         """
         Get the data and metadata.
 
@@ -166,10 +165,23 @@ class L1DataConstructor():
         # Apply unit conversions
         for variable in self.md_mngr.list_variables_for_conversion():
             attrs = self.md_mngr.get_variable_attributes(variable=variable)
-            func = ccf.convert_variable(variable=attrs['quantity'])
-            data[variable] = func(
-                data=data[variable], from_units=attrs['units']
-                )
+
+            # If a variance, call the variance wrapper function
+            if variable in self.md_mngr.list_variance_variables():
+                data[variable] = ccf.convert_variance(
+                    variable=attrs['quantity'],
+                    data=data[variable],
+                    variance_units=attrs['units']
+                    )
+
+            # If a standard variable, call the function directly
+            else:
+
+                func = ccf.convert_variable(variable=attrs['quantity'])
+                data[variable] = func(
+                    data=data[variable], from_units=attrs['units']
+                    )
+
         return data
     #--------------------------------------------------------------------------
 

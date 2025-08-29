@@ -26,7 +26,7 @@ import logging
 # CUSTOM IMPORTS #
 import file_handling.file_handler as fh
 import file_handling.file_io as io
-from paths import paths_manager as pm
+from managers import paths
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -58,7 +58,7 @@ def append_to_eddypro_file(site: str) -> None:
 
     # Get the master file (raise error if missing)
     data_path = (
-        pm.get_local_stream_path(
+        paths.get_local_stream_path(
             resource='raw_data', stream='flux_slow', site=site
             )
         )
@@ -111,7 +111,7 @@ def write_to_eddypro_file(site: str) -> None:
 
     # Get the file list
     data_path = (
-        pm.get_local_stream_path(
+        paths.get_local_stream_path(
             resource='raw_data', stream='flux_slow', site=site
             )
         )

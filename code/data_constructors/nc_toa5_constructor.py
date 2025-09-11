@@ -54,7 +54,9 @@ logger = logging.getLogger(__name__)
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def construct_visualisation_TOA5(site: str, n_files=None) -> None:
+def construct_visualisation_TOA5(
+        site: str, n_files=None, output_path=None
+        ) -> None:
     """
     Build a TOA5 file from the netcdf L1 files.
 
@@ -70,12 +72,13 @@ def construct_visualisation_TOA5(site: str, n_files=None) -> None:
     input_path = paths.get_local_stream_path(
         resource='homogenised_data', stream='nc', subdirs=[site]
         )
-    output_path = (
-        paths.get_local_stream_path(
-            resource='homogenised_data', stream='TOA5'
-            ) /
-        f'{site}_merged_std.dat'
-        )
+    if output_path is None:
+        output_path = (
+            paths.get_local_stream_path(
+                resource='homogenised_data', stream='TOA5'
+                ) /
+            f'{site}_merged_std.dat'
+            )
     files = sorted(file for file in input_path.glob('*.nc'))
     if n_files is not None:
         files = files[-n_files:]
@@ -350,6 +353,17 @@ def _rename_variables(ds: xr.Dataset) -> xr.Dataset:
     precip_var = precip_list[0]
     if not precip_var == 'Precip':
         ds = ds.rename({precip_var: 'Precip'})
+
+    # Rename soil units if prompted
+    rslt = {}
+    for soil_var in ['Fg', 'Ts', 'Sws']:
+        rslt.update(
+            {
+                var: ccf.convert_soil_vars(variable=var) for var in ds.variables
+                if var.startswith(soil_var + '_')
+                }
+            )
+    ds = ds.rename(rslt)
 
     return ds
 #------------------------------------------------------------------------------

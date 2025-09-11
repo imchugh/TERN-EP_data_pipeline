@@ -406,3 +406,63 @@ def filter_range(series, max_val, min_val):
 ###############################################################################
 ### END DATA FILTERING FUNCTIONS ###
 ###############################################################################
+
+###############################################################################
+### BEGIN VARIABLE RENAMING FUNCTIONS ###
+###############################################################################
+
+#------------------------------------------------------------------------------
+def convert_soil_vars(variable):
+
+    funcs_dict = {'cm': _convert_cm_2_m, 'm': _convert_m_2_cm}
+    units_list = ['cm', 'm']
+
+    elems = variable.split('_')
+    quant = elems[0]
+    loc = elems[1]
+    other = elems[2:]
+
+    current_units = None
+    for these_units in units_list:
+        loc_elems = loc.split(these_units)
+        if not loc_elems[0] == loc:
+            current_units = these_units
+            break
+    if current_units is None:
+        raise KeyError('Could not detect units for conversion!')
+
+    units_list.remove(current_units)
+    new_units = units_list[0]
+    func = funcs_dict[current_units]
+    new_loc = func(loc_elems.pop(0)) + new_units
+    if len(loc_elems) == 1:
+        new_loc += loc_elems[0]
+
+    return '_'.join([quant, new_loc] + other)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def _convert_cm_2_m(num_str):
+
+    try:
+        interm = int(num_str)
+    except ValueError:
+        if '.' in num_str:
+            interm = float(num_str)
+        if '-' in num_str:
+            interm = sum([int(num) for num in num_str.split('-')]) / 2
+    interm = round(interm / 100, 3)
+    if interm == int(interm):
+        interm = int(interm)
+    return str(interm).rstrip('0')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def _convert_m_2_cm(num_str):
+
+    return str(int(float(num_str) * 100))
+#------------------------------------------------------------------------------
+
+###############################################################################
+### END VARIABLE RENAMING FUNCTIONS ###
+###############################################################################

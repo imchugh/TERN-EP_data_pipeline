@@ -284,10 +284,14 @@ class L1DataConstructor():
         global_attrs.update(new_dict)
 
         # Get site-specific global attributes
-        site_specific_attrs = {
-            attr: self.md_mngr.site_details[attr]
-            for attr in SITE_DETAIL_SUBSET
-            }
+        site_specific_attrs = (
+            {
+                attr: self.md_mngr.site_details[attr]
+                for attr in SITE_DETAIL_SUBSET
+                } |
+            {'system_type': self.md_mngr.system_type}
+            )
+
         for old_name, new_name in SITE_DETAIL_ALIASES.items():
             site_specific_attrs[new_name] = site_specific_attrs.pop(old_name)
 

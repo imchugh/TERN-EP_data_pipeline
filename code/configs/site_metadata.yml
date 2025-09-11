@@ -455,8 +455,8 @@ Tumbarumba:
   latitude: -35.6566
   longitude: 148.1517
   elevation: 1200.0
-  time_step: 60
-  freq_hz: 20
+  time_step: 30
+  freq_hz: 10
   canopy_height: 40.0
   soil: Alfisol
   tower_height: 70.0
@@ -529,7 +529,7 @@ WombatStateForest:
   date_commissioned: '2010-01-01'
   latitude: -37.4222
   longitude: 144.0944
-  elevation: 705.0
+  elevation: 713.0
   time_step: 30
   freq_hz: 10
   canopy_height: '23'

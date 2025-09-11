@@ -7,6 +7,12 @@ Boyagin:
   notes: >
     soil pit a: pit north of tower
     soil pit b: pit south of tower
+Fletcherview:
+  notes: >
+    soil pit a: shrub
+    soil pit b: bare ground
+    soil pit c: tree
+    soil pit d: grass
 Ridgefield:
   notes: >
     soil location a: main tower

@@ -5,14 +5,15 @@ Created on Fri Jun 20 15:42:13 2025
 
 Module to:
     1) process fast daily data files (using externally developed code repo
-    from GitHub) in TOB3 format to TOA5;
+    from GitHub) in compressed format (TOB1 and TOB3 supported) format to TOA5;
     2) write out to individual files at the interval specified in the DB
     3) rename all files and transfer to date-based directory structure.
 
 Consists of the following classes:
-    DailyFastDataHandler: takes a daily TOB3 fast data file as input, converts
+    FastDataConverter: class that converts compressed data.
+    DailyFastDataConverter: takes a daily TOB3 fast data file as input, converts
     the data and holds it as a class attr. Allows the fast data to be subsetted
-    into
+    into files of EddyPro-ready length.
 
 To do:
     *
@@ -36,7 +37,6 @@ import pathlib
 #------------------------------------------------------------------------------
 
 from file_handling import read_cs_files as rcf
-from file_handling import file_io as io
 from managers import paths
 from managers import site_details
 
@@ -283,7 +283,7 @@ class FastDataConverter():
     #--------------------------------------------------------------------------
     def write_data_to_file(self, output_file: pathlib.Path | str) -> None:
         """
-
+        Write the data to an external file.
 
         Args:
             output_file (pathlib.Path | str): DESCRIPTION.
@@ -433,7 +433,8 @@ class DailyFastDataConverter(FastDataConverter):
             self, index_num: int, output_file: pathlib.Path | str
             ) -> None:
         """
-
+        Write a subset of the data to file based on the allocated file number
+        (documented in file_reference dataframe).
 
         Args:
             output_file (pathlib.Path | str): DESCRIPTION.
@@ -777,16 +778,12 @@ def convert_fast_file(
     logger.info(f' - parsing file {file.name}')
 
     # Read the file data into the fast data handler
-    handler = DailyFastDataConverter(
+    converter = DailyFastDataConverter(
         file=file, time_step=time_step, freq_hz=freq
         )
 
-    # Get the file info and header (will not change from file to file)
-    info = handler.get_file_info()
-    header = handler.get_file_header()
-
     # Get the output directory and ensure it exists
-    out_dir = file.parents[1] / handler.date_start.strftime('TOA5/%Y_%m/%d')
+    out_dir = file.parents[1] / converter.date_start.strftime('TOA5/%Y_%m/%d')
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Create the prefix for the file name
@@ -794,12 +791,12 @@ def convert_fast_file(
     out_file_prefix = f'TOA5_{site}_{freq_str}'
 
     # Iterate over subfiles
-    for num in handler.file_reference.index:
+    for num in converter.file_reference.index:
 
         # Get the date of the file and create the complete outfile name
-        date = handler.file_reference.loc[num, 'end_date']
+        date = converter.file_reference.loc[num, 'end_date']
         out_file_suffix = date.strftime('_%Y_%m_%d_%H_%M.dat')
-        out_file = out_dir / (out_file_prefix + out_file_suffix)
+        output_file = out_dir / (out_file_prefix + out_file_suffix)
 
         logger.info(
             f'    Writing out {time_step} minute file ending with date '
@@ -808,19 +805,12 @@ def convert_fast_file(
 
         # Subset the data (will raise a RunTimeError if no data)
         try:
-            data = handler.get_data_by_file_num(num=num)
+            converter.write_data_to_file_by_num(
+                index_num=num, output_file=output_file
+                )
         except RuntimeError as e:
             logger.error(f'Encountered an error: {e}')
             continue
-
-        # Write the data
-        io.write_data_to_file(
-            headers=io.reformat_headers(headers=header, output_format='TOA5'),
-            data=io.reformat_data(data=data, output_format='TOA5'),
-            info=info,
-            abs_file_path=out_file,
-            output_format='TOA5'
-            )
 
     logger.info(' - ...Done!')
 #------------------------------------------------------------------------------
@@ -919,7 +909,28 @@ def _write_data_to_file(file, headers: list, data: pd.DataFrame) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def convert_file(input_file, output_file, overwrite=False):
+def convert_file(
+        input_file: pathlib.Path | str, output_file: pathlib.Path | str,
+        overwrite: bool=False
+        ) -> None:
+    """
+    Convert from a compressed Campbell TOB3 or TOB1 file to Campbell TOA5.
+
+    Args:
+        input_file: source (compressed) file.
+        output_file: target (uncompressed) file.
+        overwrite: set True to overwrite existing output file of same name.
+
+    Raises:
+        RuntimeError: raised if input and output files have same name.
+        FileNotFoundError: raised if the parent directory does not exist.
+        FileExistsError: raised if the output file exists and the overwrite
+        Flag is set to False.
+
+    Returns:
+        None.
+
+    """
 
     # Check file inputs
     input_file = pathlib.Path(input_file)
@@ -942,7 +953,7 @@ def convert_file(input_file, output_file, overwrite=False):
                 'setting `overwrite` arg to True!'
                 )
 
-    # Get the data handler
+    # Get the data converter
     converter = FastDataConverter(file=input_file)
 
     # Write to file

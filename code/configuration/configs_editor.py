@@ -10,6 +10,7 @@ Created on Thu Aug  7 16:02:37 2025
 ### BEGIN IMPORTS ###
 ###############################################################################
 
+from configobj import ConfigObj
 import pandas as pd
 import pathlib
 import yaml
@@ -146,6 +147,12 @@ class ConfigsEditor():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
+    def rename_variable_by_map(self, map_dict):
+
+        self.data = self.data.rename(map_dict)
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
     def write_to_file(self, output_file):
 
         # Don't allow overwrites
@@ -210,31 +217,173 @@ def _write_xl(file_path, data):
     return data.to_excel(file_path, sheet_name='variables')
 #------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+class PFPL1CntlParser():
+    """Class to convert L1 control files to excel workbooks (one sheet contains
+    the global fields, one sheet contains the variable fields). The 'Variables'
+    sheet then needs to be manually amended so that the 'sheet' field is
+    replaced with information about the logger and table that record the given
+    variable.
+    """
+
+    #--------------------------------------------------------------------------
+    def __init__(self, file_name):
+
+        self.config=ConfigObj(file_name)
+        self.site = self.config['Global']['site_name']
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_variable_table(self) -> pd.DataFrame:
+        """
+        Grab all the variable attributes from the L1 control file.
+
+        Returns:
+            The variable attributes.
+
+        """
+
+        parse_list = []
+        for variable in self.config['Variables'].keys():
+            if 'xl' in self.config['Variables'][variable]:
+                parse_list.append(variable)
+
+        df = (
+            pd.concat(
+                [
+                    # pd.DataFrame(
+                    #     [self.config['Variables'][key]['Attr'] for key in
+                    #      self.config['Variables'].keys()]
+                    #     ),
+                    # pd.DataFrame(
+                    #     [self.config['Variables'][key]['xl'] for key in
+                    #      self.config['Variables'].keys()]
+                    #     )
+                    pd.DataFrame(
+                        [self.config['Variables'][key]['Attr'] for key in
+                         parse_list]
+                        ),
+                    pd.DataFrame(
+                        [self.config['Variables'][key]['xl'] for key in
+                         parse_list]
+                        )
+                    ],
+                axis=1
+                )
+            # .set_index(key for key in self.config['Variables'].keys())
+            .set_index(key for key in parse_list)
+            .rename({'sheet': 'table'}, axis=1)
+            .fillna('')
+            )
+        df['instrument'] = df['instrument'].apply(_stringify_list)
+        return df
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_globals_series(self):
+        """
+        Grab all the global attributes from the L1 control file.
+
+        Returns:
+            The global attributes.
+
+        """
+
+        return pd.Series(
+            dict(zip(
+                self.config['Global'].keys(),
+                [''.join(x) for x in self.config['Global'].values()]
+                ))
+            )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def write_variables_to_excel(
+            self, xl_write_path: pathlib.Path | str, dump_req_only=True
+            ) -> None:
+        """
+        Generate an excel file containing the global and variable configs.
+
+        Args:
+            xl_write_path: path to write excel file to.
+
+        Returns:
+            None.
+
+        """
+
+        with pd.ExcelWriter(path=xl_write_path) as writer:
+            self.get_globals_series().to_excel(
+                writer, sheet_name='Global_attrs', header=False
+                )
+            self.get_variable_table().to_excel(
+                writer, sheet_name='Variable_attrs', index_label='pfp_name'
+                )
+    #--------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def _stringify_list(elem: str | list) -> str:
+
+    if isinstance(elem, str):
+        return elem
+    elif isinstance(elem, list):
+        return ','.join(elem)
+    raise TypeError('`elem` must be of type list or str!')
+#------------------------------------------------------------------------------
+
 ###############################################################################
 ### END CLASSES ###
 ###############################################################################
 
+def convert_cm_to_m(var_name):
 
-#------------------------------------------------------------------------------
+    if not 'cm' in var_name:
+        raise TypeError('Only pass variables with a depth identifier in cm!')
+    elems = var_name.split('_')
+    quant = elems[0]
+    loc = elems[1]
+    other = elems[2:]
+    if not 'cm' in loc:
+        raise TypeError('Variable must have location identifiers in second slot!')
+    loc_elems = elems[1].split('cm')
+    new_loc = str(int(loc_elems[0]) / 100).rstrip('0') + 'm' + loc_elems[1]
 
-#------------------------------------------------------------------------------
+    return '_'.join([quant, new_loc] + other)
 
-#------------------------------------------------------------------------------
+def convert_height_attr(old_attr):
 
-#------------------------------------------------------------------------------
-def write_to_yml(data: dict, file: pathlib.Path | str) -> None:
-    """
-    Write data dictionary input data to file.
+    elems = old_attr.split('to')
+    if len(elems) == 1:
+        return elems[0].replace(' ','')
+    for i, elem in enumerate(elems):
+        elems[i] = elem.replace(' ', '')
+    if not 'm' in elems[0]:
+        elems[0] += 'm'
+    return elems[0] + ' to ' + elems[1]
 
-    Args:
-        data (TYPE): DESCRIPTION.
-        file (TYPE): DESCRIPTION.
 
-    Returns:
-        None.
+# #------------------------------------------------------------------------------
 
-    """
+# #------------------------------------------------------------------------------
 
-    with open(file=file, mode='w', encoding='utf-8') as f:
-        yaml.dump(data=data, stream=f, sort_keys=False)
-#------------------------------------------------------------------------------
+# #------------------------------------------------------------------------------
+
+# #------------------------------------------------------------------------------
+# def write_to_yml(data: dict, file: pathlib.Path | str) -> None:
+#     """
+#     Write data dictionary input data to file.
+
+#     Args:
+#         data (TYPE): DESCRIPTION.
+#         file (TYPE): DESCRIPTION.
+
+#     Returns:
+#         None.
+
+#     """
+
+#     with open(file=file, mode='w', encoding='utf-8') as f:
+#         yaml.dump(data=data, stream=f, sort_keys=False)
+# #------------------------------------------------------------------------------

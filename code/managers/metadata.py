@@ -106,8 +106,11 @@ class MetaDataManager():
                 )
         else:
             self.configs = paths.get_local_config_file(
-                config_stream='variables_pfp', site=site
+                config_stream='site_variables', site=site
                 )
+            # self.configs = paths.get_local_config_file(
+            #     config_stream='variables_pfp', site=site
+            #     )
 
         # Check for the requisite fields in each entry of the control file
         self._check_config_fields()
@@ -118,7 +121,25 @@ class MetaDataManager():
         self.diag_types = self._parse_diagnostics()
 
         # Create site-based variables table
-        self.site_variables = self._parse_site_variables()
+        # Get the variable map and check the conformity of all names
+        self.site_variables = (
+            pd.DataFrame(self.configs)
+            .T
+            .rename_axis('std_name')
+            .pipe(self._test_variable_conformity)
+            .pipe(self._test_file_assignment)
+            )
+
+        # Set the system type
+        system_type = [
+            sys_type for sys_type in self.site_variables.system_type.unique()
+            if len(sys_type) > 0
+            ]
+        if len(system_type) != 1:
+            raise RuntimeError(
+                'More than one system type specified in configuration file'
+                )
+        self.system_type = system_type[0]
 
         # Determine and write system type / flux file
         self.flux_file = self._get_flux_file()
@@ -188,26 +209,25 @@ class MetaDataManager():
         return rslt
     #--------------------------------------------------------------------------
 
-    #--------------------------------------------------------------------------
-    def _parse_site_variables(self) -> pd.DataFrame:
-        """
-        Get the site variable names / attributes.
+    # #--------------------------------------------------------------------------
+    # def _parse_site_variables(self) -> pd.DataFrame:
+    #     """
+    #     Get the site variable names / attributes.
 
-        Returns:
-            dataframe containing variable names as index and attributes as cols.
+    #     Returns:
+    #         dataframe containing variable names as index and attributes as cols.
 
-        """
+    #     """
 
-        # Get the variable map and check the conformity of all names
-        return (
-            pd.DataFrame(self.configs)
-            .T
-            .rename_axis('std_name')
-            .pipe(self._test_variable_conformity)
-            .pipe(self._test_file_assignment)
-            # .pipe(self._test_variable_assignment)
-            )
-    #--------------------------------------------------------------------------
+    #     # Get the variable map and check the conformity of all names
+    #     return (
+    #         pd.DataFrame(self.configs)
+    #         .T
+    #         .rename_axis('std_name')
+    #         .pipe(self._test_variable_conformity)
+    #         .pipe(self._test_file_assignment)
+    #         )
+    # #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
     def _test_variable_conformity(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -367,10 +387,6 @@ class MetaDataManager():
 
         """
 
-        # var = [
-        #     key for key, value in self.map_fluxes_to_standard_names().items()
-        #     if value == FLUX_FILE_VAR_IND
-        #     ]
         var_list = [
             var for var in
             self.site_variables[self.site_variables.quantity==FLUX_FILE_VAR_IND]
@@ -594,13 +610,6 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def map_fluxes_to_standard_names_2(self) -> dict:
-
-        breakpoint()
-        pass
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
     def map_loggers_to_tables(self) -> dict:
         """
         Map loggers to table names.
@@ -681,10 +690,6 @@ class MetaDataManager():
 
         """
 
-        # df = self._index_translator(use_index=source_field)
-        # if return_field is None:
-        #     return df.loc[variable]
-        # return df.loc[variable, return_field]
         series = self._index_translator(use_index=source_field).loc[variable]
         if variance_2_stdev:
             self._amend_variance_metadata(series=series)

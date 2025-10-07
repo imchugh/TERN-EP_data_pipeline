@@ -22,7 +22,7 @@ from importlib import import_module
 
 #------------------------------------------------------------------------------
 
-from .registry import register, SITE_TASKS, NETWORK_TASKS
+from tasks.registry import register, SITE_TASKS, NETWORK_TASKS
 from file_transfers import rclone_transfer as rct
 from file_transfers import sftp_transfer as sftpt
 from managers import paths
@@ -67,29 +67,6 @@ tasks_df = _make_task_dataframe()
 ###############################################################################
 ### END INITS ###
 ###############################################################################
-
-
-
-# ###############################################################################
-# ### BEGIN TASK DECORATOR DEFINITION ###
-# ###############################################################################
-
-# def register(name=None, kind=None):
-
-#     def decorator(func):
-#         task_name = name or func.__name__
-#         sig = inspect.signature(func)
-#         params = list(sig.parameters.keys())
-#         if kind == 'site' or (kind is None and params == ['site']):
-#             SITE_TASKS[task_name] = func
-#         else:
-#             NETWORK_TASKS[task_name] = func
-#         return func
-#     return decorator
-
-# ###############################################################################
-# ### END TASK DECORATOR DEFINITION ###
-# ###############################################################################
 
 
 
@@ -330,12 +307,6 @@ def push_L1_nc():
     rct.push_homogenised(stream='nc')
 #------------------------------------------------------------------------------
 
-# #------------------------------------------------------------------------------
-# def push_L1_xlsx():
-
-#     rct.push_homogenised(stream='xlsx')
-# #------------------------------------------------------------------------------
-
 #------------------------------------------------------------------------------
 @register
 def push_main_fast_flux(site):
@@ -537,6 +508,7 @@ def get_task_list_for_site(site: str) -> list:
 
 
 def main():
+
     parser = argparse.ArgumentParser(description="Task runner")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -565,6 +537,7 @@ def main():
         args.func()
 
 if __name__ == "__main__":
+
     main()
 
 

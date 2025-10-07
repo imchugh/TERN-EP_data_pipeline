@@ -17,12 +17,7 @@ NETWORK_TASKS = {}
 
 def register(func):
 
-    # def decorator(func):
-        # task_name = name or func.__name__
-        # sig = inspect.signature(func)
-        # params = list(sig.parameters.keys())
     params = list(inspect.signature(func).parameters.keys())
-    # if kind == 'site' or (kind is None and params == ['site']):
     if params == ['site']:
         SITE_TASKS[func.__name__] = func
     else:

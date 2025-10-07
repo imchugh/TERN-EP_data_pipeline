@@ -21,6 +21,7 @@ It does NOT evaluate data integrity!
 
 import csv
 import datetime as dt
+import json
 import os
 from typing import Callable
 import yaml
@@ -524,6 +525,14 @@ def write_yml(file: str | pathlib.Path, data: dict) -> None:
 
     with open(file=file, mode='w', encoding='utf-8') as f:
         return yaml.dump(data=data, stream=f, sort_keys=False)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def write_json(file: str | pathlib.Path, data: dict) -> None:
+    """Write json file"""
+
+    with open(file=file, mode='w', encoding='utf-8') as f:
+        json.dump(obj=data, fp=f, indent=4)
 #------------------------------------------------------------------------------
 
 # #------------------------------------------------------------------------------
@@ -1102,8 +1111,6 @@ def get_EddyPro_files(file: str | pathlib.Path) -> list:
 ### BEGIN FILE INTERVAL FUNCTIONS ###
 ###############################################################################
 
-
-
 #------------------------------------------------------------------------------
 def get_file_interval(file: str | pathlib.Path, file_type: str=None) -> int:
     """Find the file interval (i.e. time step)
@@ -1153,8 +1160,6 @@ def get_datearray_interval(datearray: ArrayLike) -> int:
         return int(minimum_val)
     raise RuntimeError('Minimum and most common values do not coincide!')
 #------------------------------------------------------------------------------
-
-
 
 ###############################################################################
 ### END FILE INTERVAL FUNCTIONS ###

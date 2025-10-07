@@ -123,8 +123,7 @@ class MetaDataManager():
         # Create site-based variables table
         # Get the variable map and check the conformity of all names
         self.site_variables = (
-            pd.DataFrame(self.configs)
-            .T
+            pd.DataFrame.from_dict(data=self.configs, orient='index')
             .rename_axis('std_name')
             .pipe(self._test_variable_conformity)
             .pipe(self._test_file_assignment)

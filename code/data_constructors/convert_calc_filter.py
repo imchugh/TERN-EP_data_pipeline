@@ -296,8 +296,9 @@ def calculate_AH_from_RH(Ta: pd.Series, RH: pd.Series, ps: pd.Series):
 #------------------------------------------------------------------------------
 def calculate_dew_point(Ta: pd.Series, RH: pd.Series) -> pd.Series:
 
-    b = (np.log(RH / 100) + ((17.27 * Ta) / (237.3 + Ta))) / 17.27
-    return (237.3 * b) / (1 - b)
+    e = calculate_e(Ta=Ta, RH=RH)
+    ln_ratio = np.log(e / 0.61121)
+    return (243.5 * ln_ratio) / (17.502 - ln_ratio)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -328,8 +329,9 @@ def calculate_e(Ta: pd.Series, RH: pd.Series) -> pd.Series:
 
 #------------------------------------------------------------------------------
 def calculate_es(Ta: pd.Series) -> pd.Series:
-
-    return 0.6106 * np.exp(17.27 * Ta / (Ta + 237.3))
+    """Saturation vapor pressure (kPa) from Buck (1996) formula"""
+    
+    return 0.61121 * np.exp((18.678 - Ta / 234.5) * (Ta / (257.14 + Ta)))
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

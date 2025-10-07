@@ -202,22 +202,22 @@ def process_profile_data(site: str) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def file_main_fast_data(site: str) -> None:
+def parse_main_fast_data(site: str) -> None:
 
-    _file_fast_data(site=site, is_aux=False)
+    _parse_fast_data(site=site, is_aux=False)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def file_aux_fast_data(site: str) -> None:
+def parse_aux_fast_data(site: str) -> None:
 
-    _file_fast_data(site=site, is_aux=True)
+    _parse_fast_data(site=site, is_aux=True)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def _file_fast_data(site: str, is_aux: bool) -> None:
+def _parse_fast_data(site: str, is_aux: bool) -> None:
 
-    pf = import_module('file_handling.package_fast')
-    pf.file_fast_data(site=site, is_aux=is_aux)
+    ffc = import_module('data_constructors.fast_file_converters')
+    ffc.parse_TOB3_daily(site=site, is_aux=is_aux)
     # fdf.move_fast_files(site=site, is_aux=is_aux)
 #------------------------------------------------------------------------------
 

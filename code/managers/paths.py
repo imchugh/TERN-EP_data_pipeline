@@ -20,7 +20,8 @@ REMOTE_CONFIG_PATH_FILE = pathlib.Path(
     '/store/Config_files/Network/Paths/remote_paths.yml'
     )
 REMOTE_ALIAS_DICT = {
-    'AliceSpringsMulga': 'AliceMulga', 'Longreach': 'MitchellGrassRangeland'
+    'AliceSpringsMulga': 'AliceMulga', 'Longreach': 'MitchellGrassRangeland',
+    'AlpinePeat': 'AlpinePeatland'
     }
 PLACEHOLDER = '<site>'
 #------------------------------------------------------------------------------

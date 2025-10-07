@@ -57,6 +57,7 @@ INFO_NAMES = [
 CSV_SEP = ','
 CSV_QUOTING = 2
 CSV_NA_VALUES = 'NAN'
+DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 logger = logging.getLogger(__name__)
 details = site_details.SiteDetailsManager()
@@ -207,6 +208,7 @@ class FastDataConverter():
 
         # Set basic attrs
         metadata = contents[1]
+        self.file = file
         self.input_format = metadata[0][0]
         self.ex_meta = None
         if self.input_format == 'TOB3':
@@ -268,16 +270,7 @@ class FastDataConverter():
 
         """
 
-        if self.input_format == 'TOB3':
-            last_info_name = 'creation_date'
-        elif self.input_format == 'TOB1':
-            last_info_name = 'table_name'
-        info_keys = INFO_NAMES.copy()
-        info_keys.append(last_info_name)
-        return dict(zip(
-            info_keys,
-            ['TOA5'] + self.metadata[0][1:]
-            ))
+        return get_info_line(file=self.file, as_dict=True)
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -491,215 +484,6 @@ def _time_rounder(timestamp):
     return f'{rounded:%Y-%m-%d %H:%M:%S}.{tenths}'
 #------------------------------------------------------------------------------
 
-# #------------------------------------------------------------------------------
-# class DailyFastDataHandler():
-#     """
-#     Class to parse data from a TOB3 file.
-#     """
-
-#     #--------------------------------------------------------------------------
-#     def __init__(
-#             self, file: pathlib.Path | str, time_step: int=30, freq_hz:int=10
-#             ) -> None:
-#         """
-#         Initialisation of class.
-
-#         Args:
-#             file_name: name of fioe to parse.
-#             time_step (optional): individual block interval. Defaults to 30.
-#             freq_hz (optional): data frequency in hertz. Defaults to 10.
-
-#         Returns:
-#             None.
-
-#         """
-
-#         contents = rcf.read_cs_files(filename=file)
-#         if len(contents[0]) == 0:
-#             raise RuntimeError('No valid data discovered in file!')
-#         self.time_step = time_step
-#         self.freq_hz = freq_hz
-#         self.n_expected = time_step * freq_hz * 60
-#         self.metadata = contents[1]
-#         self.date_start = dt.datetime.strptime(
-#             self.metadata[0][-1], '%Y-%m-%d %H:%M:%S'
-#             )
-#         data = (
-#             pd.DataFrame(dict(zip(self.metadata[2], contents[0])))
-#             .set_index(keys='TIMESTAMP' )
-#             )
-#         self.data = data[~data.index.duplicated()].sort_index()
-#         self.file_reference = self._make_df()
-#     #--------------------------------------------------------------------------
-
-#     #--------------------------------------------------------------------------
-#     def _make_df(self) -> pd.DataFrame:
-#         """
-#         Create a reference dataframe containing the dates and info required to
-#         partition into smaller file blocks.
-
-#         Returns:
-#             the dataframe.
-
-#         """
-
-#         # Get start and end dates for files at specified time step
-#         file_start = self.data.index[0]
-#         day_start = dt.datetime(
-#             file_start.year,
-#             file_start.month,
-#             file_start.day
-#             )
-#         day_end = day_start + dt.timedelta(days=1)
-
-#         dates = (
-#             pd.date_range(
-#                 start=day_start,
-#                 end=day_end,
-#                 freq=f'{self.time_step}min'
-#                 )
-#             [:-1]
-#             )
-
-#         start_date = dates + dt.timedelta(
-#             microseconds=10**6 / self.freq_hz
-#             )
-#         end_date = dates + dt.timedelta(
-#             minutes=self.time_step, seconds=0, microseconds=0
-#             )
-
-#         # Find the number of valid records
-#         n_recs = []
-#         for date_pair in zip(start_date, end_date):
-#             n_recs.append(len(self.data.loc[date_pair[0]: date_pair[1]]))
-
-#         return pd.DataFrame(
-#             data={
-#                 'start_date': start_date,
-#                 'end_date': end_date,
-#                 'n_recs': n_recs,
-#                 # 'time_str': time_str
-#                 },
-#             index=pd.Index(data=range(len(dates)), name='file_num')
-#             )
-#     #--------------------------------------------------------------------------
-
-#     #--------------------------------------------------------------------------
-#     def get_file_header(self) -> pd.DataFrame:
-#         """
-#         Get the header as a dataframe.
-
-#         Returns:
-#             the dataframe.
-
-#         """
-
-#         return (
-#             pd.DataFrame(
-#                 data=self.metadata[2:5],
-#                 index=['variable', 'units', 'sampling']
-#                 )
-#             .T
-#             .set_index(keys='variable')
-#             )
-#     #--------------------------------------------------------------------------
-
-#     #--------------------------------------------------------------------------
-#     def get_file_info(self) -> dict:
-#         """
-#         Get the pre-header info line as a dict.
-
-#         Returns:
-#             the dict.
-
-#         """
-
-#         return dict(zip(
-#             INFO_NAMES,
-#             ['TOA5'] + self.metadata[0][1:-1] + [self.metadata[1][0]]
-#             ))
-#     #--------------------------------------------------------------------------
-
-#     #--------------------------------------------------------------------------
-#     def get_data_by_dates(
-#         self, start: dt.datetime, end: dt.datetime
-#         ) -> pd.DataFrame:
-#         """
-#         Return a date-bound subset of the complete data.
-
-#         Args:
-#             start: date of first record.
-#             end: date of last record (inclusive).
-
-#         Returns:
-#             the subset dataframe.
-
-#         """
-
-#         return self.data.loc[start: end]
-#     #--------------------------------------------------------------------------
-
-#     #--------------------------------------------------------------------------
-#     def get_data_by_file_num(self, num: int) -> pd.DataFrame:
-#         """
-#         Return a subset of the data based on the allocated file number
-#         (documented in file_reference dataframe).
-
-#         Args:
-#             num: the numerical reference of the data subset.
-
-#         Raises:
-#             RuntimeError: raised if no data in the file.
-
-#         Returns:
-#             the subset dataframe.
-
-#         """
-
-#         rec = self.file_reference.loc[num]
-#         if rec.n_recs == 0:
-#             start = rec.start_date.strftime('%H:%M')
-#             end = rec.end_date.strftime('%H:%M')
-#             raise RuntimeError(f'No data between {start} and {end}!')
-#         return self.data.loc[rec.start_date: rec.end_date]
-#     #--------------------------------------------------------------------------
-
-#     #--------------------------------------------------------------------------
-#     def write_data_to_file(self, output_file: pathlib.Path | str) -> None:
-#         """
-
-
-#         Args:
-#             output_file (pathlib.Path | str): DESCRIPTION.
-
-#         Returns:
-#             None: DESCRIPTION.
-
-#         """
-
-#         # Move the header lines to a list
-#         header_list = []
-#         header_list.append(list(self.get_file_info().values()))
-#         header = self.get_file_header().reset_index()
-#         for item in header.columns:
-#             header_list.append(header[item].tolist())
-
-#         # Turn bools into integer
-#         data = self.data
-#         bool_data = self.data.select_dtypes(bool).astype(int)
-#         data = data.drop(bool_data.columns, axis=1)
-#         data = pd.concat([data, bool_data], axis=1).reset_index()
-
-#         data['TIMESTAMP'] = data['TIMESTAMP'].apply(_time_rounder)
-
-#         # Write out the data
-#         _write_data_to_file(file=output_file, headers=header_list, data=data)
-#     #--------------------------------------------------------------------------
-
-# #------------------------------------------------------------------------------
-
-
-
 ###############################################################################
 ### END CLASSES ###
 ###############################################################################
@@ -711,7 +495,7 @@ def _time_rounder(timestamp):
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def file_fast_data(site: str, is_aux=False) -> None:
+def file_fast_TOB3_data(site: str, is_aux=False) -> None:
 
     logger.info('Converting fast TOB3 files:')
 
@@ -727,8 +511,24 @@ def file_fast_data(site: str, is_aux=False) -> None:
         )
 
     site_deets = details.get_single_site_details(site=site)
+    today = dt.datetime.now().date()
 
     for file in sorted(base_path.rglob('TOB3*.dat')):
+
+        # Get header lines, strip and check file type and date
+        info = get_info_line(file=file, as_dict=True)
+        if not info['format'] == 'TOB3':
+            raise TypeError('Only implemented for files of type `TOB3`')
+        if not info['station_name'] == site + '_EC':
+            logger.warning('Warning: logger site name does not match site name')
+        #     raise RuntimeError('Unexpected site name in data header!')
+        creation_date = (
+            dt.datetime.strptime(info['creation_date'], DATE_FORMAT).date()
+            )
+        if not creation_date < today:
+            continue
+
+        print('Parsed fast file! Done.')
 
         try:
             convert_fast_file(
@@ -884,6 +684,33 @@ def move_fast_file(
 
     # Move the file
     in_file.rename(out_file)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_info_line(file: pathlib.Path | str, as_dict: bool=False):
+
+    rslt = get_header_lines(file=file)[0]
+    if not as_dict:
+        return rslt
+    if rslt[0] == 'TOB3':
+        last_info_name = 'creation_date'
+    elif rslt[0] == 'TOB1':
+        last_info_name = 'table_name'
+    info_keys = INFO_NAMES.copy()
+    info_keys.append(last_info_name)
+    return dict(zip(info_keys, rslt))
+
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_header_lines(file, n_lines=1):
+
+    l = []
+    with open(file=file, mode='rb') as f:
+        for i, line in enumerate(f):
+            l.append(line.decode().replace('"', '').strip().split(','))
+            if i == n_lines - 1:
+                return l
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

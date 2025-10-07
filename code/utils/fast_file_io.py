@@ -64,289 +64,132 @@ DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 ### BEGIN CLASSES ###
 ###############################################################################
 
+# #------------------------------------------------------------------------------
+# class FileConverter():
+#     """Simple class to convert data to TOA5"""
+
+#     #--------------------------------------------------------------------------
+#     def __init__(self, file: pathlib.Path | str) -> None:
+#         """
+#         Set attrs.
+
+#         Args:
+#             file: absolute path for input file.
+
+#         Raises:
+#             RuntimeError: raised if no data returned.
+
+#         Returns:
+#             None.
+
+#         """
+
+#         # Unpack and load the contents
+#         contents = rcf.read_cs_files(filename=file)
+#         if len(contents[0]) == 0:
+#             raise RuntimeError('No valid data discovered in file!')
+
+#         # Set basic attrs
+#         metadata = contents[1]
+#         self.file = file
+#         self.input_format = metadata[0][0]
+#         self.ex_meta = None
+#         if self.input_format == 'TOB3':
+#             self.ex_meta = metadata.pop(1)
+#         self.metadata = metadata
+
+#         # Pull the data into the dataframe and create headers from metadata
+#         # (note that there is an extra line of metadata for TOB3 at pos 1)
+#         data = (
+#             pd.DataFrame(dict(zip(self.metadata[1], contents[0])))
+#             .set_index(keys='TIMESTAMP' )
+#             )
+
+#         # For float cols:
+#         # 1) Downcast any columns to integer if no information lost (e.g. diags)
+#         # 2) Downcast float64 to float32 and round to prevent recast to 64 on
+#         #    csv output
+#         for col in data.select_dtypes('float'):
+#             if _check_integer_data(series=data[col]):
+#                 try:
+#                     data[col] = data[col].astype('Int32')
+#                 except TypeError:
+#                     data[col] = pd.to_numeric(
+#                         data.Diag_CSAT, 
+#                         downcast='integer', 
+#                         errors='coerce'
+#                         )
+#             else:
+#                 data[col] = (
+#                     data[col]
+#                     .astype('float32')
+#                     .apply(lambda x: float(f'{x:.7g}'))
+#                     )
+
+#         # Assign as attr
+#         self.data = data[~data.index.duplicated()].sort_index()
+#     #--------------------------------------------------------------------------
+
+#     #--------------------------------------------------------------------------
+#     def get_file_header(self) -> pd.DataFrame:
+#         """
+#         Get the header as a dataframe.
+
+#         Returns:
+#             the dataframe.
+
+#         """
+
+#         return (
+#             pd.DataFrame(
+#                 data=self.metadata[1:4],
+#                 index=['variable', 'units', 'sampling']
+#                 )
+#             .T
+#             .set_index(keys='variable')
+#             )
+#     #--------------------------------------------------------------------------
+
+#     #--------------------------------------------------------------------------
+#     def get_file_info(self) -> dict:
+#         """
+#         Get the pre-header info line as a dict.
+
+#         Returns:
+#             the dict.
+
+#         """
+
+#         return get_info_line(file=self.file, as_dict=True)
+#     #--------------------------------------------------------------------------
+
+#     #--------------------------------------------------------------------------
+#     def write_data_to_file(self, output_file: pathlib.Path | str) -> None:
+#         """
+#         Write the data to an external file.
+
+#         Args:
+#             output_file (pathlib.Path | str): DESCRIPTION.
+
+#         Returns:
+#             None: DESCRIPTION.
+
+#         """
+
+#         # Write out the data
+#         _write_data_to_file(
+#             file=output_file,
+#             headers=_format_output_header(
+#                 info=self.get_file_info(), header=self.get_file_header()
+#                 ),
+#             data=_format_output_data(data=self.data)
+#             )
+#     #--------------------------------------------------------------------------
+
+# #------------------------------------------------------------------------------
+
 #------------------------------------------------------------------------------
 class FileConverter():
-    """Simple class to convert data to TOA5"""
-
-    #--------------------------------------------------------------------------
-    def __init__(self, file: pathlib.Path | str) -> None:
-        """
-        Set attrs.
-
-        Args:
-            file: absolute path for input file.
-
-        Raises:
-            RuntimeError: raised if no data returned.
-
-        Returns:
-            None.
-
-        """
-
-        # Unpack and load the contents
-        contents = rcf.read_cs_files(filename=file)
-        if len(contents[0]) == 0:
-            raise RuntimeError('No valid data discovered in file!')
-
-        # Set basic attrs
-        metadata = contents[1]
-        self.file = file
-        self.input_format = metadata[0][0]
-        self.ex_meta = None
-        if self.input_format == 'TOB3':
-            self.ex_meta = metadata.pop(1)
-        self.metadata = metadata
-
-        # Pull the data into the dataframe and create headers from metadata
-        # (note that there is an extra line of metadata for TOB3 at pos 1)
-        data = (
-            pd.DataFrame(dict(zip(self.metadata[1], contents[0])))
-            .set_index(keys='TIMESTAMP' )
-            )
-
-        # For float cols:
-        # 1) Downcast any columns to integer if no information lost (e.g. diags)
-        # 2) Downcast float64 to float32 and round to prevent recast to 64 on
-        #    csv output
-        for col in data.select_dtypes('float'):
-            if _check_integer_data(series=data[col]):
-                try:
-                    data[col] = data[col].astype('Int32')
-                except TypeError:
-                    data[col] = pd.to_numeric(
-                        data.Diag_CSAT, 
-                        downcast='integer', 
-                        errors='coerce'
-                        )
-            else:
-                data[col] = (
-                    data[col]
-                    .astype('float32')
-                    .apply(lambda x: float(f'{x:.7g}'))
-                    )
-
-        # Assign as attr
-        self.data = data[~data.index.duplicated()].sort_index()
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_file_header(self) -> pd.DataFrame:
-        """
-        Get the header as a dataframe.
-
-        Returns:
-            the dataframe.
-
-        """
-
-        return (
-            pd.DataFrame(
-                data=self.metadata[1:4],
-                index=['variable', 'units', 'sampling']
-                )
-            .T
-            .set_index(keys='variable')
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_file_info(self) -> dict:
-        """
-        Get the pre-header info line as a dict.
-
-        Returns:
-            the dict.
-
-        """
-
-        return get_info_line(file=self.file, as_dict=True)
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def write_data_to_file(self, output_file: pathlib.Path | str) -> None:
-        """
-        Write the data to an external file.
-
-        Args:
-            output_file (pathlib.Path | str): DESCRIPTION.
-
-        Returns:
-            None: DESCRIPTION.
-
-        """
-
-        # Write out the data
-        _write_data_to_file(
-            file=output_file,
-            headers=_format_output_header(
-                info=self.get_file_info(), header=self.get_file_header()
-                ),
-            data=_format_output_data(data=self.data)
-            )
-    #--------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-class DailyTOB3FileConverter(FileConverter):
-
-    #--------------------------------------------------------------------------
-    def __init__(
-        self, file: pathlib.Path | str, time_step: int, freq_hz: int
-        ) -> None:
-        """
-        Inherit from FastDataConverter and assign new attributes.
-
-        Args:
-            file (pathlib.Path | str): DESCRIPTION.
-            time_step (int): DESCRIPTION.
-            freq_hz (int): DESCRIPTION.
-
-        Returns:
-            None: DESCRIPTION.
-
-        """
-
-        super().__init__(file)
-        self.time_step = time_step
-        self.freq_hz = freq_hz
-        self.n_expected = time_step * freq_hz * 60
-        self.file_reference = self._make_df()
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _make_df(self) -> pd.DataFrame:
-        """
-        Create a reference dataframe containing the dates and info required to
-        partition into smaller file blocks.
-
-        Returns:
-            the dataframe.
-
-        """
-
-        # Get start and end dates for files at specified time step
-        file_start = self.data.index[0]
-        day_start = dt.datetime(
-            file_start.year,
-            file_start.month,
-            file_start.day
-            )
-        day_end = day_start + dt.timedelta(days=1)
-
-        dates = (
-            pd.date_range(
-                start=day_start,
-                end=day_end,
-                freq=f'{self.time_step}min'
-                )
-            [:-1]
-            )
-
-        start_date = dates + dt.timedelta(
-            microseconds=10**6 / self.freq_hz
-            )
-        end_date = dates + dt.timedelta(
-            minutes=self.time_step, seconds=0, microseconds=0
-            )
-
-        # Find the number of valid records
-        n_recs = []
-        for date_pair in zip(start_date, end_date):
-            n_recs.append(len(self.data.loc[date_pair[0]: date_pair[1]]))
-
-        # Assemble and return the dataframe
-        return pd.DataFrame(
-            data={
-                'start_date': start_date,
-                'end_date': end_date,
-                'n_recs': n_recs,
-                },
-            index=pd.Index(data=range(len(dates)), name='file_num')
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_data_audit(self):
-
-        return self.file_reference
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_data_by_dates(
-        self, start: dt.datetime, end: dt.datetime
-        ) -> pd.DataFrame:
-        """
-        Return a date-bound subset of the complete data.
-
-        Args:
-            start: date of first record.
-            end: date of last record (inclusive).
-
-        Returns:
-            the subset dataframe.
-
-        """
-
-        return self.data.loc[start: end]
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_data_by_file_num(self, num: int) -> pd.DataFrame:
-        """
-        Return a subset of the data based on the allocated file number
-        (documented in file_reference dataframe).
-
-        Args:
-            num: the numerical reference of the data subset.
-
-        Raises:
-            RuntimeError: raised if no data in the file.
-
-        Returns:
-            the subset dataframe.
-
-        """
-
-        rec = self.file_reference.loc[num]
-        if rec.n_recs == 0:
-            start = rec.start_date.strftime('%H:%M')
-            end = rec.end_date.strftime('%H:%M')
-            raise RuntimeError(f'No data between {start} and {end}!')
-        return self.data.loc[rec.start_date: rec.end_date]
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def write_data_to_file_by_num(
-            self, index_num: int, output_file: pathlib.Path | str
-            ) -> None:
-        """
-        Write a subset of the data to file based on the allocated file number
-        (documented in file_reference dataframe).
-
-        Args:
-            output_file (pathlib.Path | str): DESCRIPTION.
-
-        Returns:
-            None: DESCRIPTION.
-
-        """
-
-        # Write out the data
-        _write_data_to_file(
-            file=output_file,
-            headers=_format_output_header(
-                info=self.get_file_info(), header=self.get_file_header()
-                ),
-            data=_format_output_data(data=self.get_data_by_file_num(index_num))
-            )
-    #--------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-class FileDataCombiner():
 
     #--------------------------------------------------------------------------
     def __init__(self, files: str |  list) -> None:
@@ -600,6 +443,165 @@ class FileDataCombiner():
     #--------------------------------------------------------------------------
     
 #------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+class DailyTOB3FileConverter(FileConverter):
+
+    #--------------------------------------------------------------------------
+    def __init__(
+        self, files: pathlib.Path | str, time_step: int, freq_hz: int
+        ) -> None:
+        """
+        Inherit from FastDataConverter and assign new attributes.
+
+        Args:
+            file (pathlib.Path | str): DESCRIPTION.
+            time_step (int): DESCRIPTION.
+            freq_hz (int): DESCRIPTION.
+
+        Returns:
+            None: DESCRIPTION.
+
+        """
+
+        super().__init__(files)
+        self.time_step = time_step
+        self.freq_hz = freq_hz
+        self.n_expected = time_step * freq_hz * 60
+        self.file_reference = self._make_df()
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _make_df(self) -> pd.DataFrame:
+        """
+        Create a reference dataframe containing the dates and info required to
+        partition into smaller file blocks.
+
+        Returns:
+            the dataframe.
+
+        """
+
+        # Get start and end dates for files at specified time step
+        file_start = self.data.index[0]
+        day_start = dt.datetime(
+            file_start.year,
+            file_start.month,
+            file_start.day
+            )
+        day_end = day_start + dt.timedelta(days=1)
+
+        dates = (
+            pd.date_range(
+                start=day_start,
+                end=day_end,
+                freq=f'{self.time_step}min'
+                )
+            [:-1]
+            )
+
+        start_date = dates + dt.timedelta(
+            microseconds=10**6 / self.freq_hz
+            )
+        end_date = dates + dt.timedelta(
+            minutes=self.time_step, seconds=0, microseconds=0
+            )
+
+        # Find the number of valid records
+        n_recs = []
+        for date_pair in zip(start_date, end_date):
+            n_recs.append(len(self.data.loc[date_pair[0]: date_pair[1]]))
+
+        # Assemble and return the dataframe
+        return pd.DataFrame(
+            data={
+                'start_date': start_date,
+                'end_date': end_date,
+                'n_recs': n_recs,
+                },
+            index=pd.Index(data=range(len(dates)), name='file_num')
+            )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_data_audit(self):
+
+        return self.file_reference
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_data_by_dates(
+        self, start: dt.datetime, end: dt.datetime
+        ) -> pd.DataFrame:
+        """
+        Return a date-bound subset of the complete data.
+
+        Args:
+            start: date of first record.
+            end: date of last record (inclusive).
+
+        Returns:
+            the subset dataframe.
+
+        """
+
+        return self.data.loc[start: end]
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_data_by_file_num(self, num: int) -> pd.DataFrame:
+        """
+        Return a subset of the data based on the allocated file number
+        (documented in file_reference dataframe).
+
+        Args:
+            num: the numerical reference of the data subset.
+
+        Raises:
+            RuntimeError: raised if no data in the file.
+
+        Returns:
+            the subset dataframe.
+
+        """
+
+        rec = self.file_reference.loc[num]
+        if rec.n_recs == 0:
+            start = rec.start_date.strftime('%H:%M')
+            end = rec.end_date.strftime('%H:%M')
+            raise RuntimeError(f'No data between {start} and {end}!')
+        return self.data.loc[rec.start_date: rec.end_date]
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def write_data_to_file_by_num(
+            self, index_num: int, output_file: pathlib.Path | str
+            ) -> None:
+        """
+        Write a subset of the data to file based on the allocated file number
+        (documented in file_reference dataframe).
+
+        Args:
+            output_file (pathlib.Path | str): DESCRIPTION.
+
+        Returns:
+            None: DESCRIPTION.
+
+        """
+
+        # Write out the data
+        _write_data_to_file(
+            file=output_file,
+            headers=_format_output_header(
+                info=self.get_file_info(), header=self.get_file_header()
+                ),
+            data=_format_output_data(data=self.get_data_by_file_num(index_num))
+            )
+    #--------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+
+
 
 ###############################################################################
 ### END CLASSES ###

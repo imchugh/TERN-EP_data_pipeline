@@ -17,6 +17,7 @@ sites:
   - MyallValeB
   - Ridgefield
   - RobsonCreek
+  - SilverPlains  
   - SnowGum
   - SturtPlains
   - TiTreeEast
@@ -53,8 +54,9 @@ tasks:
     - MyallValeB
     - Ridgefield
     - RobsonCreek
-    - SturtPlains
+    - SilverPlains
     - SnowGum
+    - SturtPlains
     - TiTreeEast
     - Tumbarumba
     - Wedgetail
@@ -100,6 +102,7 @@ tasks:
     - Litchfield
     - Ridgefield
     - RobsonCreek
+    - SilverPlains  
     - SnowGum
     - SturtPlains
     - TiTreeEast
@@ -122,6 +125,7 @@ tasks:
   # Local data moving
 
   parse_main_fast_data:
+    - AliceSpringsMulga
     - Boyagin
     - Calperum
     - Gingin
@@ -150,6 +154,7 @@ tasks:
     - MyallValeB
     - Ridgefield
     - RobsonCreek
+    - SilverPlains   
     - SnowGum
     - SturtPlains
     - TiTreeEast
@@ -175,6 +180,7 @@ tasks:
     - MyallValeB
     - Ridgefield
     - RobsonCreek
+    - SilverPlains
     - SnowGum
     - SturtPlains
     - TiTreeEast
@@ -204,6 +210,7 @@ tasks:
     - Litchfield
     - Ridgefield
     - RobsonCreek
+    - SilverPlains    
     - SnowGum
     - SturtPlains
     - TiTreeEast
@@ -227,6 +234,7 @@ tasks:
   # Rclone transfers - push tasks
 
   push_main_fast_flux:
+    - AliceSpringsMulga  
     - Boyagin
     - Calperum
     - Gingin
@@ -274,9 +282,9 @@ tasks:
   # s/ftp - push tasks
 
   push_cosmoz:
-    - Fletcherview
     - AliceSpringsMulga
+    - Fletcherview
+    - GreatWesternWoodlands
     - Litchfield
     - MyallValeA
-    - GreatWesternWoodlands
     - Tumbarumba

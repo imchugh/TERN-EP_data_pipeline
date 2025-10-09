@@ -153,7 +153,7 @@ def convert_TOB3_daily(
 
     # Read the file data into the fast data handler
     converter = ffio.DailyTOB3FileConverter(
-        file=file, time_step=time_step, freq_hz=freq
+        files=file, time_step=time_step, freq_hz=freq
         )
 
     # Get the output directory and ensure it exists

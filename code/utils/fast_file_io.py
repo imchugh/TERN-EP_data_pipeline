@@ -192,10 +192,10 @@ DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 class FileConverter():
 
     #--------------------------------------------------------------------------
-    def __init__(self, files: str |  list) -> None:
+    def __init__(self, files: str | list) -> None:
         
         # If files is a single file, convert to a list with single element
-        if isinstance(files, str):
+        if isinstance(files, (str, pathlib.Path)):
             files = [files]
         
         # Initialise and check file list
@@ -207,7 +207,9 @@ class FileConverter():
             file.name: rcf.read_cs_files(filename=file, metaonly=True)
             for file in self.file_list
             }
-        self._set_format(metadata=metadata)
+        
+        # Check the format of all files is identical and set the format
+        self.input_format = self._check_format(metadata=metadata)
         
         # Get data
         data, start_file = self._get_data()
@@ -249,12 +251,12 @@ class FileConverter():
     ###########################################################################
 
     #--------------------------------------------------------------------------
-    def _check_files_exist(self):
+    def _check_files_exist(self) -> None:
         """
-        
+        Check that the passed files exist.
 
         Raises:
-            FileNotFoundError: DESCRIPTION.
+            FileNotFoundError: raised if not.
 
         Returns:
             None.
@@ -267,15 +269,15 @@ class FileConverter():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _set_format(self, metadata):
+    def _check_format(self, metadata: dict) -> str:
         """
-        
+        Checks the file format across all passed files to ensure consistency.
 
         Args:
-            metadata (TYPE): DESCRIPTION.
+            metadata: dict containing all of the metadata.
 
         Raises:
-            TypeError: DESCRIPTION.
+            TypeError: raised if file formats are not identical.
 
         Returns:
             None.
@@ -285,29 +287,23 @@ class FileConverter():
         rslt = np.unique([value[0][0] for value in metadata.values()])
         if len(rslt) != 1:
             raise TypeError('Files must all be of same format!')
-        self.input_format = rslt[0].item()
+        return rslt[0].item()
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _check_metadata(self, metadata):
+    def _check_metadata(self, metadata: dict) -> None:
         """
-        Cross check all of the header lines to ensure they are the same.
-        
+        Check the pre-header and header lines to ensure consistency across files.
 
-        Raises:
-            TypeError: DESCRIPTION.
+        Args:
+            metadata: dict containing all of the metadata.
 
         Returns:
             None.
 
         """
-               
-        # Check the format field in the header is consistent
-        rslt = np.unique([value[0][0] for value in metadata.values()])
-        if len(rslt) != 1:
-            raise TypeError('Files must all be of same format!')
-        input_format = rslt[0]
-            
+
+                          
         # Check the complete info pre-header field is consistent
         self._check_meta_line(
             line_list=[info_line[0][:-1] for info_line in metadata.values()]
@@ -315,7 +311,7 @@ class FileConverter():
         
         # Check the three main header lines 
         start_line = 1
-        if input_format == 'TOB3':
+        if self.input_format == 'TOB3':
             start_line += 1
         for i in range(start_line, start_line + 3):
             i += 1
@@ -323,15 +319,15 @@ class FileConverter():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _check_meta_line(self, line_list):
+    def _check_meta_line(self, line_list: list) -> None:
         """
-        
+        Generic header line checking.
 
         Args:
-            line_list (TYPE): DESCRIPTION.
+            line_list: list of header line elements.
 
         Raises:
-            RuntimeError: DESCRIPTION.
+            RuntimeError: raised if lines are not all the same.
 
         Returns:
             None.
@@ -345,7 +341,7 @@ class FileConverter():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------            
-    def _get_data(self):
+    def _get_data(self) -> pd.DataFrame:
         """
         
 

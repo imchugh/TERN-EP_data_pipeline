@@ -15,6 +15,7 @@ do not need to be loaded every time the task manager is called externally!
 import datetime as dt
 import inspect
 import logging.config
+import pandas as pd
 import sys
 from importlib import import_module
 
@@ -34,132 +35,32 @@ from managers import paths
 ###############################################################################
 
 logger_configs = paths.get_internal_configs('py_logger')
-task_configs = '~/Code/TERN-EP_data_pipeline/code/configs/tasks.csv'
 logger = logging.getLogger(__name__)
 
 #------------------------------------------------------------------------------
-class SiteTaskManager():
-    
-    #--------------------------------------------------------------------------
-    def __init__(self) -> None:
-        """
-        Initialise with contents of csv config file.
+def _make_task_dataframe() -> pd.DataFrame:
+    """
+    Make a dataframe with tasks x sites matrix.
 
-        Returns:
-            None.
+    """
 
-        """
-        
-        self.tasks_df = (
-            paths.get_internal_configs('tasks')
-            .set_index(keys='Site')
-            .astype(bool)
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------    
-    def get_site_list(self) -> list:
-        """
-        Return the list of sites.
-
-        Returns:
-            the list.
-
-        """
-        
-        return self.tasks_df.index.tolist()
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------        
-    def get_site_list_for_task(self, task: str, disabled=False) -> list:
-        """
-        Return the list of sites for which task is enabled.
-
-        Args:
-            task: name of task.
-            disabled: set True to get a list of sites for which task is disabled.
-
-        Returns:
-            the list.
-
-        """
-        
-        return self.tasks_df[~self.tasks_df[task]==disabled].index.tolist()
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------    
-    def get_task_list(self):
-        """
-        Return the list of tasks.
-
-        Returns:
-            the list.
-
-        """
-        
-        return self.tasks_df.columns.tolist()        
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------    
-    def get_task_list_for_site(self, site: str, disabled=False) -> list:
-        """
-        Return the list of enabled tasks for a site.
-
-        Args:
-            site: name of site.
-
-        Returns:
-            the list.
-
-        """
-        
-        return self.tasks_df.columns[~self.tasks_df.loc[site]==disabled]
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def set_site_task_status(self, site: str, task: str, status: bool) -> None:
-        """
-        Edit the status of a site task.
-
-        Args:
-            site: name of site.
-            task: name of task.
-            status: status of task.
-
-        Raises:
-            TypeError: raised if `status` kwarg not passed a boolean.
-
-        Returns:
-            None.
-
-        """
-        
-        if not isinstance(status, bool):
-            raise TypeError('`status` kwarg must be a boolean')
-        self.tasks_df.loc[site, task] = status
-    #--------------------------------------------------------------------------
-    
-    #--------------------------------------------------------------------------
-    def write_tasks_config(self) -> None:
-        """
-        Write config file.
-
-        Returns:
-            None.
-
-        """
-        
-        self.tasks_df.to_csv(
-            paths.get_internal_config_path('tasks'), 
-            index_label='Site'
-            )
-    #--------------------------------------------------------------------------
-
+    task_configs = paths.get_internal_configs(config_name='tasks')
+    tasks_df = pd.DataFrame(
+        data=False,
+        index=task_configs['sites'],
+        columns=list(task_configs['tasks'].keys())
+        )
+    for task in tasks_df.columns:
+        site_list = task_configs['tasks'][task]
+        if not site_list:
+            site_list = task_configs['sites']
+        tasks_df.loc[site_list, task] = True
+    return tasks_df
 #------------------------------------------------------------------------------
 
-# Instantiate tasks manager at top level, since for site-based tasks, it must be
+# Instantiate tasks_df at top level, since for site-based tasks, it must be
 # repeatedly called.
-mngr = SiteTaskManager()
+tasks_df = _make_task_dataframe()
 
 ###############################################################################
 ### END INITS ###
@@ -235,7 +136,7 @@ def construct_site_details_json() -> None:
     deetcon = import_module('data_constructors.details_constructor')
     this_task = inspect.stack()[0][3]
     deetcon.site_info_2_json(
-        site_list=mngr.get_site_list_for_task(task=this_task)
+        site_list=get_site_list_for_task(task=this_task)
         )
 #------------------------------------------------------------------------------
 
@@ -246,7 +147,7 @@ def construct_status_xlsx() -> None:
     ns = import_module('network_monitoring.network_status')
     this_task = inspect.stack()[0][3]
     ns.write_status_xlsx(
-        site_list=mngr.get_site_list_for_task(task=this_task)
+        site_list=get_site_list_for_task(task=this_task)
         )
 #------------------------------------------------------------------------------
 
@@ -257,7 +158,7 @@ def construct_status_geojson() -> None:
     ns = import_module('network_monitoring.network_status')
     this_task = inspect.stack()[0][3]
     ns.write_status_geojson(
-        site_list=mngr.get_site_list_for_task(task=this_task)
+        site_list=get_site_list_for_task(task=this_task)
         )
 #------------------------------------------------------------------------------
 
@@ -549,6 +450,38 @@ def configure_logger(log_path):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+def get_site_list_for_task(task: str) -> list:
+    """
+    Return the list of sites for which task is enabled.
+
+    Args:
+        task: name of task.
+
+    Returns:
+        the list.
+
+    """
+
+    return tasks_df[tasks_df[task]==True].index.tolist()
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_task_list_for_site(site: str) -> list:
+    """
+    Return the list of tasks enabled for site.
+
+    Args:
+        site: name of site.
+
+    Returns:
+        the list.
+
+    """
+
+    return tasks_df.columns[tasks_df.loc[site]]
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
 def run_site_task(task: str, site:str) -> None:
     """
     Run a task for a single site (and log to single site log file).
@@ -596,7 +529,7 @@ def run_site_task_from_list(task: str) -> None:
 
     """
 
-    sites = mngr.get_site_list_for_task(task=task)
+    sites = get_site_list_for_task(task=task)
     for site in sites:
         run_site_task(task=task, site=site)
 #------------------------------------------------------------------------------

@@ -23,7 +23,6 @@ def register(func):
     else:
         NETWORK_TASKS[func.__name__] = func
     return func
-    # return decorator
 
 ###############################################################################
 ### END TASK DECORATOR DEFINITION ###

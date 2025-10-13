@@ -34,11 +34,14 @@ from managers import paths
 ###############################################################################
 
 logger_configs = paths.get_internal_configs('py_logger')
-task_configs = '~/Code/TERN-EP_data_pipeline/code/configs/tasks.csv'
 logger = logging.getLogger(__name__)
 
 #------------------------------------------------------------------------------
 class SiteTaskManager():
+    """
+    Ingest csv site / task boolean matrix and expose methods to get task 
+    lists
+    """
     
     #--------------------------------------------------------------------------
     def __init__(self) -> None:

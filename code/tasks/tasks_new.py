@@ -12,12 +12,11 @@ do not need to be loaded every time the task manager is called externally!
 ### BEGIN IMPORTS ###
 ###############################################################################
 
-import argparse
+# import argparse
 import datetime as dt
 import inspect
 import logging.config
-import pandas as pd
-# import sys
+import sys
 from importlib import import_module
 
 #------------------------------------------------------------------------------
@@ -40,29 +39,132 @@ logger_configs = paths.get_internal_configs('py_logger')
 logger = logging.getLogger(__name__)
 
 #------------------------------------------------------------------------------
-def _make_task_dataframe() -> pd.DataFrame:
+class SiteTaskManager():
     """
-    Make a dataframe with tasks x sites matrix.
-
+    Ingest csv site / task boolean matrix and expose methods to get task 
+    lists
     """
+    
+    #--------------------------------------------------------------------------
+    def __init__(self) -> None:
+        """
+        Initialise with contents of csv config file.
 
-    task_configs = paths.get_internal_configs(config_name='tasks')
-    tasks_df = pd.DataFrame(
-        data=False,
-        index=task_configs['sites'],
-        columns=list(task_configs['tasks'].keys())
-        )
-    for task in tasks_df.columns:
-        site_list = task_configs['tasks'][task]
-        if not site_list:
-            site_list = task_configs['sites']
-        tasks_df.loc[site_list, task] = True
-    return tasks_df
+        Returns:
+            None.
+
+        """
+        
+        self.tasks_df = (
+            paths.get_internal_configs('tasks')
+            .set_index(keys='Site')
+            .astype(bool)
+            )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------    
+    def get_site_list(self) -> list:
+        """
+        Return the list of sites.
+
+        Returns:
+            the list.
+
+        """
+        
+        return self.tasks_df.index.tolist()
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------        
+    def get_site_list_for_task(self, task: str, disabled=False) -> list:
+        """
+        Return the list of sites for which task is enabled.
+
+        Args:
+            task: name of task.
+            disabled: set True to get a list of sites for which task is disabled.
+
+        Returns:
+            the list.
+
+        """
+        
+        return self.tasks_df[~self.tasks_df[task]==disabled].index.tolist()
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------    
+    def get_task_list(self):
+        """
+        Return the list of tasks.
+
+        Returns:
+            the list.
+
+        """
+        
+        return self.tasks_df.columns.tolist()        
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------    
+    def get_task_list_for_site(self, site: str, disabled=False) -> list:
+        """
+        Return the list of enabled tasks for a site.
+
+        Args:
+            site: name of site.
+
+        Returns:
+            the list.
+
+        """
+        
+        return self.tasks_df.columns[~self.tasks_df.loc[site]==disabled]
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def set_site_task_status(self, site: str, task: str, status: bool) -> None:
+        """
+        Edit the status of a site task.
+
+        Args:
+            site: name of site.
+            task: name of task.
+            status: status of task.
+
+        Raises:
+            TypeError: raised if `status` kwarg not passed a boolean.
+
+        Returns:
+            None.
+
+        """
+        
+        if not isinstance(status, bool):
+            raise TypeError('`status` kwarg must be a boolean')
+        self.tasks_df.loc[site, task] = status
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def write_tasks_config(self) -> None:
+        """
+        Write config file.
+
+        Returns:
+            None.
+
+        """
+        
+        self.tasks_df.to_csv(
+            paths.get_internal_config_path('tasks'), 
+            index_label='Site'
+            )
+    #--------------------------------------------------------------------------
+
 #------------------------------------------------------------------------------
 
-# Instantiate tasks_df at top level, since for site-based tasks, it must be
+# Instantiate tasks manager at top level, since for site-based tasks, it must be
 # repeatedly called.
-tasks_df = _make_task_dataframe()
+mngr = SiteTaskManager()
 
 ###############################################################################
 ### END INITS ###
@@ -145,7 +247,7 @@ def construct_site_details_json() -> None:
     deetcon = import_module('data_constructors.details_constructor')
     this_task = inspect.stack()[0][3]
     deetcon.site_info_2_json(
-        site_list=get_site_list_for_task(task=this_task)
+        site_list=mngr.get_site_list_for_task(task=this_task)
         )
 #------------------------------------------------------------------------------
 
@@ -157,7 +259,7 @@ def construct_status_xlsx() -> None:
     ns = import_module('network_monitoring.network_status')
     this_task = inspect.stack()[0][3]
     ns.write_status_xlsx(
-        site_list=get_site_list_for_task(task=this_task)
+        site_list=mngr.get_site_list_for_task(task=this_task)
         )
 #------------------------------------------------------------------------------
 
@@ -169,7 +271,7 @@ def construct_status_geojson() -> None:
     ns = import_module('network_monitoring.network_status')
     this_task = inspect.stack()[0][3]
     ns.write_status_geojson(
-        site_list=get_site_list_for_task(task=this_task)
+        site_list=mngr.get_site_list_for_task(task=this_task)
         )
 #------------------------------------------------------------------------------
 
@@ -215,24 +317,23 @@ def process_profile_data(site: str) -> None:
 
 #------------------------------------------------------------------------------
 @register
-def file_main_fast_data(site: str) -> None:
+def parse_main_fast_data(site: str) -> None:
 
-    _file_fast_data(site=site, is_aux=False)
+    _parse_fast_data(site=site, is_aux=False)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 @register
-def file_aux_fast_data(site: str) -> None:
+def parse_aux_fast_data(site: str) -> None:
 
-    _file_fast_data(site=site, is_aux=True)
+    _parse_fast_data(site=site, is_aux=True)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def _file_fast_data(site: str, is_aux: bool) -> None:
+def _parse_fast_data(site: str, is_aux: bool) -> None:
 
-    pf = import_module('file_handling.package_fast')
-    pf.file_fast_data(site=site, is_aux=is_aux)
-    # fdf.move_fast_files(site=site, is_aux=is_aux)
+    ffc = import_module('data_constructors.fast_file_converters')
+    ffc.parse_TOB3_daily(site=site, is_aux=is_aux)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -405,52 +506,52 @@ def push_cosmoz(site) -> None:
 ###############################################################################
 
 
-# #------------------------------------------------------------------------------
-# class FunctionFinder():
-#     """
-#     Puts all public functions in dictionary and sorts them into site-based and
-#     network-based functions.
-#     """
+#------------------------------------------------------------------------------
+class FunctionFinder():
+    """
+    Puts all public functions in dictionary and sorts them into site-based and
+    network-based functions.
+    """
 
-#     #--------------------------------------------------------------------------
-#     def __init__(self) -> None:
-#         """
-#         Do all the things.
+    #--------------------------------------------------------------------------
+    def __init__(self) -> None:
+        """
+        Do all the things.
 
-#         Returns:
-#             None.
+        Returns:
+            None.
 
-#         """
+        """
 
-#         task_functions = dict(
-#             inspect.getmembers(
-#                 sys.modules[__name__], inspect.isfunction
-#                 )
-#             )
-#         task_functions = {
-#             name: func for name, func in task_functions.items()
-#             if not name.startswith('_')
-#             }
-#         network_tasks, site_tasks = [], []
-#         for name, func in task_functions.items():
-#             if name.startswith('_'):
-#                 task_functions.pop(name)
-#             args = list(inspect.signature(func).parameters.keys())
-#             if not args:
-#                 network_tasks.append(name)
-#             elif args[0] == 'site':
-#                 site_tasks.append(name)
-#         self.tasks = list(task_functions.keys())
-#         self.task_functions = task_functions
-#         self.network_tasks = network_tasks
-#         self.site_tasks = site_tasks
-#     #--------------------------------------------------------------------------
+        task_functions = dict(
+            inspect.getmembers(
+                sys.modules[__name__], inspect.isfunction
+                )
+            )
+        task_functions = {
+            name: func for name, func in task_functions.items()
+            if not name.startswith('_')
+            }
+        network_tasks, site_tasks = [], []
+        for name, func in task_functions.items():
+            if name.startswith('_'):
+                task_functions.pop(name)
+            args = list(inspect.signature(func).parameters.keys())
+            if not args:
+                network_tasks.append(name)
+            elif args[0] == 'site':
+                site_tasks.append(name)
+        self.tasks = list(task_functions.keys())
+        self.task_functions = task_functions
+        self.network_tasks = network_tasks
+        self.site_tasks = site_tasks
+    #--------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 
 # Instantiate finder at top level, since for site-based tasks, it must be
 # repeatedly called.
-# func_finder = FunctionFinder()
+func_finder = FunctionFinder()
 
 ###############################################################################
 ### END FUNCTION FINDER CLASS ###
@@ -473,179 +574,145 @@ def configure_logger(log_path):
     logging.config.dictConfig(new_configs)
 #------------------------------------------------------------------------------
 
+# def main():
+
+#     parser = argparse.ArgumentParser(description="Task runner")
+#     subparsers = parser.add_subparsers(dest="command", required=True)
+
+#     # Network tasks (no site argument)
+#     for name, func in NETWORK_TASKS.items():
+#         subparsers.add_parser(name, help=func.__doc__).set_defaults(func=func, site=None, multiple_sites=False)
+
+#     # Site tasks (optional site argument)
+#     for name, func in SITE_TASKS.items():
+#         sp = subparsers.add_parser(name, help=func.__doc__)
+#         sp.add_argument("site", nargs="?", help="Site identifier (optional)")
+#         sp.set_defaults(func=func, multiple_sites=True)
+
+#     args = parser.parse_args()
+
+#     if getattr(args, "multiple_sites", False):
+#         # Site task
+#         if args.site:  # run for a single site
+#             args.func(args.site)
+#         else:  # run for all sites listed in the YAML
+#             sites = SITE_TASKS.get(args.command, [])
+#             for site in sites:
+#                 args.func(site)
+#     else:
+#         # Network task
+#         args.func()
+
+# if __name__ == "__main__":
+
+#     main()
+
+
+
+
+
+
 #------------------------------------------------------------------------------
-def get_site_list_for_task(task: str) -> list:
+def run_site_task(task: str, site:str) -> None:
     """
-    Return the list of sites for which task is enabled.
+    Run a task for a single site (and log to single site log file).
+
+    Args:
+        task: name of task.
+        site: name of site.
+
+    Returns:
+        None.
+
+    """
+
+    # Get the log output path and configure the logger
+    log_path = (
+        paths.get_local_stream_path(
+            resource='logs',
+            stream='site_logs',
+            site=site
+            ) /
+        f'{site}_{task}.log'
+        )
+    configure_logger(log_path=log_path)
+
+    # Retrieve the function and run the task
+    logger.info(f'Running task {task}...')
+    try:
+        function = func_finder.task_functions[task]
+        function(site=site)
+        logger.info('Task completed without error\n')
+    except Exception:
+        logger.error('Task failed with the following error:', exc_info=True)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def run_site_task_from_list(task: str) -> None:
+    """
+    Run a site task for a site (and log to single site log file) from list of sites.
 
     Args:
         task: name of task.
 
     Returns:
-        the list.
+        None.
 
     """
 
-    return tasks_df[tasks_df[task]==True].index.tolist()
+    sites = mngr.get_site_list_for_task(task=task)
+    for site in sites:
+        run_site_task(task=task, site=site)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def get_task_list_for_site(site: str) -> list:
+def run_network_task(task: str) -> None:
     """
-    Return the list of tasks enabled for site.
+    Run a network-based task.
 
     Args:
-        site: name of site.
+        task: name of task.
 
     Returns:
-        the list.
+        None.
 
     """
 
-    return tasks_df.columns[tasks_df.loc[site]]
+    # Get the log output path and configure the logger
+    log_path = (
+        paths.get_local_stream_path(
+            resource='logs',
+            stream='network_logs',
+            ) /
+        f'{task}.log'
+        )
+    configure_logger(log_path=log_path)
+
+    # Get the requested function
+    function = func_finder.task_functions[task]
+
+    # Run the task
+    logger.info(f'Running task {task}...')
+    try:
+        function()
+        logger.info('Task completed without error\n')
+    except Exception:
+        logger.error('Task failed with the following error:', exc_info=True)
 #------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+def run_task(task):
 
-
-def main():
-
-    parser = argparse.ArgumentParser(description="Task runner")
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    # Network tasks (no site argument)
-    for name, func in NETWORK_TASKS.items():
-        subparsers.add_parser(name, help=func.__doc__).set_defaults(func=func, site=None, multiple_sites=False)
-
-    # Site tasks (optional site argument)
-    for name, func in SITE_TASKS.items():
-        sp = subparsers.add_parser(name, help=func.__doc__)
-        sp.add_argument("site", nargs="?", help="Site identifier (optional)")
-        sp.set_defaults(func=func, multiple_sites=True)
-
-    args = parser.parse_args()
-
-    if getattr(args, "multiple_sites", False):
-        # Site task
-        if args.site:  # run for a single site
-            args.func(args.site)
-        else:  # run for all sites listed in the YAML
-            sites = SITE_TASKS.get(args.command, [])
-            for site in sites:
-                args.func(site)
+    if task in func_finder.site_tasks:
+        run_site_task_from_list(task=task)
+    elif task in func_finder.network_tasks:
+        run_network_task(task=task)
     else:
-        # Network task
-        args.func()
+        raise NotImplementedError(
+            f'Function for task "{task}" not implemented!'
+            )
+#------------------------------------------------------------------------------
 
-if __name__ == "__main__":
-
-    main()
-
-
-
-
-
-
-# #------------------------------------------------------------------------------
-# def run_site_task(task: str, site:str) -> None:
-#     """
-#     Run a task for a single site (and log to single site log file).
-
-#     Args:
-#         task: name of task.
-#         site: name of site.
-
-#     Returns:
-#         None.
-
-#     """
-
-#     # Get the log output path and configure the logger
-#     log_path = (
-#         paths.get_local_stream_path(
-#             resource='logs',
-#             stream='site_logs',
-#             site=site
-#             ) /
-#         f'{site}_{task}.log'
-#         )
-#     configure_logger(log_path=log_path)
-
-#     # Retrieve the function and run the task
-#     logger.info(f'Running task {task}...')
-#     try:
-#         function = func_finder.task_functions[task]
-#         function(site=site)
-#         logger.info('Task completed without error\n')
-#     except Exception:
-#         logger.error('Task failed with the following error:', exc_info=True)
-# #------------------------------------------------------------------------------
-
-# #------------------------------------------------------------------------------
-# def run_site_task_from_list(task: str) -> None:
-#     """
-#     Run a site task for a site (and log to single site log file) from list of sites.
-
-#     Args:
-#         task: name of task.
-
-#     Returns:
-#         None.
-
-#     """
-
-#     sites = get_site_list_for_task(task=task)
-#     for site in sites:
-#         run_site_task(task=task, site=site)
-# #------------------------------------------------------------------------------
-
-# #------------------------------------------------------------------------------
-# def run_network_task(task: str) -> None:
-#     """
-#     Run a network-based task.
-
-#     Args:
-#         task: name of task.
-
-#     Returns:
-#         None.
-
-#     """
-
-#     # Get the log output path and configure the logger
-#     log_path = (
-#         paths.get_local_stream_path(
-#             resource='logs',
-#             stream='network_logs',
-#             ) /
-#         f'{task}.log'
-#         )
-#     configure_logger(log_path=log_path)
-
-#     # Get the requested function
-#     function = func_finder.task_functions[task]
-
-#     # Run the task
-#     logger.info(f'Running task {task}...')
-#     try:
-#         function()
-#         logger.info('Task completed without error\n')
-#     except Exception:
-#         logger.error('Task failed with the following error:', exc_info=True)
-# #------------------------------------------------------------------------------
-
-# #------------------------------------------------------------------------------
-# def run_task(task):
-
-#     if task in func_finder.site_tasks:
-#         run_site_task_from_list(task=task)
-#     elif task in func_finder.network_tasks:
-#         run_network_task(task=task)
-#     else:
-#         raise NotImplementedError(
-#             f'Function for task "{task}" not implemented!'
-#             )
-# #------------------------------------------------------------------------------
-
-# ###############################################################################
-# ### END TASK MANAGEMENT FUNCTIONS ###
-# ###############################################################################
+###############################################################################
+### END TASK MANAGEMENT FUNCTIONS ###
+###############################################################################

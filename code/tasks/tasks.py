@@ -12,6 +12,7 @@ do not need to be loaded every time the task manager is called externally!
 ### BEGIN IMPORTS ###
 ###############################################################################
 
+# import argparse
 import datetime as dt
 import inspect
 import logging.config
@@ -20,6 +21,7 @@ from importlib import import_module
 
 #------------------------------------------------------------------------------
 
+from tasks.registry import register, SITE_TASKS, NETWORK_TASKS
 from file_transfers import rclone_transfer as rct
 from file_transfers import sftp_transfer as sftpt
 from managers import paths
@@ -179,6 +181,7 @@ mngr = SiteTaskManager()
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def construct_homogenised_TOA5(site: str) -> None:
     """Construct a TOA5 file for visualisation."""
 
@@ -190,6 +193,7 @@ def construct_homogenised_TOA5(site: str) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def construct_homogenised_TOA5_from_nc(site: str) -> None:
 
     nctoa5 = import_module('data_constructors.nc_toa5_constructor')
@@ -197,6 +201,7 @@ def construct_homogenised_TOA5_from_nc(site: str) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def construct_L1_nc(site: str) -> None:
     """Construct the L1 NetCDF file"""
 
@@ -210,6 +215,7 @@ def construct_L1_nc(site: str) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def construct_L1_xlsx(site: str) -> None:
 
     xlcon = import_module('data_constructors.L1_workbook_constructor')
@@ -217,6 +223,7 @@ def construct_L1_xlsx(site: str) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def update_EddyPro_master(site: str) -> None:
 
     epc = import_module('file_handling.eddypro_concatenator')
@@ -224,6 +231,7 @@ def update_EddyPro_master(site: str) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def construct_site_details(site: str) -> None:
     """Construct the details file for the RTMC plotting"""
 
@@ -232,6 +240,7 @@ def construct_site_details(site: str) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def construct_site_details_json() -> None:
     """Construct the details file for the Grafana dash"""
 
@@ -243,6 +252,7 @@ def construct_site_details_json() -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def construct_status_xlsx() -> None:
     """Construct the status xlsx seeded with site list"""
 
@@ -254,6 +264,7 @@ def construct_status_xlsx() -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def construct_status_geojson() -> None:
     """Construct the status geojson seeded with site list"""
 
@@ -273,6 +284,7 @@ def construct_status_geojson() -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def process_profile_data(site: str) -> None:
 
     pdp = import_module('profile_processing.profile_data_processor')
@@ -304,12 +316,14 @@ def process_profile_data(site: str) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def parse_main_fast_data(site: str) -> None:
 
     _parse_fast_data(site=site, is_aux=False)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def parse_aux_fast_data(site: str) -> None:
 
     _parse_fast_data(site=site, is_aux=True)
@@ -320,7 +334,6 @@ def _parse_fast_data(site: str, is_aux: bool) -> None:
 
     ffc = import_module('data_constructors.fast_file_converters')
     ffc.parse_TOB3_daily(site=site, is_aux=is_aux)
-    # fdf.move_fast_files(site=site, is_aux=is_aux)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -331,7 +344,10 @@ def _parse_fast_data(site: str, is_aux: bool) -> None:
 ### BEGIN RCLONE DATA TRANSFERS ###
 #------------------------------------------------------------------------------
 
+# PULL TASKS
+
 #------------------------------------------------------------------------------
+@register
 def pull_profile_raw(site: str) -> None:
 
     logger.info('Downloading data from remote location...')
@@ -343,12 +359,14 @@ def pull_profile_raw(site: str) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def pull_RTMC_images():
 
     rct.push_pull_RTMC_images(which='pull')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def pull_slow_flux(site):
 
     logger.info(f'Begin retrieval of {site} slow data from UQRDM')
@@ -359,7 +377,10 @@ def pull_slow_flux(site):
     logger.info('Done')
 #------------------------------------------------------------------------------
 
+# PUSH TASKS
+
 #------------------------------------------------------------------------------
+@register
 def push_aux_fast_flux(site):
 
     logger.info(f'Begin move of {site} fast data to UQRDM flux archive')
@@ -371,30 +392,28 @@ def push_aux_fast_flux(site):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def push_details_json():
 
     rct.push_details_json()
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def push_homogenised_TOA5():
 
     rct.push_homogenised(stream='TOA5')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def push_L1_nc():
 
     rct.push_homogenised(stream='nc')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def push_L1_xlsx():
-
-    rct.push_homogenised(stream='xlsx')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
+@register
 def push_main_fast_flux(site):
 
     logger.info(f'Begin move of {site} fast data to UQRDM flux archive')
@@ -406,6 +425,7 @@ def push_main_fast_flux(site):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def push_profile_processed(site):
 
     logger.info(f'Begin move of {site} processed profile data to UQRDM')
@@ -416,6 +436,7 @@ def push_profile_processed(site):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def push_profile_raw(site: str) -> None:
 
     logger.info('Uploading data to remote location...')
@@ -426,12 +447,14 @@ def push_profile_raw(site: str) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def push_RTMC_images():
 
     rct.push_pull_RTMC_images(which='push')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def push_slow_flux(site):
 
     logger.info(f'Begin move of {site} slow flux data to UQRDM')
@@ -442,6 +465,40 @@ def push_slow_flux(site):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+def move_site_data_stream(
+        site: str, stream: str, resource: str='raw_data',
+        exclude_dirs: list=None, which_way: str='to_remote', timeout: int=600
+        ) -> None:
+    """
+    Moves individual site data between local and remote folders
+
+    Args:
+        site name of site : DESCRIPTION.
+        stream (TYPE): DESCRIPTION.
+        exclude_dirs (TYPE, optional): DESCRIPTION. Defaults to None.
+        which_way (TYPE, optional): DESCRIPTION. Defaults to 'to_remote'.
+        timeout (TYPE, optional): DESCRIPTION. Defaults to 600.
+
+    Returns:
+        None.
+
+    """
+    rct = import_module('file_transfers.rclone_transfer')
+    rct.generic_move(
+        local_location=paths.get_local_stream_path(
+            resource='raw_data', stream=stream, site=site, as_str=True
+            ), 
+        remote_location=paths.get_remote_stream_path(
+            resource='raw_data', stream=stream, site=site, as_str=True
+            ),
+        exclude_dirs=exclude_dirs, 
+        which_way=which_way, 
+        timeout=timeout
+        )
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+@register
 def push_status_geojson() -> None:
     """Use Rclone to push data to rdm"""
 
@@ -449,6 +506,7 @@ def push_status_geojson() -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def push_status_xlsx() -> None:
     """Use Rclone to push data to rdm"""
 
@@ -464,6 +522,7 @@ def push_status_xlsx() -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+@register
 def push_cosmoz(site) -> None:
 
     sftpt.push_cosmoz(site=site)
@@ -482,6 +541,7 @@ def push_cosmoz(site) -> None:
 ###############################################################################
 ### BEGIN FUNCTION FINDER CLASS ###
 ###############################################################################
+
 
 #------------------------------------------------------------------------------
 class FunctionFinder():
@@ -550,6 +610,44 @@ def configure_logger(log_path):
     new_configs['handlers']['file']['filename'] = str(log_path)
     logging.config.dictConfig(new_configs)
 #------------------------------------------------------------------------------
+
+# def main():
+
+#     parser = argparse.ArgumentParser(description="Task runner")
+#     subparsers = parser.add_subparsers(dest="command", required=True)
+
+#     # Network tasks (no site argument)
+#     for name, func in NETWORK_TASKS.items():
+#         subparsers.add_parser(name, help=func.__doc__).set_defaults(func=func, site=None, multiple_sites=False)
+
+#     # Site tasks (optional site argument)
+#     for name, func in SITE_TASKS.items():
+#         sp = subparsers.add_parser(name, help=func.__doc__)
+#         sp.add_argument("site", nargs="?", help="Site identifier (optional)")
+#         sp.set_defaults(func=func, multiple_sites=True)
+
+#     args = parser.parse_args()
+
+#     if getattr(args, "multiple_sites", False):
+#         # Site task
+#         if args.site:  # run for a single site
+#             args.func(args.site)
+#         else:  # run for all sites listed in the YAML
+#             sites = SITE_TASKS.get(args.command, [])
+#             for site in sites:
+#                 args.func(site)
+#     else:
+#         # Network task
+#         args.func()
+
+# if __name__ == "__main__":
+
+#     main()
+
+
+
+
+
 
 #------------------------------------------------------------------------------
 def run_site_task(task: str, site:str) -> None:
@@ -640,7 +738,20 @@ def run_network_task(task: str) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def run_task(task):
+def run_task(task: str) -> None:
+    """
+    Run a task.
+
+    Args:
+        task: name of taks to run.
+
+    Raises:
+        NotImplementedError: raised if an undefined task is passed.
+
+    Returns:
+        None.
+
+    """
 
     if task in func_finder.site_tasks:
         run_site_task_from_list(task=task)

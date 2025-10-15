@@ -214,7 +214,9 @@ def _write_yml(file_path, data):
 #------------------------------------------------------------------------------
 def _write_xl(file_path, data):
 
-    return data.to_excel(file_path, sheet_name='variables')
+    return data.to_excel(
+        file_path, sheet_name='variables', index_label='pfp_name'
+        )
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

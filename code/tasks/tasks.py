@@ -4,7 +4,7 @@ Created on Fri Aug  2 09:43:07 2024
 
 @author: jcutern-imchugh
 
-Note that imports are embedded in the task function calls so that all modules
+Note that some imports are embedded in the task function calls so that all modules
 do not need to be loaded every time the task manager is called externally!
 """
 
@@ -440,7 +440,7 @@ def push_profile_processed(site):
 def push_profile_raw(site: str) -> None:
 
     logger.info('Uploading data to remote location...')
-    rct.move_site_data_stream(
+    move_site_data_stream(
         site=site, resource='raw_data', stream='profile', which_way='to_remote'
         )
     logger.info('Done!')
@@ -458,9 +458,7 @@ def push_RTMC_images():
 def push_slow_flux(site):
 
     logger.info(f'Begin move of {site} slow flux data to UQRDM')
-    rct.move_site_data_stream(
-        site=site, resource='raw_data', stream='flux_slow'
-        )
+    move_site_data_stream(site=site, resource='raw_data', stream='flux_slow')
     logger.info('Done.')
 #------------------------------------------------------------------------------
 
@@ -483,14 +481,17 @@ def move_site_data_stream(
         None.
 
     """
+    
     rct = import_module('file_transfers.rclone_transfer')
+    local_location = paths.get_local_stream_path(
+        resource='raw_data', stream=stream, site=site, as_str=True
+        ).replace('\\', '/')
+    remote_location = paths.get_remote_stream_path(
+        resource='raw_data', stream=stream, site=site, as_str=True
+        ).replace('\\', '/')
     rct.generic_move(
-        local_location=paths.get_local_stream_path(
-            resource='raw_data', stream=stream, site=site, as_str=True
-            ), 
-        remote_location=paths.get_remote_stream_path(
-            resource='raw_data', stream=stream, site=site, as_str=True
-            ),
+        local_location=local_location, 
+        remote_location=remote_location,
         exclude_dirs=exclude_dirs, 
         which_way=which_way, 
         timeout=timeout

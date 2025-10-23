@@ -19,7 +19,7 @@ AliceSpringsMulga:
     and annual Eriachne pulchella ssp pulchella (Pretty wanderrie).'
   time_zone: Australia/Darwin
   UTC_offset: 9.5
-AlpinePeat:
+AlpinePeatland:
   id: https://w3id.org/tern/resources/77df3c32-a853-4bed-ad13-192c639288c8
   fluxnet_id: AU-APL
   date_commissioned: '2017-04-01'
@@ -45,7 +45,7 @@ SnowGum:
   freq_hz: 10
   canopy_height: null
   soil: null
-  tower_height: null
+  tower_height: 14.0
   vegetation: null
   time_zone: Australia/Sydney
   UTC_offset: 10.0
@@ -152,6 +152,36 @@ Dookie1:
   canopy_height: null
   soil: null
   tower_height: 3.0
+  vegetation: null
+  time_zone: Australia/Melbourne
+  UTC_offset: 10.0
+Dookie2:
+  id: https://w3id.org/tern/resources/ccb2fb93-8421-4f16-afe1-a37276748a53
+  fluxnet_id: AU-Do2
+  date_commissioned: '2025-05-21'
+  latitude: -36.3903
+  longitude: 145.724
+  elevation: 140.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: null
+  soil: null
+  tower_height: null
+  vegetation: null
+  time_zone: Australia/Melbourne
+  UTC_offset: 10.0
+Dookie3:
+  id: https://w3id.org/tern/resources/1d92d8a7-c28b-40b3-8805-844b5d7b1df3
+  fluxnet_id: AU-Do3
+  date_commissioned: '2025-05-22'
+  latitude: -36.392964
+  longitude: 145.7233
+  elevation: 140.0
+  time_step: 30
+  freq_hz: 10
+  canopy_height: null
+  soil: null
+  tower_height: null
   vegetation: null
   time_zone: Australia/Melbourne
   UTC_offset: 10.0
@@ -302,8 +332,8 @@ MyallValeA:
   time_step: 30
   freq_hz: 20
   canopy_height: null
-  soil: null
-  tower_height: null
+  soil: vertosol
+  tower_height: 3.1
   vegetation: null
   time_zone: Australia/Sydney
   UTC_offset: 10.0
@@ -317,8 +347,8 @@ MyallValeB:
   time_step: 30
   freq_hz: 20
   canopy_height: null
-  soil: null
-  tower_height: null
+  soil: vertosol
+  tower_height: 3.1
   vegetation: null
   time_zone: Australia/Sydney
   UTC_offset: 10.0
@@ -541,7 +571,7 @@ WombatStateForest:
 WombatStateForest2:
   id: https://w3id.org/tern/resources/bf3daf01-0e7a-4e18-aa9d-460be3fe06cc
   fluxnet_id: AU-Wom
-  date_commissioned: NaT
+  date_commissioned: '2024-05-08'
   latitude: null
   longitude: null
   elevation: null
@@ -549,7 +579,7 @@ WombatStateForest2:
   freq_hz: 10
   canopy_height: Ask Cacilia/Stefan
   soil: silt-clay/clay
-  tower_height: 40.19
+  tower_height: 44.19
   vegetation: dry sclerophyll eucalypt forest
   time_zone: null
   UTC_offset: null

@@ -38,7 +38,7 @@ creds = paths.get_local_config_file(config_stream='secrets')['SITE_DETAILS']
 USERNAME = creds['USERNAME']
 PASSWORD = creds['PASSWORD']
 SPARQL_ENDPOINT = "https://graphdb.tern.org.au/repositories/knowledge_graph_core"
-ALIAS_DICT = {'Alpine Peatland': 'Alpine Peat',
+ALIAS_DICT = {#'Alpine Peatland': 'Alpine Peat',
               'Aqueduct Snow Gum': 'SnowGum',
               'ArcturusEmerald': 'Emerald',
               'Calperum Chowilla': 'Calperum',
@@ -53,13 +53,6 @@ HEADERS = {
     "content-type": "application/sparql-query",
     "accept": "application/sparql-results+json"
     }
-# DATA_DTYPES_OLD = {
-#     'id': str, 'fluxnet_id': str, 'date_commissioned': 'datetime64[ns]',
-#     'date_decommissioned': 'datetime64[ns]', 'latitude': float,
-#     'longitude': float, 'elevation': float, 'time_step': float,
-#     'freq_hz': float, 'soil': str, 'tower_height': float, 'vegetation': str,
-#     'canopy_height': 'O', 'time_zone': str, 'UTC_offset': float
-#     }
 DATA_DTYPES = {
     'id': 'string', 'fluxnet_id': 'string', 'date_commissioned': 'datetime64[ns]',
     'date_decommissioned': 'datetime64[ns]', 'latitude': float,
@@ -290,11 +283,11 @@ def export_data_to_yml(
     # Convert null values to None, which should be null in yaml
     site_data = {
         site: _format_canopy_height(
-            in_dict=data.loc[site].replace((np.nan, 'nan'), None).to_dict()
+            in_dict=data.loc[site].replace((np.nan, 'nan', ''), None).to_dict()
             )
         for site in data.index
         }
-
+    
     # Output to yaml
     with open(file=output_path, mode='w', encoding='utf-8') as f:
         yaml.dump(data=site_data, stream=f, sort_keys=False)

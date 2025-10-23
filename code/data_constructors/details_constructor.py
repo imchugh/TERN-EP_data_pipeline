@@ -109,7 +109,7 @@ def write_site_info(site: str) -> None:
 
     # Get flux logger info
     logger.info('Getting flux logger information...')
-    nc_file_list = paths.get_internal_configs('tasks')['tasks']['construct_L1_nc']
+    nc_file_list = paths.get_internal_configs('tasks').Site.tolist()
     if site in nc_file_list:
         from managers import metadata
         md_mngr = metadata.MetaDataManager(site=site)

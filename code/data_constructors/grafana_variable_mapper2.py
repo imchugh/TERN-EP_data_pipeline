@@ -17,6 +17,7 @@ import pathlib
 # -----------------------------------------------------------------------------
 
 from file_handling import file_io as io
+from file_handling import nc_io as ncio
 from managers import paths
 from managers import metadata
 
@@ -33,7 +34,7 @@ from managers import metadata
 HEIGHT_VAR = 'Ws_SONIC_Av'
 NOT_ENDS_WITH = ['QC_Flag', 'QC', 'Sd', 'Ct']
 ADD_ATTRS = ['quantity', 'horizontal_location', 'replicate']
-
+nc_path = paths.get_local_stream_path(resource='homogenised_data', stream='nc')
 parser = metadata.PFPNameParser()
 
 ###############################################################################
@@ -58,6 +59,7 @@ def map_all_sites(output_path: str | pathlib.Path=None) -> dict:
     rslt = {}
     for path in sorted(configs_path.glob('*.yml')):
         site = path.stem
+        print (f'Running site {site}...')
         rslt.update({site: map_variables(site=site)})
 
     # Spit out to json if output path supplied
@@ -84,11 +86,24 @@ def map_variables(site: str) -> dict:
 
     """
 
-    # Get the metadata manager for the site
-    md_mngr = metadata.MetaDataManager(site=site)
-
+    # Get the nc file for the site
+    reader = ncio.NCReader(nc_path / site / f'{site}_2025_L1.nc')
+    temp_dict = reader.variable_attrs.T.to_dict()
+    drop_list = []
+    for variable in temp_dict.keys():
+        try:
+            temp_dict[variable].update(
+                parser.parse_variable_name(variable_name=variable)
+                )
+        except TypeError:
+            drop_list.append(variable)
+    temp_dict = {
+        key: value for key, value in temp_dict.items() if not key in drop_list
+        }
+    df = pd.DataFrame.from_dict(temp_dict).T.fillna('')
+       
     # Copy the underlying dataframe from the manager and amend heights to float
-    df = md_mngr.site_variables.copy()
+    # df = md_mngr.site_variables.copy()
     df['height'] = df['height'].apply(height_extractor)
 
     # Result dict to contain variable translations
@@ -157,9 +172,6 @@ def _get_met_vars(df: pd.DataFrame) -> dict:
 
     """
 
-    # Inits
-    rslt = {'Ta': None, 'RH': None, 'AH': None}
-
     # Create a temperature dataframe and order by target height delta
     target_height = df.loc[HEIGHT_VAR, 'height']
     ta_df = df.loc[df.quantity == 'Ta'].copy()
@@ -168,47 +180,53 @@ def _get_met_vars(df: pd.DataFrame) -> dict:
 
     # Iterate over temperature variables to find one with a matching RH value
     for variable in ta_df.index:
+
+        # Initialise the result dictionary        
+        rslt = {'Ta': None, 'RH': None, 'AH': None}        
         height_diff, instrument = (
             ta_df.loc[variable, ['height_diff', 'instrument']].tolist()
             )
         rslt['Ta'] = variable
 
-        # Create a dataframe for quantity and order by target height delta
-        sub_df = df.loc[df.quantity == 'RH'].copy()
-        if len(sub_df) == 0:
-            continue
-        sub_df['height_diff'] = abs(sub_df.height - target_height)
-        sub_df = sub_df.sort_values('height_diff')
-
-        # Check for same instrument at same height
-        try:
+        # Iterate over AH and RH
+        for quantity in ['RH', 'AH']:
+    
+            # Create a dataframe for quantity and order by target height delta
+            sub_df = df.loc[df.quantity == quantity].copy()
+            if len(sub_df) == 0:
+                continue
+            sub_df['height_diff'] = abs(sub_df.height - target_height)
+            sub_df = sub_df.sort_values('height_diff')
+    
+            # Check for same instrument at same height
+            try:
+                match_var = sub_df.loc[
+                    (sub_df.height_diff == height_diff) &
+                    (sub_df.quantity == quantity) &
+                    (sub_df.instrument == instrument)
+                    ].index.item()
+                rslt[quantity] = match_var
+                continue
+            except ValueError:
+                continue
+    
+            # If not found, drop the instrument match requirement
             match_var = sub_df.loc[
                 (sub_df.height_diff == height_diff) &
-                (sub_df.quantity == 'RH') &
-                (sub_df.instrument == instrument)
+                (sub_df.quantity == quantity)
                 ].index.item()
-            rslt['RH'] = match_var
+            if not len(match_var) == 0:
+                rslt[quantity] = match_var
+                continue
+    
+            # If not found, drop the height match requirement and accept the
+            # smallest delta
+            rslt[quantity] = sub_df.height_diff.idxmin()
             continue
-        except ValueError:
-            continue
-
-        # If not found, drop the instrument match requirement
-        match_var = sub_df.loc[
-            (sub_df.height_diff == height_diff) &
-            (sub_df.quantity == 'RH')
-            ].index.item()
-        if not len(match_var) == 0:
-            rslt['RH'] = match_var
-            continue
-
-        # If not found, drop the height match requirement and accept the
-        # smallest delta
-        rslt['RH'] = sub_df.height_diff.idxmin()
-        continue
-
-        # Break as soon as there is a hit
-        if rslt['RH'] is not None:
-            break
+    
+            # Break as soon as there is a hit
+            if not None in rslt.values():
+                break
 
     # Remove fields with empty values, reverse and return
     return {value: key for key, value in rslt.items() if value is not None}
@@ -274,7 +292,7 @@ def _get_sig_vars(df):
         return {'SigCO2_IRGA': 'Sig_IRGA'}
     if 'SigH2O_IRGA' in df.index:
         return {'SigH2O_IRGA': 'Sig_IRGA'}
-    raise KeyError('Must contain one of Sig_IRGA, SigCO2_IRGA or SigH2O_IRGA')
+    return {}
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

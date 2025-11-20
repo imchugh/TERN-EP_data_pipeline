@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = 'empty-project-type'
-recent_files = ['managers/metadata.py', 'configuration/pfp_configs_editor.py']
+recent_files = ['managers/metadata.py', 'configs_editors/pfp_configs_editor.py', 'configs_editors/edit_configs.py', 'network_monitoring/network_status.py', 'data_constructors/nc_constructors.py', 'data_constructors/convert_calc_filter.py', 'data_constructors/grafana_variable_mapper.py']
 
 [main]
 version = 0.2.0

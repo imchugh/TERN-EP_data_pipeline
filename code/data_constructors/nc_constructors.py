@@ -44,7 +44,6 @@ import file_handling.file_handler as fh
 ### BEGIN INITS ###
 ###############################################################################
 
-#------------------------------------------------------------------------------
 SITE_DETAIL_ALIASES = {'elevation': 'altitude'}
 SITE_DETAIL_SUBSET = [
     'fluxnet_id', 'latitude', 'longitude', 'elevation', 'time_step',
@@ -58,8 +57,8 @@ VAR_METADATA_SUBSET = [
     ]
 TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 HIST_STR = 'instrument_history'
+parser = md.PFPNameParser()
 logger = logging.getLogger(__name__)
-#------------------------------------------------------------------------------
 
 ###############################################################################
 ### END INITS ###
@@ -78,7 +77,7 @@ class L1DataConstructor():
     def __init__(
         self, site: str, use_alternate_configs: pathlib.Path | str=None,
         concat_files: bool=False, constrain_start_to_flux: bool=False,
-        constrain_end_to_flux: bool=True
+        constrain_end_to_flux: bool=True, pad_humidity_vars=False
         ) -> None:
         """
         Get the data and metadata.
@@ -98,12 +97,18 @@ class L1DataConstructor():
         self.md_mngr = md.MetaDataManager(
             site=site, use_alternate_configs=use_alternate_configs
             )
-        self.data = (
+        data = (
             self._build_internal_data(args=locals())
             .pipe(self._do_unit_conversions)
             .pipe(self._do_diag_conversions)
             .pipe(self._do_variance_conversions)
+            # .pipe(self._add_humidity_variables)
             )
+        
+        if pad_humidity_vars:
+            data = self._add_humidity_variables(data=data)
+            
+        self.data = data
 
         # Amend metadata manager to account for variance conversions
         self._amend_metadata_manager()
@@ -234,6 +239,76 @@ class L1DataConstructor():
         for variable in rename_dict.keys():
             data[variable] = ccf.convert_variance_stdev(data=data[variable])
         return data.rename(rename_dict, axis=1)
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _add_humidity_variables(self, data):
+        """
+        
+
+        Args:
+            data (TYPE): DESCRIPTION.
+
+        Returns:
+            data (TYPE): DESCRIPTION.
+
+        """
+               
+        for Ta_var in [x for x in data if 'Ta' in x]:
+            got, get = {}, {}
+            for quant in ['RH', 'AH']:
+                # got, get = {}, {}
+                humid_var = Ta_var.replace('Ta', quant)
+                if humid_var in data.columns:
+                    got[quant] = humid_var
+                else:
+                    get[quant] = humid_var
+            if len(got) == 1 and len (get) == 1:
+                get_quant = next(iter(get))
+                get_var = get[get_quant]
+                got_quant = next(iter(got))
+                got_var = got[got_quant]
+                self._add_humidity_metadata(get_var=get_var, got_var=got_var)
+                if get_quant == 'AH':
+                    data[get_var] = ccf.calculate_AH_from_RH(
+                        Ta=data[Ta_var], RH=data[got_var], ps=data['ps']
+                        )
+                if get_quant == 'RH':
+                    data[get_var] = ccf.calculate_RH_from_AH(
+                        Ta=data[Ta_var], AH=data[got_var], ps=data['ps']
+                        )
+        return data
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _add_humidity_metadata(self, get_var, got_var):
+        """
+        
+
+        Args:
+            get_var (TYPE): DESCRIPTION.
+            got_var (TYPE): DESCRIPTION.
+
+        Returns:
+            None.
+
+        """
+        
+        attrs = self.md_mngr.get_variable_attributes(variable=got_var).to_dict()
+        new_attrs = parser.parse_variable_name(get_var)
+        attrs['units'] = new_attrs['standard_units']
+        for field in ['name', 'logger', 'table', 'file']:
+            attrs[field] = ''
+        attrs.update(new_attrs)
+        attrs_df = (
+            pd.DataFrame([attrs])
+            .set_index(pd.Index([get_var]))
+            .rename_axis(self.md_mngr.site_variables.index.name)
+            .fillna('')
+            )
+        self.md_mngr.site_variables = pd.concat(
+            [self.md_mngr.site_variables, attrs_df]
+            )
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -377,7 +452,6 @@ class L1DataConstructor():
         bounds = self._get_year_bounds(
             year=year,
             time_step=self.md_mngr.site_details['time_step']
-            # time_step=self.global_attrs['time_step']
             )
         return self._build_xarray_dataset(
             df=self.data.loc[bounds[0]: bounds[1]]

@@ -180,24 +180,24 @@ mngr = SiteTaskManager()
 ### BEGIN DATA CONSTRUCTORS ###
 #------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-@register
-def construct_homogenised_TOA5(site: str) -> None:
-    """Construct a TOA5 file for visualisation."""
+# #------------------------------------------------------------------------------
+# @register
+# def construct_homogenised_TOA5(site: str) -> None:
+#     """Construct a TOA5 file for visualisation."""
 
-    datacon = import_module('data_constructors.data_constructors')
-    try:
-        datacon.append_to_std_file(site=site)
-    except FileNotFoundError:
-        datacon.write_to_std_file(site=site)
-#------------------------------------------------------------------------------
+#     datacon = import_module('data_constructors.data_constructors')
+#     try:
+#         datacon.append_to_std_file(site=site)
+#     except FileNotFoundError:
+#         datacon.write_to_std_file(site=site)
+# #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 @register
 def construct_homogenised_TOA5_from_nc(site: str) -> None:
 
     nctoa5 = import_module('data_constructors.nc_toa5_constructor')
-    nctoa5.construct_visualisation_TOA5(site=site, n_files=3)
+    nctoa5.construct_visualisation_TOA5(site=site, n_files=2)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -207,7 +207,8 @@ def construct_L1_nc(site: str) -> None:
 
     nccon = import_module('data_constructors.nc_constructors')
     L1con = nccon.L1DataConstructor(
-        site=site, constrain_start_to_flux=True, concat_files=True
+        site=site, constrain_start_to_flux=True, concat_files=True, 
+        pad_humidity_vars=True
         )
     this_year = dt.datetime.now().year
     if max(L1con.data_years) == this_year:

@@ -108,9 +108,6 @@ class MetaDataManager():
             self.configs = paths.get_local_config_file(
                 config_stream='site_variables', site=site
                 )
-            # self.configs = paths.get_local_config_file(
-            #     config_stream='variables_pfp', site=site
-            #     )
 
         # Check for the requisite fields in each entry of the control file
         self._check_config_fields()
@@ -207,26 +204,6 @@ class MetaDataManager():
                 next
         return rslt
     #--------------------------------------------------------------------------
-
-    # #--------------------------------------------------------------------------
-    # def _parse_site_variables(self) -> pd.DataFrame:
-    #     """
-    #     Get the site variable names / attributes.
-
-    #     Returns:
-    #         dataframe containing variable names as index and attributes as cols.
-
-    #     """
-
-    #     # Get the variable map and check the conformity of all names
-    #     return (
-    #         pd.DataFrame(self.configs)
-    #         .T
-    #         .rename_axis('std_name')
-    #         .pipe(self._test_variable_conformity)
-    #         .pipe(self._test_file_assignment)
-    #         )
-    # #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
     def _test_variable_conformity(self, df: pd.DataFrame) -> pd.DataFrame:

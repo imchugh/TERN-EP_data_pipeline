@@ -52,6 +52,15 @@ class NCReader():
         self.labels_to_keep = [
             var for var in self.ds if not var in self.labels_to_drop
             ]
+        self.variable_attrs = (
+            pd.DataFrame.from_dict(
+                {
+                    var: self.get_variable_attrs(variable=var) 
+                    for var in self.labels_to_keep
+                    }
+                )
+            .T
+            )
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------

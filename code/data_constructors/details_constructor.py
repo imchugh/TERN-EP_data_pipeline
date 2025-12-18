@@ -12,6 +12,7 @@ Created on Mon Aug 26 11:46:04 2024
 import datetime as dt
 import logging
 import pandas as pd
+import pathlib
 import json
 
 #------------------------------------------------------------------------------
@@ -38,6 +39,7 @@ LOGGER_SUBSET = [
     'format', 'station_name', 'logger_type', 'serial_num', 'OS_version',
     'program_name'
     ]
+SITE_METADATA = paths.get_internal_configs(config_name='site_metadata')
 
 ###############################################################################
 ### END INITS ###
@@ -185,9 +187,7 @@ def get_site_info(site: str) -> None:
 
     # Get site info
     logger.info(f'  Getting information for {site}...')
-    site_info = (
-        paths.get_internal_configs(config_name='site_metadata')[site]
-        )
+    site_info = SITE_METADATA[site]
     site_info['start_year'] = str(
         dt.datetime.strptime(site_info['date_commissioned'], '%Y-%m-%d').year
         )
@@ -245,16 +245,23 @@ def get_site_info(site: str) -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def site_info_2_json(site_list):
+def site_info_2_json(site_list=None):
 
+    if site_list is None:
+        site_list = sorted(
+            site.name for site in (pathlib.Path('/store/Raw_data').glob('*'))
+            )
     logger.info('Generating site information json...')
     data_list = []
     for site in site_list:
-        site_info = get_site_info(site=site)
-        for key, value in site_info.items():
-            if value is None:
-                site_info[key] = ''
-        data_list.append({'site': site} | site_info)
+        try:
+            site_info = get_site_info(site=site)
+            for key, value in site_info.items():
+                if value is None:
+                    site_info[key] = ''
+            data_list.append({'site': site} | site_info)
+        except KeyError:
+            next
     output_path = paths.get_local_stream_path(
         resource='network',
         stream='status',

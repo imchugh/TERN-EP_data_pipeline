@@ -361,7 +361,6 @@ def _run_subprocess(run_list, timeout=5):
         TYPE: DESCRIPTION.
 
     """
-
     return spc.run(
         run_list, capture_output=True, timeout=timeout, check=True
         )

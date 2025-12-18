@@ -30,8 +30,9 @@ import xarray as xr
 #------------------------------------------------------------------------------
 
 from data_constructors import convert_calc_filter as ccf
-from managers import metadata as md
-from managers import paths
+from managers import var_metadata as md
+from managers import glob_metadata as gmd
+from managers import paths_new as paths
 import file_handling.file_handler as fh
 
 ###############################################################################
@@ -69,6 +70,89 @@ logger = logging.getLogger(__name__)
 ###############################################################################
 ### BEGIN L1 NETCDF DATA CONSTRUCTOR CLASS ###
 ###############################################################################
+
+#------------------------------------------------------------------------------
+class InputDataSet():
+    """"""
+    
+    #--------------------------------------------------------------------------
+    def __init__(
+        self, 
+        site: str, 
+        concat_files: bool=False, 
+        constrain_start_to_flux: bool=False, 
+        constrain_end_to_flux: bool=True 
+        ) -> None:
+       
+        # Get the variable metadata
+        # config_path = (
+        #     paths.get_local_stream_path(
+        #         resource='configs', stream='site_config_files') / 
+        #     f'{site}.yml'
+        #     )
+        config_path = '/store/Config_files/Sites/Test/Boyagin.yml'
+        self.variable_metadata = md.InputMetaDataManager.from_yaml(
+            yml_path=config_path
+            )
+        
+        # Get the global metadata
+        self.global_metadata = (
+            gmd.get_metadata_manager(source='rdf', query='operational')
+            .get_single_site_details(site=site)
+            )
+        
+        # Build the data
+        self.data = self._build_internal_data(
+            concat_files=concat_files, 
+            constrain_start_to_flux=constrain_start_to_flux, 
+            constrain_end_to_flux=constrain_end_to_flux,
+            time_step=self.global_metadata.time_step
+            )
+    #--------------------------------------------------------------------------        
+
+    #--------------------------------------------------------------------------
+    def _build_internal_data(
+        self,
+        *,
+        constrain_start_to_flux: bool,
+        constrain_end_to_flux: bool,
+        concat_files: bool,
+        time_step: int
+        ) -> pd.DataFrame:
+
+        # If requested, set flux file date constraints on merged file
+        start_date, end_date = None, None
+        if constrain_start_to_flux:
+            start_date = self.variable_metadata.get_file_attributes(
+                file=self.variable_metadata.flux_file,
+                include_backups=concat_files,
+                return_field='start_date'
+                )
+        if constrain_end_to_flux:
+            end_date = self.variable_metadata.get_file_attributes(
+                file=self.variable_metadata.flux_file,
+                include_backups=concat_files,
+                return_field='end_date'
+                )
+
+        # Merge the raw data
+        merge_dict = (
+            self.variable_metadata.translate_variables_by_file(abs_path=True)
+            )
+        merge_to_int = f'{time_step}min'
+        return (
+            fh.merge_data(
+                files=merge_dict,
+                concat_files=concat_files,
+                interval=merge_to_int,
+                start_date=start_date,
+                end_date=end_date
+                )
+            ['data']
+            )
+    #--------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 class L1DataConstructor():

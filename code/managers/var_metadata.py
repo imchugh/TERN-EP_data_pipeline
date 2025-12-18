@@ -20,12 +20,14 @@ Todo:
 
 import pathlib
 import pandas as pd
+from typing import Optional, Dict, ClassVar, List
+from pydantic import BaseModel, model_validator, field_validator
+import yaml
 
 #------------------------------------------------------------------------------
 
-from managers import paths
 from file_handling import file_io as io
-from managers.site_details import SiteDetailsManager as sdm
+from managers import paths
 
 ###############################################################################
 ### END IMPORTS ###
@@ -40,17 +42,22 @@ from managers.site_details import SiteDetailsManager as sdm
 VALID_INSTRUMENTS = ['SONIC', 'IRGA', 'RAD']
 VALID_FLUX_SYSTEMS = {'EF': 'EasyFlux', 'EP': 'EddyPro', 'DL': 'TERNflux'}
 TURBULENT_FLUX_QUANTITIES = ['Fco2', 'Fe', 'Fh']
-FLUX_FILE_VAR_IND = 'Fco2'
 VALID_LOC_UNITS = ['cm', 'm']
 VALID_SUFFIXES = {
     'Av': 'average', 'Sd': 'standard_deviation', 'Vr': 'variance',
     'Sum': 'sum', 'Ct': 'sum', 'QC': 'quality_control_flag'
     }
-REQUISITE_FIELDS = [
-    'height', 'instrument', 'statistic_type', 'units', 'name', 'logger',
-    'table'
-    ]
-_NAME_MAP = {'site_name': 'name', 'std_name': 'std_name'}
+VARIANCE_CONVERSIONS = {
+    'g^2/m^6': 'g/m^3',
+    'umol/mol': 'umol/mol',
+    'mg^2/m^6': 'mg/m^3',
+    'degC^2': 'degC',
+    'm^2/s^2': 'm/s',
+    'mmol^2/m^6': 'mmol/m^3',
+    'mmol/mol': 'mmol/mol',
+    'K^2': 'K'
+    }
+_NAME_MAP = {'site_name': 'name', 'pfp_name': 'pfp_name'}
 
 ###############################################################################
 ### END INITS ###
@@ -63,7 +70,7 @@ _NAME_MAP = {'site_name': 'name', 'std_name': 'std_name'}
 ###############################################################################
 
 #------------------------------------------------------------------------------
-class MetaDataManager():
+class BaseMetaDataManager():
     """
     Class to read and interrogate variable metadata from site-specific
     config file
@@ -72,331 +79,25 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def __init__(
-            self, site: str, use_alternate_configs: str | pathlib.Path=None
-            ) -> None:
+    def __init__(self, df: pd.DataFrame, data_path: pathlib.Path):
         """
-        Do inits - read the yaml files, build lookup tables.
-
-        Args:
-            site: name of site.
-
-        Returns:
-            None.
-
-        """
-
-        # Set basic attrs
-        self.site = site
-        self.data_path = (
-            paths.get_local_stream_path(
-                site=site, resource='raw_data', stream='flux_slow'
-                )
-            )
-        self.site_details = (
-            sdm(use_local=True)
-            .get_single_site_details_as_dict(site=site)
-            )
         
-        # Save the basic configs from the yml file
-        if use_alternate_configs:
-            self.configs = paths.get_other_config_file(
-                file_path=use_alternate_configs
-                )
-        else:
-            self.configs = paths.get_local_config_file(
-                config_stream='site_variables', site=site
-                )
 
-        # Check for the requisite fields in each entry of the control file
-        self._check_config_fields()
-
-        # Check for the diag_type attribute in the configurations, and set them
-        # to either 'valid_count' (default in new Campbell progs) or
-        # 'invalid_count' (past default)
-        self.diag_types = self._parse_diagnostics()
-
-        # Create site-based variables table
-        # Get the variable map and check the conformity of all names
-        self.site_variables = (
-            pd.DataFrame.from_dict(data=self.configs, orient='index')
-            .rename_axis('std_name')
-            .pipe(self._test_variable_conformity)
-            .pipe(self._test_file_assignment)
-            )
-
-        # Set the system type
-        system_type = [
-            sys_type for sys_type in self.site_variables.system_type.unique()
-            if len(sys_type) > 0
-            ]
-        if len(system_type) != 1:
-            raise RuntimeError(
-                'More than one system type specified in configuration file'
-                )
-        self.system_type = system_type[0]
-
-        # Determine and write system type / flux file
-        self.flux_file = self._get_flux_file()
-
-        # Get flux instrument types
-        self.instruments = self._parse_instrument_type()
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _check_config_fields(self):
-        """
-        Check that all entries in the config file contain the requisite input
-        fields.
-
-        Raises:
-            KeyError: raised if any are missing.
+        Args:
+            df (pd.DataFrame): DESCRIPTION.
+            data_path (pathlib.Path): DESCRIPTION.
 
         Returns:
             None.
 
         """
-
-        for variable, fields in self.configs.items():
-
-            fields_in_metadata = [field in fields for field in REQUISITE_FIELDS]
-            if not all(fields_in_metadata):
-                missing_fields = [
-                    field for field, field_in_metadata in
-                    zip(REQUISITE_FIELDS, fields_in_metadata)
-                    if not field_in_metadata
-                    ]
-
-                # Allow override if file name directly supplied.
-                if len(missing_fields) == 2:
-                    if 'logger' and 'table' in missing_fields:
-                        if 'file' in fields:
-                            continue
-                raise KeyError(
-                    f'The following fields were missing from entry {variable}: '
-                    f'{", ".join(missing_fields)}'
-                    )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _parse_diagnostics(self) -> dict:
-        """
-        Get the expression of the diag_type variable (either 'valid_count'
-        [default in new Campbell progs] or 'invalid_count' [past default])
-        and remove from configuration.
-
-        Returns:
-            rslt: dictionary with IRGA and SONIC entries.
-
-        """
-
-        rslt = {
-            'Diag_IRGA': 'invalid_count',
-            'Diag_SONIC': 'invalid_count'
-            }
-        for variable in ['Diag_IRGA', 'Diag_SONIC']:
-            try:
-                rslt[variable] = (
-                    self.configs[variable].pop('diag_type')
-                    )
-            except KeyError:
-                next
-        return rslt
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _test_variable_conformity(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Check all names in the configuration file conform to pfp standards.
-
-        Args:
-            df: dataframe containing variable names in index.
-
-        Returns:
-            returns data unaltered or raises exception if any non-compliant vars.
-
-        """
-
-        # Get the name parser
-        name_parser = PFPNameParser()
-
-        # Iterate through all names and capture additional variable properties
-        props_list = []
-        for variable in df.index:
-
-            # Check whether variable is custom (determined True if a long_name
-            # attribute is in the config file)
-            is_custom = False
-            try:
-                if not pd.isnull(df.loc[variable, 'long_name']):
-                    is_custom = True
-            except KeyError:
-                pass
-
-            # If custom, bypass conformity check and call custom metadata routine.
-            if is_custom:
-                props_list.append(
-                    self._build_custom_metadata(df.loc[variable])
-                    )
-
-            # ... otherwise, do standard conformity checking.
-            else:
-
-                # Here we deal with the problem that PFP allows two distinct
-                # quantities using the same variable name: CO2_IRGA can either
-                # be mass concentration OR dry mole fraction. This should
-                # change, but we hack in the meantime to ensure the correct
-                # units are assigned to the attributes.
-                parser_name = variable
-                if 'CO2_IRGA' in variable:
-                    if 'mg' in df.loc[variable, 'units']:
-                        parser_name = variable.replace('CO2', 'CO2c')
-
-                #
-                props_list.append(
-                    name_parser.parse_variable_name(
-                        variable_name=parser_name
-                        )
-                    )
-
-        # Concatenate the properties into df
-        props_df = (
-            pd.DataFrame(props_list)
-            .set_index(df.index)
-            .fillna('')
-            )
-
-        # # Convert minima and maxima columns to numeric
-        # for col in ['plausible_min', 'plausible_max']:
-        #     props_df[col] = pd.to_numeric(props_df[col])
-
-        return pd.concat([df, props_df], axis=1)
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _build_custom_metadata(self, series: pd.Series) -> dict:
-        """
-        Assign standard_units attribute to result dictionary.
-
-        Args:
-            series: series containing the attributes.
-
-        Returns:
-            dict containing only 'standard_units' attribute.
-
-        """
-
-        return {'standard_units': series['units']}
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _test_file_assignment(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Generate standard file names based on site, logger and table names.
-
-        Args:
-            df: the dataframe to which to append the information.
-
-        Returns:
-            the dataframe with additional information.
-
-        """
-
-        # Make file names (use 'file' column if exists)
-        if 'file' in df.columns:
-            file_list = df.file.copy()
-        else:
-            file_list = (
-                f'{self.site}_' +
-                df[['logger', 'table']]
-                .agg('_'.join, axis=1) + '.dat'
-                )
-
-        # Check file paths are valid
-        for file in file_list.unique():
-            if not (self.data_path / file).exists():
-                raise FileNotFoundError(
-                    f'File {file} does not exist in the data path'
-                    )
-
-        # Assign and return
-        return df.assign(file=file_list).fillna('')
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _test_variable_assignment(self, df: pd.DataFrame) -> pd.DataFrame:
-
-        """
-        In here test whether each variable is found in the header of its
-        file
-
-        """
-
-        groups = df.groupby(df.file)
-        for this_tuple in groups:
-            file_path = self.data_path / this_tuple[0]
-            check_vars = this_tuple[1].name.tolist()
-            header_df = io.get_header_df(file=file_path)
-            for var in check_vars:
-                if not var in header_df.index:
-                    raise KeyError(
-                        f'Variable {var} not found in file {this_tuple[0]}'
-                        )
-        return df
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _get_flux_file(self) -> str:
-        """
-        Use the FLUX_FILE_VAR_IND constant to set the system type and flux
-        file name, logger and table.
-
-        Raises:
-            RuntimeError: raised if the suffix immediately following the
-            generic flux name is not a valid flux system descriptor.
-            KeyError: raised if no variables containing the constant are found
-            in the mapping file.
-
-        Returns:
-            None.
-
-        """
-
-        var_list = [
-            var for var in
-            self.site_variables[self.site_variables.quantity==FLUX_FILE_VAR_IND]
-            .index.tolist() if len(var.split('_')) == 2
-            ]
-        return self.site_variables.loc[var_list, 'file'].item()
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _parse_instrument_type(self) -> str:
-        """
-        Get the instrument types for SONIC and IRGA.
-
-        Raises:
-            RuntimeError: raised if more than one instrument type found.
-
-        Returns:
-            instrument type description.
-
-        """
-
-        rslt = {}
-        for instrument in ['SONIC', 'IRGA']:
-            var_list = [x for x in self.site_variables.index if instrument in x]
-            inst_list = self.site_variables.loc[var_list].instrument.unique()
-            if len(inst_list) > 1:
-                raise RuntimeError(
-                    'More than one instrument specified as instrument attribute '
-                    f'for {instrument} device variable ({", ".join(inst_list)})'
-                    )
-            if len(inst_list) == 0:
-                rslt.update({instrument: None})
-            else:
-                rslt.update({instrument: inst_list[0]})
-        return rslt
+    
+        self._df = df
+        self.data_path = data_path
+        
+    @property
+    def variables(self) -> pd.DataFrame:
+        return self._df  
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -459,6 +160,75 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
+    def get_variable_attributes(
+            self, variable: str, source_field: str='pfp_name', 
+            return_field: str=None
+            ) -> pd.Series | str:
+        """
+        Get the attributes for a given variable.
+
+        Args:
+            variable: the variable for which to return the attribute(s).
+            source_field (optional): the source field for the variable name
+            (either 'pfp_name' or 'site_name'). Defaults to 'pfp_name'.
+            return_field (optional): the attribute field to return.
+            Defaults to None.
+
+        Returns:
+            All attributes or requested attribute.
+
+        """
+
+        df = self._index_translator(use_index=source_field)
+        series = df.loc[variable]
+        if return_field is None:
+            return series
+        return series[return_field]
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_variables_by_file(
+            self, file: str, source_field: str='pfp_name'
+            ) -> list:
+        """
+        Get the untranslated list of variable names.
+
+        Args:
+            file: name of file.
+
+        Returns:
+            list: list of untranslated variable names.
+
+        """
+
+        df = self._index_translator(use_index=source_field)
+        return df[df.file==file].index.tolist()
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_variables_by_quantity(
+            self, quantity: str, source_field: str='pfp_name'
+            ) -> list:
+        """
+
+
+        Args:
+            quantity (TYPE): DESCRIPTION.
+
+        Returns:
+            list: DESCRIPTION.
+
+        """
+
+        df = self._index_translator(use_index=source_field)
+        return df[df.quantity == quantity].index.tolist()
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    ### List ###
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
     def list_loggers(self) -> list:
         """
         List the loggers defined in the variable map.
@@ -468,7 +238,7 @@ class MetaDataManager():
 
         """
 
-        return self.site_variables.logger.unique().tolist()
+        return self.variables.logger.unique().tolist()
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -480,7 +250,7 @@ class MetaDataManager():
             the list of tables.
 
         """
-        return self.site_variables.table.unique().tolist()
+        return self.variables.table.unique().tolist()
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -497,7 +267,7 @@ class MetaDataManager():
             the list of files.
 
         """
-        the_list = self.site_variables.file.unique().tolist()
+        the_list = self.variables.file.unique().tolist()
         if not abs_path:
             return the_list
         return [self.data_path / file for file in the_list]
@@ -513,11 +283,7 @@ class MetaDataManager():
 
         """
 
-        return (
-            self._index_translator(use_index='std_name')
-            .index
-            .tolist()
-            )
+        return self.variables.index.tolist()
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -532,9 +298,9 @@ class MetaDataManager():
         """
 
         return (
-            self.site_variables.loc[
-                self.site_variables.units!=
-                self.site_variables.standard_units
+            self.variables.loc[
+                self.variables.units!=
+                self.variables.standard_units
                 ]
             .index
             .tolist()
@@ -552,10 +318,14 @@ class MetaDataManager():
         """
 
         return (
-            self.site_variables
-            [self.site_variables.process=='Vr']
+            self.variables
+            [self.variables.process=='Vr']
             .index.tolist()
             )
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    ### Map ###
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -572,13 +342,13 @@ class MetaDataManager():
         """
 
         return (
-            self.site_variables
+            self.variables
             .quantity
             .reset_index()
             .set_index(keys='quantity')
             .loc[TURBULENT_FLUX_QUANTITIES]
             .reset_index()
-            .set_index(keys='std_name')
+            .set_index(keys='pfp_name')
             .squeeze()
             .to_dict()
             )
@@ -596,7 +366,7 @@ class MetaDataManager():
 
 
         sub_df = (
-            self.site_variables[['logger', 'table']]
+            self.variables[['logger', 'table']]
             .reset_index(drop=True)
             .drop_duplicates()
             )
@@ -629,8 +399,8 @@ class MetaDataManager():
 
         s = (
             pd.Series(
-                data=self.site_variables.file.tolist(),
-                index=self.site_variables.table.tolist()
+                data=self.variables.file.tolist(),
+                index=self.variables.table.tolist()
                 )
             .drop_duplicates()
             .loc[table]
@@ -646,106 +416,7 @@ class MetaDataManager():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_variable_attributes(
-            self, variable: str, variance_2_stdev=False,
-            source_field: str='std_name', return_field: str=None
-            ) -> pd.Series | str:
-        """
-        Get the attributes for a given variable.
-
-        Args:
-            variable: the variable for which to return the attribute(s).
-            source_field (optional): the source field for the variable name
-            (either 'std_name' or 'site_name'). Defaults to 'std_name'.
-            return_field (optional): the attribute field to return.
-            Defaults to None.
-
-        Returns:
-            All attributes or requested attribute.
-
-        """
-
-        series = self._index_translator(use_index=source_field).loc[variable]
-        if variance_2_stdev:
-            self._amend_variance_metadata(series=series)
-        if return_field is None:
-            return series
-        return series[return_field]
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _amend_variance_metadata(self, series: pd.Series) -> pd.Series:
-
-        if not series.process == 'Vr':
-            return series
-        series.loc['process'] = 'Sd'
-        series.loc['standard_units'] = convert_variance_units(
-            units=series.standard_units, to_variance=False
-            )
-        series.loc['statistic_type'] = 'standard_deviation'
-        series.name = series.name.replace('Vr', 'Sd')
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def convert_variance_attrs_2_stdev(self, variable: str) -> pd.Series:
-        """
-        Convert the attributes of a variance variable to standard deviation.
-
-        Args:
-            variable: name of variable.
-
-        Returns:
-            attrs: all attributes or requested attribute.
-
-        """
-
-        attrs = self.site_variables.loc[variable].copy()
-        attrs.process = 'Sd'
-        attrs.standard_units = convert_variance_units(
-            units=attrs.standard_units, to_variance=False
-            )
-        attrs.name = attrs.name.replace('Vr', 'Sd')
-        return attrs
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_variables_by_file(self, file: str) -> list:
-        """
-        Get the untranslated list of variable names.
-
-        Args:
-            file: name of file.
-
-        Returns:
-            list: list of untranslated variable names.
-
-        """
-
-        return (
-            self.site_variables.loc[self.site_variables.file == file]
-            .index
-            .tolist()
-            )
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def get_variables_by_quantity(self, quantity) -> list:
-        """
-
-
-        Args:
-            quantity (TYPE): DESCRIPTION.
-
-        Returns:
-            list: DESCRIPTION.
-
-        """
-
-        return (
-            self.site_variables.loc[self.site_variables.quantity == quantity]
-            .index
-            .tolist()
-            )
+    ### Translate ###
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -755,7 +426,7 @@ class MetaDataManager():
 
         Args:
             source_field (optional): the source field for the variable name
-            (either 'std_name' or 'site_name'). Defaults to 'site_name'.
+            (either 'pfp_name' or 'site_name'). Defaults to 'site_name'.
 
         Returns:
             Dictionary containing the mapping.
@@ -784,7 +455,7 @@ class MetaDataManager():
             table (optional): name of table for which to fetch translations.
             Defaults to None.
             source_field (optional): the source field for the variable name
-            (either 'std_name' or 'site_name'). Defaults to 'site_name'.
+            (either 'pfp_name' or 'site_name'). Defaults to 'site_name'.
 
         Returns:
             Dictionary containing the mapping.
@@ -811,7 +482,7 @@ class MetaDataManager():
             file (optional): name of file for which to fetch translations.
             Defaults to None.
             source_field (optional): the source field for the variable name
-            (either 'std_name' or 'site_name'). Defaults to 'site_name'.
+            (either 'pfp_name' or 'site_name'). Defaults to 'site_name'.
 
         Returns:
             Dictionary containing the mapping.
@@ -844,7 +515,7 @@ class MetaDataManager():
             file_or_table (optional): pass a valid file or table for
             specific translation map. Defaults to None.
             source_field (optional): the source field for the variable name
-            (either 'std_name' or 'site_name'). Defaults to 'site_name'.
+            (either 'pfp_name' or 'site_name'). Defaults to 'site_name'.
 
         Returns:
             Dictionary containing the mapping.
@@ -877,7 +548,7 @@ class MetaDataManager():
         Args:
             variable (optional): name of variable. Defaults to None.
             source_field (optional): the source field for the variable name
-            (either 'std_name' or 'site_name'). Defaults to 'site_name'.
+            (either 'pfp_name' or 'site_name'). Defaults to 'site_name'.
 
         Returns:
             Dictionary containing the mapping.
@@ -897,7 +568,7 @@ class MetaDataManager():
 
         Args:
             source_field: field for which to retrieve inverse
-            (if 'site_name' is source, 'std_name' is return, and vice versa).
+            (if 'site_name' is source, 'pfp_name' is return, and vice versa).
 
         Returns:
             inverse return string.
@@ -924,7 +595,7 @@ class MetaDataManager():
         """
 
         return (
-            self.site_variables
+            self.variables
             .reset_index()
             .set_index(keys=_NAME_MAP[use_index])
             )
@@ -932,10 +603,517 @@ class MetaDataManager():
 
 #------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+class InputMetaDataManager(BaseMetaDataManager):
+    
+    #--------------------------------------------------------------------------
+    def __init__(self, configs: dict, data_path: pathlib.Path):
+        
+        self.site_name = configs['site']
+        global_attrs = configs.get("global_attrs", {})
+        for field, value in global_attrs.items():
+            setattr(self, field, value)
+        # self.sonic_type = global_attrs.get('sonic_type')
+        # self.irga_type = global_attrs.get('irga_type')
+        # self.system_type = global_attrs.get('system_type')
+        
+        data_path = paths.get_local_stream_path(
+            resource='raw_data', stream='flux_slow', site=configs['site']
+            )
+        
+        # Build dataframe from metadata dict
+        df = self._build_dataframe(configs=configs)
+               
+        # Initialize the base class with dataframe + path
+        super().__init__(df, data_path)
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _build_dataframe(self, configs):
+        
+        return (
+            pd.DataFrame.from_dict(configs['variables'], orient='index')
+            .rename_axis('pfp_name')
+            )
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    @classmethod
+    def from_yaml(cls, yml_path: pathlib.Path) -> "InputMetadataManager":
+        """
+        Factory to create an InputMetadataManager instance from a YAML file.
+        """
+        
+        configs = read_yml(file=yml_path)
+        
+        # Do yml file / content validation
+        # Validate YAML structure
+        struct_validator = Config(**configs)
+        
+        # Validate standard names
+        configs = validate_L1_config_names(configs=configs)
+        
+        # Validate the paths / variables
+        data_path = paths.get_local_stream_path(
+            resource='raw_data', stream='flux_slow', site=configs['site']
+            )
+        configs = validate_L1_config_paths(configs, data_path)
+
+        # Get the raw flux file
+        flux_file = get_raw_flux_file(configs=configs)
+
+        # Add necessary stuff from validator
+        configs['global_attrs'] = {
+            'sonic_type': struct_validator.sonic_instrument,
+            'irga_type': struct_validator.irga_instrument,
+            'system_type': VALID_FLUX_SYSTEMS[struct_validator.flux_suffix],
+            'flux_file': flux_file
+            }
+
+        # Construct instance
+        return cls(configs, data_path)
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def list_variance_variables(self):
+        
+        return (
+            self.variables
+            [self.variables.statistic_type=='variance']
+            .index.tolist()
+            )
+    #--------------------------------------------------------------------------
+    
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+class OutputMetaDataManager(BaseMetaDataManager):
+    
+    
+    def __init__(self, source: InputMetaDataManager):
+        
+        data_path = source.data_path
+        df = source.variables.copy(deep=True)
+        
+        super().__init__(df=df, data_path=data_path)
+        self._convert_variance_to_std()
+
+    def _convert_variance_to_std(self):
+        
+        mask = self.variables['statistic_type'] == 'variance'
+        self.variables.loc[mask, 'units'].apply(self._convert_units)
+        self.variables.loc[mask, 'process'] = 'Sd'
+        self.variables.loc[mask, "statistic_type"] = 'standard_deviation'
+        self.variables.loc[mask, 'units'] = (
+            self.variables.loc[mask, 'units'].apply(self._convert_units)
+            )
+        self.vr_to_sd_map = {
+            variable: variable.replace('Vr', 'Sd') for variable in 
+            self.variables[mask].index.tolist()
+            }
+        self.variables.rename(self.vr_to_sd_map, inplace=True)
+        
+    def _convert_units(self, variance_in):
+        
+        return VARIANCE_CONVERSIONS[variance_in]
+    
+    def _rename_var(self, variable_in):
+        
+        return variable_in.replace()
+#------------------------------------------------------------------------------
+
 ###############################################################################
 ### END SITE METADATA MANAGER CLASS ###
 ###############################################################################
 
+
+###############################################################################
+### BEGIN CONFIG VALIDATOR CLASSES ###
+###############################################################################
+
+
+# ───────────────────────────────────────────────
+# Per-variable configuration
+# ───────────────────────────────────────────────
+class VariableConfig(BaseModel):
+    """
+    Represents configuration metadata for a single data variable.
+
+    Supports two mutually exclusive naming conventions:
+    - (logger + table)
+    - file
+
+    Also supports:
+    - diag_type for diagnostic variables (optional unless required by rules)
+    - standard_name for custom user-defined variables
+    """
+
+    instrument: str
+    statistic_type: str
+    units: str
+    height: str
+    name: str
+
+    # Two possible schemas:
+    logger: Optional[str] = None
+    table: Optional[str] = None
+    file: Optional[str] = None
+
+    diag_type: Optional[str] = None
+    standard_name: Optional[str] = None   # indicates custom variable
+
+    class Config:
+        extra = "allow"   # allow unexpected user-added fields
+
+    @field_validator("diag_type")
+    def validate_diag_type_value(cls, v):
+        """If present, diag_type must be valid_count or invalid_count."""
+        if v is None:
+            return v
+        if v not in {"valid_count", "invalid_count"}:
+            raise ValueError("diag_type must be one of: valid_count, invalid_count")
+        return v
+
+    @model_validator(mode="after")
+    def validate_schema_choice(self):
+        """Enforce exactly one schema: either file OR (logger + table)."""
+        if self.file is not None:
+            if self.logger is not None or self.table is not None:
+                raise ValueError("Use either file OR logger+table, not both.")
+        else:
+            # file is None → require logger + table
+            if self.logger is None or self.table is None:
+                raise ValueError("Must define either file OR (logger AND table).")
+
+        return self
+
+
+
+# ───────────────────────────────────────────────
+# Global configuration for a site
+# ───────────────────────────────────────────────
+
+class Config(BaseModel):
+    """
+    Represents full metadata configuration for a site.
+
+    Performs validation on:
+    - required fields in variables
+    - diagnostic variable rules
+    - sonic/IRGA instrument consistency
+    - flux variable suffix consistency (EP/EF/DL)
+    """
+
+    site: str
+    variables: Dict[str, VariableConfig]
+
+    # class-level lists
+    diag_prefixes: ClassVar[List[str]] = ["Diag_"]
+    sonic_suffix: ClassVar[str] = "_SONIC"
+    irga_suffix: ClassVar[str] = "_IRGA"
+    flux_prefixes: ClassVar[List[str]] = ["Fco2", "Fe", "Fh", "Fm", "ustar"]
+
+    # Site-wide attributes set by validators
+    sonic_instrument: Optional[str] = None
+    irga_instrument: Optional[str] = None
+    diag_type: Optional[str] = None
+    flux_suffix: Optional[str] = None
+
+    # ───────────────────────────────────────────────
+    # Validator: diagnostics must have diag_type
+    # ───────────────────────────────────────────────
+    @model_validator(mode="after")
+    def enforce_diag_rules(self):
+        diag_types = set()
+
+        for var_name, cfg in self.variables.items():
+            if any(var_name.startswith(prefix) for prefix in self.diag_prefixes):
+                if cfg.diag_type is None:
+                    raise ValueError(
+                        f"Diagnostic variable '{var_name}' must define diag_type"
+                    )
+                diag_types.add(cfg.diag_type)
+
+        if diag_types:
+            if len(diag_types) > 1:
+                raise ValueError(
+                    f"Diagnostic variables have inconsistent diag_type values: "
+                    f"{diag_types}. Must all be same."
+                )
+            self.diag_type = diag_types.pop()
+
+        return self
+
+
+    # ───────────────────────────────────────────────
+    # Validator: sonic and IRGA instrument consistency
+    # ───────────────────────────────────────────────
+    @model_validator(mode="after")
+    def enforce_instrument_consistency(self):
+        sonic_instruments = set()
+        irga_instruments = set()
+
+        for var_name, cfg in self.variables.items():
+
+            if var_name.endswith(self.sonic_suffix):
+                sonic_instruments.add(cfg.instrument)
+
+            if var_name.endswith(self.irga_suffix):
+                irga_instruments.add(cfg.instrument)
+
+        if len(sonic_instruments) > 1:
+            raise ValueError(
+                f"SONIC variables must use the same instrument; found {sonic_instruments}"
+            )
+
+        if len(irga_instruments) > 1:
+            raise ValueError(
+                f"IRGA variables must use the same instrument; found {irga_instruments}"
+            )
+
+        if sonic_instruments:
+            self.sonic_instrument = sonic_instruments.pop()
+        if irga_instruments:
+            self.irga_instrument = irga_instruments.pop()
+
+        return self
+
+
+    # ───────────────────────────────────────────────
+    # Validator: flux suffix consistency (EP/EF/DL)
+    # ───────────────────────────────────────────────
+    @model_validator(mode="after")
+    def enforce_flux_suffix(self):
+        suffixes_found = set()
+
+        for var_name in self.variables:
+            for prefix in self.flux_prefixes:
+                if var_name.startswith(prefix):
+
+                    # extract suffix after underscore
+                    parts = var_name.split("_", 1)
+                    if len(parts) != 2:
+                        raise ValueError(
+                            f"Flux variable '{var_name}' must end with _EP/_EF/_DL"
+                        )
+                    suffix = parts[1]
+
+                    if suffix not in set(VALID_FLUX_SYSTEMS.keys()):
+                        raise ValueError(
+                            f"Flux variable '{var_name}' has invalid suffix '{suffix}'. "
+                            "Must be one of: EP, EF, DL."
+                        )
+
+                    suffixes_found.add(suffix)
+
+        if suffixes_found:
+            if len(suffixes_found) > 1:
+                raise ValueError(
+                    f"Flux variables must share the same suffix (EP/EF/DL). "
+                    f"Found: {suffixes_found}"
+                )
+            self.flux_suffix = suffixes_found.pop()
+
+        return self
+
+    # ----------------------------------------------------------------------
+    # 4. Compute derived attributes (after all validation)
+    # ----------------------------------------------------------------------
+    def model_post_init(self, _ctx):
+        sonic = {
+            cfg.instrument
+            for name, cfg in self.variables.items()
+            if self.sonic_suffix in name
+        }
+        irga = {
+            cfg.instrument
+            for name, cfg in self.variables.items()
+            if self.irga_suffix in name
+        }
+
+        self.sonic_instrument = next(iter(sonic), None)
+        self.irga_instrument = next(iter(irga), None)
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def validate_L1_config_structure(file):
+           
+    # Check that all fields are correctly structured in config file 
+    # (will fail if not - let tasks module catch and log it)
+    return Config(**read_yml(file=file))
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def validate_L1_config_names(configs: dict) -> dict:
+    
+    parser = PFPNameParser()
+    for variable, attrs in configs['variables'].items():
+        if 'long_name' in attrs.keys():
+            attrs.update(
+                {'standard_units': attrs['units'], 'is_custom': True}
+                )
+        else:
+            attrs.update(parser.parse_variable_name(variable_name=variable))
+            attrs.update({'is_custom': False})
+    return configs            
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def validate_L1_config_paths(
+        configs: dict, data_path: str | pathlib.Path
+        ) -> dict:
+    
+    
+    # Create file names if they don't exist
+    data_path = pathlib.Path(data_path)
+    temp_df = pd.DataFrame.from_dict(configs['variables'], orient='index')
+    if not 'file' in temp_df.columns:
+        temp_df['file'] = (
+            f'{configs["site"]}_' +
+            temp_df[['logger', 'table']].agg('_'.join, axis=1) + 
+            '.dat'
+            )
+    
+    # Validate the file paths and the variable allocations to those files
+    groups = temp_df.groupby(temp_df.file)
+    for this_tuple in groups:
+        file_path = data_path / this_tuple[0]
+        if not file_path.exists():
+            raise FileNotFoundError(f'File path {file_path} does not exist!')
+        check_vars = this_tuple[1].name.tolist()
+        header_df = io.get_header_df(file=file_path)
+        for var in check_vars:
+            if not var in header_df.index:
+                raise KeyError(
+                    f'Variable {var} not found in file {this_tuple[0]}'
+                    )
+    
+    # Update the existing variable set to include file
+    configs['variables'] = temp_df.to_dict(orient='index')
+    return configs
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_raw_flux_file(configs):
+    
+    var_list = []
+    for variable, attrs in configs['variables'].items():
+        if attrs['quantity'] in TURBULENT_FLUX_QUANTITIES:
+            var_list.append(attrs['file'])
+    if all([var==var_list[0] for var in var_list]):
+        return var_list[0]
+    raise RuntimeError(
+        'Turbulent flux variables must be contained in a single file source'
+        )
+#------------------------------------------------------------------------------
+
+
+
+# #------------------------------------------------------------------------------
+# def check_L1_config_file(file: str, data_path: str | pathlib.Path):
+    
+#     data_path = pathlib.Path(data_path)
+    
+#     # Get the structural yml validator
+#     validator = validate_L1_config_structure(file=file, return_validator=True)
+
+#     # Make df from validator
+#     configs_df = pd.DataFrame(
+#         [v.model_dump() for v in validator.variables.values()],
+#         index=validator.variables.keys()
+#         )
+    
+#     # Add columns
+#     try:
+#         configs_df['is_custom'] = ~pd.isnull(configs_df['long_name'])
+#     except KeyError:
+#         configs_df['is_custom'] = False
+#     for field in ['file', 'long_name']:
+#         if not field in configs_df.columns:
+#             configs_df['file'] = None
+    
+#     # Iterate over variables and check that the variable names conform to PFP naming rules
+#     parser = PFPNameParser()
+#     props_list = []   
+#     for variable in configs_df.index:
+        
+#         # If a custom variable, bypass the parser and create a minimal set of properties
+#         # Otherwise, run the parser and pop the long name into the existing long_name col
+#         if configs_df.loc[variable, 'is_custom']:
+#             temp_dict = {'standard_units': configs_df.loc[variable, 'units']}
+#         else:
+#             temp_dict = parser.parse_variable_name(variable_name=variable)
+#             configs_df.loc[variable, 'long_name'] = temp_dict.pop('long_name')
+#         props_list.append(temp_dict)
+        
+#         # If there is not an existing file name (usually the case), make it
+#         if configs_df.loc[variable, 'file'] is None:
+#             logger, table = configs_df.loc[variable, ['logger', 'table']]
+#             configs_df.loc[variable, 'file'] = (
+#                 '_'.join([validator.site, logger, table]) + '.dat'
+#                 )
+                   
+#     # Make a dataframe from the properties unpacked from the variable name parser
+#     props_df = (
+#         pd.DataFrame(props_list)
+#         .set_index(configs_df.index)
+#         )
+    
+#     # Validate the file paths and the variable allocations to those files
+#     groups = configs_df.groupby(configs_df.file)
+#     for this_tuple in groups:
+#         file_path = data_path / this_tuple[0]
+#         if not file_path.exists():
+#             raise FileNotFoundError(f'File path {file_path} does not exist!')
+#         check_vars = this_tuple[1].name.tolist()
+#         header_df = io.get_header_df(file=file_path)
+#         for var in check_vars:
+#             if not var in header_df.index:
+#                 raise KeyError(
+#                     f'Variable {var} not found in file {this_tuple[0]}'
+#                     )
+
+#     # Concatenate the variable dataframe
+#     variables_df = (
+#         pd.concat([configs_df, props_df], axis=1)
+#         .fillna('')
+#         .rename_axis('pfp_name')
+#         )
+
+#     # Check that all the data is contained in a single file
+#     flux_file = (
+#         variables_df[variables_df.quantity.isin(TURBULENT_FLUX_QUANTITIES)]
+#         .file
+#         .unique()
+#         )
+#     if len(flux_file) > 1:
+#         raise RuntimeError(
+#             'Turbulent flux variables must be contained in a single file source'
+#             )
+#     flux_file = flux_file.item()    
+        
+#     # Concatenate and return
+#     return {
+#         'site': validator.site,
+#         'system_type': VALID_FLUX_SYSTEMS[validator.flux_suffix],
+#         'variables': variables_df,
+#         'sonic_type': validator.sonic_instrument,
+#         'irga_type': validator.irga_instrument,
+#         'flux_file': flux_file
+#         }
+# #------------------------------------------------------------------------------  
+
+#------------------------------------------------------------------------------
+def read_yml(file):
+    
+    with open(file) as f:
+        return yaml.safe_load(stream=f)
+#------------------------------------------------------------------------------
+
+
+###############################################################################
+### END CONFIG VALIDATOR CLASSES ###
+###############################################################################
 
 
 ###############################################################################
@@ -984,10 +1162,11 @@ class PFPNameParser():
 
         """
 
-        self.SPLIT_CHAR = '_'
+        data = read_yml(
+            pathlib.Path(__file__).parents[1] / 'configs' / 'pfp_std_names.yml'
+            )
         self.variables = (
-            pd.DataFrame(paths.get_internal_configs('pfp_std_names'))
-            .T
+            pd.DataFrame.from_dict(data=data, orient='index')
             .rename_axis('quantity')
             )
     #--------------------------------------------------------------------------
@@ -1024,7 +1203,7 @@ class PFPNameParser():
         errors = []
 
         # Get string elements
-        elems = variable_name.split(self.SPLIT_CHAR)
+        elems = variable_name.split('_')
 
         # Find quantity and instrument (if valid);
         # We can't proceed without a valid quantity, so let this fail without

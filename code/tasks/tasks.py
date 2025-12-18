@@ -613,44 +613,6 @@ def configure_logger(log_path):
     logging.config.dictConfig(new_configs)
 #------------------------------------------------------------------------------
 
-# def main():
-
-#     parser = argparse.ArgumentParser(description="Task runner")
-#     subparsers = parser.add_subparsers(dest="command", required=True)
-
-#     # Network tasks (no site argument)
-#     for name, func in NETWORK_TASKS.items():
-#         subparsers.add_parser(name, help=func.__doc__).set_defaults(func=func, site=None, multiple_sites=False)
-
-#     # Site tasks (optional site argument)
-#     for name, func in SITE_TASKS.items():
-#         sp = subparsers.add_parser(name, help=func.__doc__)
-#         sp.add_argument("site", nargs="?", help="Site identifier (optional)")
-#         sp.set_defaults(func=func, multiple_sites=True)
-
-#     args = parser.parse_args()
-
-#     if getattr(args, "multiple_sites", False):
-#         # Site task
-#         if args.site:  # run for a single site
-#             args.func(args.site)
-#         else:  # run for all sites listed in the YAML
-#             sites = SITE_TASKS.get(args.command, [])
-#             for site in sites:
-#                 args.func(site)
-#     else:
-#         # Network task
-#         args.func()
-
-# if __name__ == "__main__":
-
-#     main()
-
-
-
-
-
-
 #------------------------------------------------------------------------------
 def run_site_task(task: str, site:str) -> None:
     """

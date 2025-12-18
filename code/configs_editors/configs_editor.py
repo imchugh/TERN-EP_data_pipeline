@@ -153,7 +153,7 @@ class ConfigsEditor():
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def write_to_file(self, output_file):
+    def write_to_file(self, output_file, nest_with_site_name=None):
 
         # Don't allow overwrites
         output_file = pathlib.Path(output_file)
@@ -168,6 +168,11 @@ class ConfigsEditor():
             for var in self.data.index:
                 s = self.data.loc[var]
                 data[var] = (s[~pd.isnull(s)].to_dict())
+            if nest_with_site_name:
+                data = {
+                    'site': nest_with_site_name,
+                    'variables': data
+                    }
             _write_yml(file_path=output_file, data=data)
 
         # Or if xlsx, send the data as is

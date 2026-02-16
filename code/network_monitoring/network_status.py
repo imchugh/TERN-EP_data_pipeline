@@ -53,79 +53,387 @@ logger = logging.getLogger(__name__)
 ### BEGIN MAIN FUNCTIONS ###
 ###############################################################################
 
-#------------------------------------------------------------------------------
-def write_status_geojson(site_list: list) -> None:
+# -----------------------------------------------------------------------------
+def network_status_to_geojson(site_list: list) -> dict:
     """
-    Write status information to a geojson file.
+    Generate a GeoJSON file describing network status for all sites.
 
     Args:
         site_list: list of sites to process.
 
     Returns:
-        None.
-
+        dict mapping site -> status result
     """
 
+    logger.info(
+        "status_geojson_generation_start",
+        extra={"site_count": len(site_list)},
+    )
+
+    features: list[geojson.Feature] = []
+    results: dict = {}
+
+    for site in site_list:
+        
+        try:
+            feature = build_site_feature(site)
+            features.append(feature)
+            results[site] = {"status": "success"}
+
+        except (KeyError, FileNotFoundError, IndexError) as e:
+            results[site] = {"status": "failure", "error": str(e)}
+            logger.warning(
+                "site_status_skipped",
+                extra={"site": site, "error": str(e)},
+            )
+
+        except Exception as e:
+            results[site] = {"status": "failure", "error": str(e)}
+            logger.error(
+                "site_status_failed",
+                extra={"site": site, "error": str(e)},
+                exc_info=True,
+            )
+
+    geojson_obj = build_geojson_feature_collection(features)
+
+    output_path = paths.get_local_stream_path(
+        resource="network",
+        stream="status",
+        file_name="network_status_test.json",
+    )
+
+    write_geojson(geojson_obj, output_path)
+
+    logger.info("status_geojson_generation_complete")
+
+    return results
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+def write_geojson(obj: dict, output_path) -> None:
+    """
+    Write GeoJSON object to disk.
+    """
+    with open(output_path, mode="w", encoding="utf-8") as f:
+        geojson.dump(obj, f, indent=4)
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+def build_geojson_feature_collection(
+        features: list[geojson.Feature], 
+        ) -> geojson.FeatureCollection:
+
+    collection = geojson.FeatureCollection(features)
+
+    collection["metadata"] = {
+        "rundatetime": dt.datetime.now(dt.timezone.utc).isoformat()
+    }
+
+    return collection
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+def build_site_feature(site: str) -> geojson.Feature:
+    """
+    Build a GeoJSON feature for a single site.
+    """
+
+    status_dict = get_site_data_status(site, subset=SUBSET)
+
+    # Compute overall min days since last record
+    days_since_last_record = min(
+        v["days_since_last_record"]
+        for v in status_dict.values()
+        if isinstance(v["days_since_last_record"], int)
+    )
+
+    properties = {
+        "days_since_last_record": days_since_last_record,
+        **{
+            var: v["days_since_last_valid_record"]
+            for var, v in status_dict.items()
+        },
+    }
+
+    latitude = sd_mngr.df.loc[site, "latitude"]
+    longitude = sd_mngr.df.loc[site, "longitude"]
+
+    return geojson.Feature(
+        id=site,
+        geometry=geojson.Point(coordinates=[latitude, longitude]),
+        properties=properties,
+    )
+# -----------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_site_data_status(site, file_index=-1, subset=None, standardise=True):
+    
     # Inits
     input_path = paths.get_local_stream_path(
         resource='homogenised_data',
         stream='nc',
+        subdirs=[site]
         )
-    output_path = paths.get_local_stream_path(
-        resource='network',
-        stream='status',
-        file_name='network_status.json'
-        )
-    rslt_list = []
+    
+    # Get file
+    file_list = sorted(list(input_path.glob('*.nc')))
+    if len(file_list) == 0:
+        raise FileNotFoundError(
+            f'No .nc files found for site {site} in directory {input_path}!'
+            )
 
-    logger.info('Scanning network: ')
+    # Pass to get_data_status
+    file = file_list[file_index]
+    site_time = _get_site_time(site=site, run_time=dt.datetime.now())
+    return get_data_status(file=file, site_time=site_time, subset=subset)
+#------------------------------------------------------------------------------
 
-    # Iterate over sites
-    for site in site_list:
+#------------------------------------------------------------------------------
+def get_data_status(file, site_time, subset=None, standardise=True):
+    """
+    Read netcdf file to get data status for .nc status file.
 
-        logger.info(f'    - retrieving status for site {site}...')
+    Args:
+        site_time: time to use for comparison of data age.
 
-        # Get the file name
+    Returns:
+        dataframe containing results.
+
+    """
+
+    # Get the data
+    df = NCReader(nc_file=file).get_dataframe()
+    
+    rename_map = {}
+    subset = subset or list(df.columns)
+    if standardise:
+        for std_name in subset:
+            raw_name = resolve_standard_name(df.columns, std_name)
+            rename_map[raw_name] = std_name
+    else:
+        rename_map = {col: col for col in df.columns if col in subset}
+       
+    # Subset + rename DataFrame
+    working_df = df[list(rename_map.keys())].rename(columns=rename_map)
+    
+    rslt = {}
+    for variable in working_df.columns:
+
+        # Get the maxima and minima (some non-standard variables are allowed
+        # when not recognised by the parser, so handle TypeErrors by setting
+        # the valid range to nans, which will leave the range unchanged)
         try:
-            file = _get_file(target_dir=input_path, site=site)
-        except FileNotFoundError:
-            logger.error(msg='There was a problem: ', exc_info=True)
-            continue
-
-        logger.info(f'      - Parsing file {file.name}...')
-
-        # Parse the variables
-        df = parse_slow_data_status_4_geojson(file=file, site_time=_get_site_time(site))
-        rslt = {'days_since_last_record': df.days_since_last_record.max()}
-        rslt.update(df.days_since_last_valid_record.to_dict())
-        rslt_list.append(
-            geojson.Feature(
-                id=site,
-                geometry=geojson.Point(coordinates=[
-                    sd_mngr.df.loc[site, 'latitude'],
-                    sd_mngr.df.loc[site, 'longitude']
-                    ]),
-                properties=rslt
+            info = name_parser.parse_variable_name(variable_name=variable)
+            valid_range = (info['plausible_min'], info['plausible_max'])
+        except TypeError:
+            valid_range = (-9999, 9999)
+            
+        # Parse the variable
+        rslt[variable] = (
+            parse_variable(
+                variable=working_df[variable],
+                var_range=valid_range,
+                site_time=site_time
                 )
             )
 
-        logger.info('      - Successfully parsed...')
-
-        logger.info('    ... done!')
-
-    logger.info('Scan complete - dumping to file...')
-
-    json_obj = geojson.FeatureCollection(rslt_list)
-    json_obj['metadata'] = {
-        'rundatetime': dt.datetime.strftime(
-            dt.datetime.now(), '%Y-%m-%d %H:%M:%S'
-            )
-        }
-    with open(file=output_path, mode='w', encoding='utf-8') as f:
-        geojson.dump(json_obj,f,indent=4)
-
-    logger.info('... done!')
+    return rslt # pd.DataFrame(rslt_list, index=SUBSET)
 #------------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+def resolve_standard_name(columns: list[str], std_name: str) -> str:
+    """
+    Resolve a standard variable name to a raw column in a file.
+    
+    Args:
+        columns: list of DataFrame column names
+        std_name: the standard name to find
+    
+    Returns:
+        raw column name matching the standard name
+    
+    Raises:
+        KeyError if no match is found
+    """
+    # Step 1: fast prefix filter
+    candidates = [col for col in columns if col == std_name or col.startswith(std_name + "_")]
+
+    if not candidates:
+        raise KeyError(f"No column found matching standard name '{std_name}'")
+
+    # Step 2: optional verification via name_parser
+    if len(candidates) > 1:
+        verified = []
+        for col in candidates:
+            try:
+                info = name_parser.parse_variable_name(col)
+                if info["standard_name"] == std_name:
+                    verified.append(col)
+            except Exception:
+                continue
+        if verified:
+            candidates = verified
+
+    # Step 3: deterministic replicate selection
+    return sorted(candidates)[0]
+# -----------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def parse_variable(
+        variable: pd.Series, var_range: tuple, site_time: dt.datetime
+        ) -> dict:
+    """
+    Parse the variable for statistics.
+
+    Args:
+        variable: variable data to parse.
+        var_range: lower and upper range limits.
+
+    Returns:
+        dicitionary containing status results.
+
+    """
+
+    # Create record structure
+    rec = {
+        'days_since_last_record': 'N/A',
+        'last_valid_value': None,
+        'last_valid_record_datetime': None,
+        'last_24hr_pct_valid': 0,
+        'days_since_last_valid_record': 'N/A'
+        }
+
+
+    # Get the last record (valid or not); return default record structure if not   
+    if variable.empty:
+        logger.debug(f"No records available for variable {variable.name}")
+        return rec
+
+    
+    # Get time since the last record in days and add to the 
+    dt_last_rec = (site_time - variable.index[-1]).days
+    rec['days_since_last_record'] = dt_last_rec
+    
+    # Filter the data
+    filtered_variable = (
+        filter_range(
+            series=variable.copy(),
+            min_val=var_range[0], max_val=var_range[1]
+            )
+        .dropna()
+        )
+
+    # If no good data, return the record structure
+    if filtered_variable.empty:
+        logger.debug(
+            'No valid records remain after filtering for variable '
+            f'{variable.name}!'
+            )
+        return rec
+
+    # Do the stats
+    lvr = filtered_variable.iloc[-1]
+    last_valid_time = filtered_variable.index[-1]
+    days_since_valid = (site_time - last_valid_time).days
+    pct_valid = 0
+    
+    # Calculate percent good data in last 24 hours
+    if days_since_valid == 0:
+        window_start = site_time - dt.timedelta(days=1)
+        raw_window = variable.loc[window_start:site_time]
+        if not raw_window.empty:
+            valid_window = filtered_variable.loc[window_start:site_time]
+            pct_valid = round(
+                len(valid_window) / len(raw_window) * 100
+                )
+                                                 
+    # Fill the record
+    rec.update(
+        {
+            "last_valid_value": lvr,
+            "last_valid_record_datetime": last_valid_time,
+            "last_24hr_pct_valid": pct_valid,
+            "days_since_last_valid_record": days_since_valid,
+        }
+    )
+    
+    return rec
+#------------------------------------------------------------------------------
+
+# #------------------------------------------------------------------------------
+# def write_status_geojson(site_list: list) -> None:
+#     """
+#     Write status information to a geojson file.
+
+#     Args:
+#         site_list: list of sites to process.
+
+#     Returns:
+#         None.
+
+#     """
+
+#     # Inits
+#     input_path = paths.get_local_stream_path(
+#         resource='homogenised_data',
+#         stream='nc',
+#         )
+#     output_path = paths.get_local_stream_path(
+#         resource='network',
+#         stream='status',
+#         file_name='network_status.json'
+#         )
+#     rslt_list = []
+
+#     logger.info('Scanning network: ')
+
+#     # Iterate over sites
+#     for site in site_list:
+
+#         logger.info(f'    - retrieving status for site {site}...')
+
+#         # Get the file name
+#         try:
+#             file = _get_file(target_dir=input_path, site=site)
+#         except FileNotFoundError:
+#             logger.error(msg='There was a problem: ', exc_info=True)
+#             continue
+
+#         logger.info(f'      - Parsing file {file.name}...')
+
+#         # Parse the variables
+#         df = parse_slow_data_status_4_geojson(file=file, site_time=_get_site_time(site))
+#         rslt = {'days_since_last_record': df.days_since_last_record.max()}
+#         rslt.update(df.days_since_last_valid_record.to_dict())
+#         rslt_list.append(
+#             geojson.Feature(
+#                 id=site,
+#                 geometry=geojson.Point(coordinates=[
+#                     sd_mngr.df.loc[site, 'latitude'],
+#                     sd_mngr.df.loc[site, 'longitude']
+#                     ]),
+#                 properties=rslt
+#                 )
+#             )
+        
+#         logger.info('      - Successfully parsed...')
+
+#         logger.info('    ... done!')
+
+#     logger.info('Scan complete - dumping to file...')
+
+#     json_obj = geojson.FeatureCollection(rslt_list)
+#     json_obj['metadata'] = {
+#         'rundatetime': dt.datetime.strftime(
+#             dt.datetime.now(), '%Y-%m-%d %H:%M:%S'
+#             )
+#         }
+#     with open(file=output_path, mode='w', encoding='utf-8') as f:
+#         geojson.dump(json_obj,f,indent=4)
+
+#     logger.info('... done!')
+# #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def write_status_xlsx(site_list) -> None:
@@ -274,15 +582,13 @@ def check_sites_online():
 
     logger.info('Running logger clock checks')
 
-    sites = pd.DataFrame(
-        data = paths.get_internal_configs('vpn_ip'),
-        index = 'ip'
-        )
-    breakpoint()
+    vpn_configs = paths.get_internal_configs('vpn_ip')
+    input_d = {
+        key: value['ip'].split('.')[-1] for key, value in vpn_configs.items()
+        }
     rslt = {}
-    for site in sites.keys():
+    for site, ip_addr in input_d.items():
         print(site)
-        ip_addr = f'192.168.{sites[site]}.100'
         time = dt.datetime.now()
         try:
             site_rslt = (
@@ -292,7 +598,6 @@ def check_sites_online():
             site_rslt['time'] = (
                 dt.datetime.strptime(site_rslt['time'], '%Y-%m-%dT%H:%M:%S.%f')
                 )
-            breakpoint()
             site_rslt['offset'] = (time - site_rslt['time']).seconds
             expected_offset = None
             rslt[site] = site_rslt
@@ -345,10 +650,14 @@ def parse_slow_data_status_4_geojson(file, site_time):
             var for var in df.columns if var.startswith(substr)
             )[0]
 
-        # Get the maxima and minima
-        info = name_parser.parse_variable_name(variable_name=substr)
-        valid_range = (info['plausible_min'], info['plausible_max'])
-
+        # Get the maxima and minima (some non-standard variableas are allowed
+        # when not recognised by the parser, so handle TypeErrors by setting
+        # the valid range to nans, which will leave the range unchanged)
+        try:
+            info = name_parser.parse_variable_name(variable_name=variable)
+            valid_range = (info['plausible_min'], info['plausible_max'])
+        except TypeError:
+            valid_range = (-9999, 9999)
         # Parse the variable
         rslt_list.append(
             _parse_variable(

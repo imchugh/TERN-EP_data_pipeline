@@ -29,9 +29,10 @@ from managers import paths
 ###############################################################################
 
 APP_PATH = 'rclone'
-ARGS_LIST = [
+COPY_ARGS = [
     'copy', '--transfers', '10', '--progress', '--checksum', '--timeout', '0'
     ]
+MOVE_ARGS = ['move']
 logger = logging.getLogger(__name__)
 
 ###############################################################################
@@ -272,7 +273,7 @@ def generic_move(
         to_location = local_location
 
     # Add any arguments to the Rclone execution string
-    run_args = ARGS_LIST.copy()
+    run_args = COPY_ARGS.copy()
     if exclude_dirs:
         run_args += _add_rclone_exclude(exclude_dirs=exclude_dirs)
 
@@ -306,10 +307,20 @@ def check_remote_available(remote_path):
 
     """
 
-    _run_subprocess(
+    return _run_subprocess(
         run_list=[APP_PATH, 'lsd', str(remote_path)],
         timeout=30
         )
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def remote_move(from_location, to_location):
+    
+    # for location in [from_location, to_location]:
+    #     check_remote_available(remote_path=location)
+    run_args = MOVE_ARGS.copy()
+    run_list =  [APP_PATH] + run_args + [from_location, to_location]
+    _run_subprocess(run_list=run_list)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

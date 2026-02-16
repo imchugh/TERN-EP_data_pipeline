@@ -491,10 +491,10 @@ def get_newest_file(ip_addr: str, source: str, file_ext: str=None) -> str:
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def do_request(cmd_str: str) -> dict:
+def do_request(cmd_str: str, timeout=2) -> dict:
 
     try:
-        rslt = requests.get(cmd_str, stream=True, timeout=30)
+        rslt = requests.get(cmd_str, stream=True, timeout=timeout)
     except (requests.ConnectTimeout, requests.ConnectionError) as e:
         raise ConnectionError(
             f'Failed to connect to url {cmd_str}! Error from requests: {e}'

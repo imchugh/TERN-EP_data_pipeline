@@ -25,6 +25,7 @@ from tasks.registry import register, SITE_TASKS, NETWORK_TASKS
 from file_transfers import rclone_transfer as rct
 from file_transfers import sftp_transfer as sftpt
 from managers import paths
+from tasks.logger_config import configure_logger_json
 
 ###############################################################################
 ### END IMPORTS ###
@@ -91,6 +92,23 @@ class SiteTaskManager():
         
         return self.tasks_df[~self.tasks_df[task]==disabled].index.tolist()
     #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_site_task_status(self, site: str, task: str) -> bool:
+        """
+        Get the status of a site task.
+
+        Args:
+            site: name of site.
+            task: name of task.
+
+        Returns:
+            Status.
+
+        """
+        
+        return self.tasks_df.loc[site, task]
+    #-------------------------------------------------------------------------- 
 
     #--------------------------------------------------------------------------    
     def get_task_list(self):
@@ -203,13 +221,13 @@ def construct_L1_nc(site: str) -> None:
         L1con.write_nc_file_by_year(year=this_year, overwrite=True)
 #------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-@register
-def construct_L1_xlsx(site: str) -> None:
+# #------------------------------------------------------------------------------
+# @register
+# def construct_L1_xlsx(site: str) -> None:
 
-    xlcon = import_module('data_constructors.L1_workbook_constructor')
-    xlcon.construct_L1_xlsx(site=site)
-#------------------------------------------------------------------------------
+#     xlcon = import_module('data_constructors.L1_workbook_constructor')
+#     xlcon.construct_L1_xlsx(site=site)
+# #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 @register
@@ -230,14 +248,12 @@ def construct_site_details(site: str) -> None:
 
 #------------------------------------------------------------------------------
 @register
-def construct_site_details_json() -> None:
-    """Construct the details file for the Grafana dash"""
-
+def construct_site_details_json(site_list) -> None:
+    
     deetcon = import_module('data_constructors.details_constructor')
-    this_task = inspect.stack()[0][3]
-    deetcon.site_info_2_json(
-        site_list=mngr.get_site_list_for_task(task=this_task)
-        )
+    rslt = deetcon.site_info_2_json(site_list=site_list)
+    return rslt
+    
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -254,14 +270,11 @@ def construct_status_xlsx() -> None:
 
 #------------------------------------------------------------------------------
 @register
-def construct_status_geojson() -> None:
+def construct_status_geojson(site_list) -> None:
     """Construct the status geojson seeded with site list"""
 
     ns = import_module('network_monitoring.network_status')
-    this_task = inspect.stack()[0][3]
-    ns.network_status_to_geojson(
-        site_list=mngr.get_site_list_for_task(task=this_task)
-        )
+    return ns.network_status_to_geojson(site_list=site_list)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -273,10 +286,11 @@ def construct_status_geojson() -> None:
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def check_site_connections() -> None:
+@register
+def check_site_connections(site_list) -> dict:
     
     ns = import_module('network_monitoring.network_tools')
-    rslt = ns.scan_network()
+    return ns.scan_network(site_list=site_list)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -607,130 +621,243 @@ func_finder = FunctionFinder()
 ### BEGIN TASK MANAGEMENT FUNCTIONS ###
 ###############################################################################
 
-#------------------------------------------------------------------------------
-def configure_logger(log_path):
-    """Configure the logger for the task (inclduing setting output path)."""
+# #------------------------------------------------------------------------------
+# def configure_logger(log_path):
+#     """Configure the logger for the task (inclduing setting output path)."""
 
-    if logger.hasHandlers():
-        logger.handlers.clear()
-    new_configs = logger_configs.copy()
-    new_configs['handlers']['file']['filename'] = str(log_path)
-    logging.config.dictConfig(new_configs)
-#------------------------------------------------------------------------------
+#     if logger.hasHandlers():
+#         logger.handlers.clear()
+#     new_configs = logger_configs.copy()
+#     new_configs['handlers']['file']['filename'] = str(log_path)
+#     logging.config.dictConfig(new_configs)
+# #------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-def run_site_task(task: str, site:str) -> None:
-    """
-    Run a task for a single site (and log to single site log file).
+# #------------------------------------------------------------------------------
+# def run_site_task(task: str, site:str) -> None:
+#     """
+#     Run a task for a single site (and log to single site log file).
 
-    Args:
-        task: name of task.
-        site: name of site.
+#     Args:
+#         task: name of task.
+#         site: name of site.
 
-    Returns:
-        None.
+#     Returns:
+#         None.
 
-    """
+#     """
 
-    # Get the log output path and configure the logger
-    log_path = (
-        paths.get_local_stream_path(
-            resource='logs',
-            stream='site_logs',
-            site=site
-            ) /
-        f'{site}_{task}.log'
-        )
-    configure_logger(log_path=log_path)
+#     # Get the log output path and configure the logger
+#     log_path = (
+#         paths.get_local_stream_path(
+#             resource='logs',
+#             stream='site_logs',
+#             site=site
+#             ) /
+#         f'{site}_{task}.log'
+#         )
+#     configure_logger(log_path=log_path)
 
-    # Retrieve the function and run the task
-    logger.info(f'Running task {task}...')
-    try:
-        function = func_finder.task_functions[task]
-        function(site=site)
-        logger.info('Task completed without error\n')
-    except Exception:
-        logger.error('Task failed with the following error:', exc_info=True)
-#------------------------------------------------------------------------------
+#     # Retrieve the function and run the task
+#     logger.info(f'Running task {task}...')
+#     try:
+#         function = func_finder.task_functions[task]
+#         function(site=site)
+#         logger.info('Task completed without error\n')
+#     except Exception:
+#         logger.error('Task failed with the following error:', exc_info=True)
+# #------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-def run_site_task_from_list(task: str) -> None:
-    """
-    Run a site task for a site (and log to single site log file) from list of sites.
+# #------------------------------------------------------------------------------
+# def run_site_task_from_list(task: str) -> None:
+#     """
+#     Run a site task for a site (and log to single site log file) from list of sites.
 
-    Args:
-        task: name of task.
+#     Args:
+#         task: name of task.
 
-    Returns:
-        None.
+#     Returns:
+#         None.
 
-    """
+#     """
 
-    sites = mngr.get_site_list_for_task(task=task)
-    for site in sites:
-        run_site_task(task=task, site=site)
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def run_network_task(task: str) -> None:
-    """
-    Run a network-based task.
-
-    Args:
-        task: name of task.
-
-    Returns:
-        None.
-
-    """
-
-    # Get the log output path and configure the logger
-    log_path = (
-        paths.get_local_stream_path(
-            resource='logs',
-            stream='network_logs',
-            ) /
-        f'{task}.log'
-        )
-    configure_logger(log_path=log_path)
-
-    # Get the requested function
-    function = func_finder.task_functions[task]
-
-    # Run the task
-    logger.info(f'Running task {task}...')
-    try:
-        function()
-        logger.info('Task completed without error\n')
-    except Exception:
-        logger.error('Task failed with the following error:', exc_info=True)
-#------------------------------------------------------------------------------
+#     sites = mngr.get_site_list_for_task(task=task)
+#     for site in sites:
+#         run_site_task(task=task, site=site)
+# #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+# def run_network_task(task: str) -> None:
+#     """
+#     Run a network-based task.
+
+#     Args:
+#         task: name of task.
+
+#     Returns:
+#         None.
+
+#     """
+
+#     # Get the log output path and configure the logger
+#     log_path = (
+#         paths.get_local_stream_path(
+#             resource='logs',
+#             stream='network_logs',
+#             ) /
+#         f'{task}.log'
+#         )
+#     configure_logger(log_path=log_path)
+
+#     # Get the requested function
+#     function = func_finder.task_functions[task]
+
+#     # Run the task
+#     logger.info(f'Running task {task}...')
+#     try:
+#         function()
+#         logger.info('Task completed without error\n')
+#     except Exception:
+#         logger.error('Task failed with the following error:', exc_info=True)
+        
+# def run_network_task_2(task: str) -> None:
+#     """
+#     Run a network-based task with structured JSON logging.
+
+#     Args:
+#         task: name of task
+#     """
+#     log_path = (
+#         paths.get_local_stream_path(resource='logs', stream='network_logs')
+#         / f'{task}.jsonl'
+#     )
+#     configure_logger_json(log_path=log_path)
+
+#     # Get the requested task function
+#     function = func_finder.task_functions[task]
+
+#     # Log task start
+#     logger.info(
+#         "task_start",
+#         extra={"task": task}
+#     )
+
+#     try:
+#         function()  # task function logs per-site results
+#         # Task completed
+#         logger.info(
+#             "task_end",
+#             extra={"task": task, "status": "success"}
+#         )
+#     except Exception:
+#         logger.error(
+#             "task_end",
+#             extra={"task": task, "status": "failure"},
+#             exc_info=True
+#         )
+        
 def run_task(task: str) -> None:
     """
-    Run a task.
-
-    Args:
-        task: name of taks to run.
-
-    Raises:
-        NotImplementedError: raised if an undefined task is passed.
-
-    Returns:
-        None.
-
+    Run a network-based task and log outcomes.
     """
 
-    if task in func_finder.site_tasks:
-        run_site_task_from_list(task=task)
-    elif task in func_finder.network_tasks:
-        run_network_task(task=task)
-    else:
+    # Resolve task function
+    try:
+        function = func_finder.task_functions[task]
+        task_name = function.__name__
+    except KeyError:
         raise NotImplementedError(
             f'Function for task "{task}" not implemented!'
             )
+
+    # Configure logging for this task
+    log_path = (
+        paths.get_local_stream_path(
+            resource="logs",
+            stream="network_logs",
+        )
+        / f"{task}.jsonl"
+    )
+    configure_logger_json(log_path=log_path)
+
+    # Resolve task function
+    function = func_finder.task_functions[task]
+    task_name = function.__name__
+
+    # Resolve sites for this task (default to all sites for any task that 
+    # has a defined function but no task list)
+    try:
+        site_list = mngr.get_site_list_for_task(task=task_name)
+    except KeyError:
+        site_list = mngr.get_site_list()
+
+    logger.info(
+        "task_start",
+        extra={
+            "task": task_name,
+            "site_count": len(site_list),
+        },
+    )
+
+    try:
+        # Run task
+        results = function(site_list)
+
+        # Log per-site results (if any)
+        if results:
+            for site, result in results.items():
+                logger.info(
+                    "task_site_result",
+                    extra={
+                        "task": task_name,
+                        "site": site,
+                        **result,
+                    },
+                )
+
+        logger.info(
+            "task_end",
+            extra={
+                "task": task_name,
+                "status": "success",
+            },
+        )
+
+    except Exception:
+        logger.error(
+            "task_end",
+            extra={
+                "task": task_name,
+                "status": "failure",
+            },
+            exc_info=True,
+        )
 #------------------------------------------------------------------------------
+
+# #------------------------------------------------------------------------------
+# def run_task(task: str) -> None:
+#     """
+#     Run a task.
+
+#     Args:
+#         task: name of taks to run.
+
+#     Raises:
+#         NotImplementedError: raised if an undefined task is passed.
+
+#     Returns:
+#         None.
+
+#     """
+
+#     if task in func_finder.site_tasks:
+#         run_site_task_from_list(task=task)
+#     elif task in func_finder.network_tasks:
+#         run_network_task(task=task)
+#     else:
+#         raise NotImplementedError(
+#             f'Function for task "{task}" not implemented!'
+#             )
+# #------------------------------------------------------------------------------
 
 ###############################################################################
 ### END TASK MANAGEMENT FUNCTIONS ###

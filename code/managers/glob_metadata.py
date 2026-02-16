@@ -66,7 +66,8 @@ ALIAS_DICT = {
     'Nimmo High Plains': 'Nimmo',
     'Samford Ecological Research Facility': 'Samford',
     'Silver Plain': 'SilverPlains',
-    'Wellington Research Station Flux Tower': 'Wellington'
+    'Wellington Research Station Flux Tower': 'Wellington',
+    'WombatStateForest':'WombatForest2'
 }
 
 # Set data types

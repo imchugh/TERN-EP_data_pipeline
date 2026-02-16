@@ -329,7 +329,7 @@ def get_path(
     if location == 'local':
         configs = LOCAL_PATHS
     elif location == 'remote':
-        configs = LOCAL_PATHS
+        configs = REMOTE_PATHS
     else:
         raise KeyError('Allowed locations are "local" and "remote"!')
 

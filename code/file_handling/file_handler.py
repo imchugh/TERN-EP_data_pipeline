@@ -83,7 +83,10 @@ class DataHandler():
 
         # Apply column subset and rename
         subset_list, rename_dict = self._subset_or_translate(usecols=usecols)
-        output_data = self.data[subset_list].rename(rename_dict, axis=1)
+        try:
+            output_data = self.data[subset_list].rename(rename_dict, axis=1)
+        except KeyError:
+            breakpoint()
 
         # Apply duplicate mask
         dupe_records = self.get_duplicate_records()

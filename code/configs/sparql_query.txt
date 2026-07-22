@@ -8,7 +8,7 @@ PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 
 SELECT ?id ?label ?fluxnet_id ?date_commissioned ?date_decommissioned ?latitude ?longitude ?elevation ?time_step ?freq_hz ?canopy_height ?soil ?tower_height ?vegetation
 WHERE {
-    ?id a tern:FluxTower ;
+    ?id tern:platformType <http://linked.data.gov.au/def/tern-cv/f27edca5-cdf1-48e9-9d00-b40c356d5fcd> ;
         rdfs:label ?label ;
         tern:fluxnetID ?fluxnet_id .
 

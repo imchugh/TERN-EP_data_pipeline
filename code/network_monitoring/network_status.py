@@ -100,7 +100,7 @@ def network_status_to_geojson(site_list: list) -> dict:
     output_path = paths.get_local_stream_path(
         resource="network",
         stream="status",
-        file_name="network_status_test.json",
+        file_name="network_status.json",
     )
 
     write_geojson(geojson_obj, output_path)

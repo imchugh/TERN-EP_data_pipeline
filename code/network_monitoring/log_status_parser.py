@@ -80,15 +80,15 @@ def get_run_ids(records: list) -> set:
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
-def get_latest_run_id(records):
+def get_latest_run_id(records: list) -> str:
     """
-    
+    Get the last run id.
 
     Args:
-        records (TYPE): DESCRIPTION.
+        records: list of records to parse.
 
     Returns:
-        TYPE: DESCRIPTION.
+        last run_id.
 
     """
     
@@ -97,16 +97,16 @@ def get_latest_run_id(records):
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
-def filter_by_run_id(records, run_id):
+def filter_by_run_id(records: list, run_id: str) -> list:
     """
-    
+    Return only records that have a specific run_id.
 
     Args:
-        records (TYPE): DESCRIPTION.
-        run_id (TYPE): DESCRIPTION.
+        records: list of records to parse.
+        run_id: run_id to filter by.
 
     Returns:
-        list: DESCRIPTION.
+        filtered record list.
 
     """
     
@@ -114,13 +114,13 @@ def filter_by_run_id(records, run_id):
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
-def filter_by_log_level(records, level='INFO'):
+def filter_by_log_level(records: list, level: str='INFO') -> list:
     """
     
 
     Args:
-        records (TYPE): DESCRIPTION.
-        level (TYPE, optional): DESCRIPTION. Defaults to 'INFO'.
+        records: list of records to parse.
+        level (optional): level to filter by. Defaults to 'INFO'.
 
     Returns:
         list: DESCRIPTION.
@@ -136,11 +136,12 @@ def get_task_completion_status(task: str, run_id: str | None=None) -> dict:
     Get the task completion status.
 
     Args:
-        task (TYPE): DESCRIPTION.
-        run_id (optional): DESCRIPTION. Defaults to None.
+        task: name of task.
+        run_id (optional): the run_id for which to retrieve the results. If 
+        None, uses the newest. Defaults to None.
 
     Returns:
-        dict: DESCRIPTION.
+        dict: the status of the task.
 
     """
     
@@ -174,7 +175,19 @@ def get_task_completion_status(task: str, run_id: str | None=None) -> dict:
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
-def get_site_result_status(task, run_id=None):
+def get_site_result_status(task: str, run_id: str | None=None) -> pd.DataFrame:
+    """
+    Get results of a given task at site level.
+
+    Args:
+        task: name of task.
+        run_id (optional): run_id for which to return status. If None, uses the 
+        newest. Defaults to None.
+
+    Returns:
+        dataframe containing all site results.
+
+    """
     
     recs = list(get_json_log(LOG_PATH / f'{task}.jsonl'))
     if run_id is None:

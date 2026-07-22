@@ -94,7 +94,7 @@ def parse_TOB3_daily(site: str, is_aux=False) -> None:
     today = dt.datetime.now().date()
 
     # Iterate over files in directory
-    for file in sorted(base_path.rglob('TOB3*.dat')):
+    for file in sorted(base_path.rglob('*.dat')):
 
         # Get header lines and check file type, station and date
         info = ffio.get_info_line(file=file, as_dict=True)

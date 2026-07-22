@@ -13,7 +13,7 @@ import inspect
 ###############################################################################
 
 SITE_TASKS = {}
-NETWORK_TASKS = {}
+GLOBAL_TASKS = {}
 
 def register(func):
 
@@ -21,7 +21,7 @@ def register(func):
     if params == ['site']:
         SITE_TASKS[func.__name__] = func
     else:
-        NETWORK_TASKS[func.__name__] = func
+        GLOBAL_TASKS[func.__name__] = func
     return func
 
 ###############################################################################

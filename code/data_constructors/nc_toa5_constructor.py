@@ -335,12 +335,22 @@ def _rename_variables(ds: xr.Dataset) -> xr.Dataset:
                 if var.startswith(met_var)
                 and not 'IRGA' in var
                 and not 'SONIC' in var
+                and not var.endswith('Ct')
                 }
             )
+    # try:
     ds = ds.rename(rslt)
+    # except ValueError:
+    #     breakpoint()
 
     # Rename wind data
-    ds = ds.rename({'Wd_SONIC': 'Wd', 'Ws_SONIC': 'Ws'})
+    wind_rename = {}
+    for var in ['Ws', 'Wd']:
+        if var in ds.variables:
+            ds = ds.drop(var)
+        wind_rename[f'{var}_SONIC'] = var
+    ds = ds.rename(wind_rename)    
+    # ds = ds.rename({'Wd_SONIC': 'Wd', 'Ws_SONIC': 'Ws'})
 
     # Get right name for CO2 units
     co2_units = ds.variables['CO2_IRGA'].attrs['units']

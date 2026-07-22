@@ -21,7 +21,7 @@ from importlib import import_module
 
 #------------------------------------------------------------------------------
 
-from tasks.registry import register, SITE_TASKS, NETWORK_TASKS
+from tasks.registry import register, SITE_TASKS, GLOBAL_TASKS
 from file_transfers import rclone_transfer as rct
 from file_transfers import sftp_transfer as sftpt
 from managers import paths

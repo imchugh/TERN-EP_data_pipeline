@@ -248,9 +248,9 @@ def _get_met_vars(df: pd.DataFrame) -> dict:
             rslt[quantity] = sub_df.height_diff.idxmin()
             continue
     
-            # Break as soon as there is a hit
-            if not None in rslt.values():
-                break
+        # Break as soon as there is a hit
+        if not None in rslt.values():
+            break
 
     # Remove fields with empty values, reverse and return
     return {value: key for key, value in rslt.items() if value is not None}

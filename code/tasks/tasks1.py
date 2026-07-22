@@ -16,16 +16,19 @@ do not need to be loaded every time the task manager is called externally!
 import datetime as dt
 import inspect
 import logging.config
-import sys
+import pandas as pd
+import pathlib
 from importlib import import_module
+from typing import Callable
 
 #------------------------------------------------------------------------------
 
-from tasks.registry import register, SITE_TASKS, NETWORK_TASKS
-from file_transfers import rclone_transfer as rct
+from tasks.registry import register, SITE_TASKS, GLOBAL_TASKS
+# from file_transfers import rclone_transfer as rct
 from file_transfers import sftp_transfer as sftpt
-from managers import paths
+from infrastructure import paths
 from tasks.logger_config import configure_logger_json
+from services.foundational import glob_metadata as gm
 
 ###############################################################################
 ### END IMPORTS ###
@@ -36,7 +39,7 @@ from tasks.logger_config import configure_logger_json
 ### BEGIN INITS ###
 ###############################################################################
 
-logger_configs = paths.get_internal_configs('py_logger')
+task_list = list(SITE_TASKS.keys()) + list(GLOBAL_TASKS.keys())
 logger = logging.getLogger(__name__)
 
 #------------------------------------------------------------------------------
@@ -57,7 +60,7 @@ class SiteTaskManager():
         """
         
         self.tasks_df = (
-            paths.get_internal_configs('tasks')
+            pd.DataFrame(paths.get_internal_configs('tasks'))
             .set_index(keys='Site')
             .astype(bool)
             )
@@ -221,14 +224,6 @@ def construct_L1_nc(site: str) -> None:
         L1con.write_nc_file_by_year(year=this_year, overwrite=True)
 #------------------------------------------------------------------------------
 
-# #------------------------------------------------------------------------------
-# @register
-# def construct_L1_xlsx(site: str) -> None:
-
-#     xlcon = import_module('data_constructors.L1_workbook_constructor')
-#     xlcon.construct_L1_xlsx(site=site)
-# #------------------------------------------------------------------------------
-
 #------------------------------------------------------------------------------
 @register
 def update_EddyPro_master(site: str) -> None:
@@ -251,9 +246,7 @@ def construct_site_details(site: str) -> None:
 def construct_site_details_json(site_list) -> None:
     
     deetcon = import_module('data_constructors.details_constructor')
-    rslt = deetcon.site_info_2_json(site_list=site_list)
-    return rslt
-    
+    return deetcon.site_info_2_json(site_list=site_list)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -289,7 +282,7 @@ def construct_status_geojson(site_list) -> None:
 @register
 def check_site_connections(site_list) -> dict:
     
-    ns = import_module('network_monitoring.network_tools')
+    ns = import_module('services.orchestration.network_services')
     return ns.scan_network(site_list=site_list)
 #------------------------------------------------------------------------------
 
@@ -354,7 +347,34 @@ def _parse_fast_data(site: str, is_aux: bool) -> None:
 
     ffc = import_module('data_constructors.fast_file_converters')
     ffc.parse_TOB3_daily(site=site, is_aux=is_aux)
-#------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+
+@register
+def process_fast_data(site: str) -> dict:
+    
+    fd_task = import_module('services.orchestration.fast_data')
+    
+    root_dir = paths.get_local_stream_path(
+        resource='raw_data', 
+        stream='flux_fast', 
+        site=site
+        )
+    input_dir = root_dir / 'TMP'
+    
+    details = (
+        gm.get_metadata_manager(source='yml')
+        .get_single_site_details(site=site)
+        )
+    
+    return fd_task.process_all_fast_daily(
+        site=site,
+        input_dir=input_dir,
+        root_dir=root_dir,
+        time_step=details.time_step,
+        freq_hz=details.freq_hz
+        )
 
 #------------------------------------------------------------------------------
 ### END LOCAL DATA MOVING ###
@@ -368,154 +388,145 @@ def _parse_fast_data(site: str, is_aux: bool) -> None:
 
 #------------------------------------------------------------------------------
 @register
-def pull_profile_raw(site: str) -> None:
+def pull_profile_raw(site: str):
 
-    logger.info('Downloading data from remote location...')
-    rct.move_site_data_stream(
-        site=site, resource='raw_data', stream='profile',
-        which_way='from_remote'
+    return transfer_stream(
+        resource='raw_data', 
+        stream_local='profile', 
+        to_remote=False,
+        path_kwargs={'site': site},
         )
-    logger.info('Done!')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 @register
 def pull_RTMC_images():
 
-    rct.push_pull_RTMC_images(which='pull')
+    return transfer_stream(
+        resource='network', 
+        stream_local='RTMC_images', 
+        stream_remote='RTMC_image_source', 
+        to_remote=False,
+        set_modtime=False
+        )
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 @register
-def pull_slow_flux(site):
+def pull_slow_flux(site: str):
 
-    logger.info(f'Begin retrieval of {site} slow data from UQRDM')
-    rct.move_site_data_stream(
-        site=site, resource='raw_data', stream='flux_slow',
-        which_way='from_remote'
+    return transfer_stream(
+        resource='raw_data', 
+        stream_local='flux_slow', 
+        to_remote=False,
+        path_kwargs={'site': site},
         )
-    logger.info('Done')
 #------------------------------------------------------------------------------
 
 # PUSH TASKS
 
 #------------------------------------------------------------------------------
 @register
-def push_aux_fast_flux(site):
+def push_aux_fast_flux(site: str):
 
-    logger.info(f'Begin move of {site} fast data to UQRDM flux archive')
-    rct.move_site_data_stream(
-        site=site, resource='raw_data', stream='flux_fast_aux',
-        exclude_dirs=['TMP'], timeout=1200
+    return transfer_stream(
+        resource='raw_data', 
+        stream_local='flux_fast_aux',
+        exclude_dirs=['TMP'], 
+        timeout=1200,
+        path_kwargs={'site': site},
         )
-    logger.info('Done.')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 @register
 def push_details_json():
 
-    rct.push_details_json()
+    return transfer_stream(
+        resource='network', 
+        stream_local='status',
+        path_kwargs={'file_name': 'site_info.json'}
+        )
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 @register
 def push_homogenised_TOA5():
 
-    rct.push_homogenised(stream='TOA5')
+    return transfer_stream(
+        resource='homogenised_data', 
+        stream_local='TOA5',
+        timeout=180,
+        )
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 @register
 def push_L1_nc():
 
-    rct.push_homogenised(stream='nc')
+    return transfer_stream(
+        resource='homogenised_data', 
+        stream_local='nc', 
+        timeout=180,
+        )    
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 @register
 def push_main_fast_flux(site):
 
-    logger.info(f'Begin move of {site} fast data to UQRDM flux archive')
-    rct.move_site_data_stream(
-        site=site, resource='raw_data', stream='flux_fast',
-        exclude_dirs=['TMP'], timeout=1200
+    return transfer_stream(
+        resource='raw_data', 
+        stream_local='flux_fast',
+        exclude_dirs=['TMP'], 
+        timeout=1200,
+        path_kwargs={'site': site},
         )
-    logger.info('Done.')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 @register
 def push_profile_processed(site):
 
-    logger.info(f'Begin move of {site} processed profile data to UQRDM')
-    rct.move_site_data_stream(
-        site=site, resource='processed_data', stream='profile'
-        )
-    logger.info('Done.')
+    return transfer_stream(
+        resource='processed_data', 
+        stream_local='profile',
+        path_kwargs={'site': site},
+        )    
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 @register
 def push_profile_raw(site: str) -> None:
 
-    logger.info('Uploading data to remote location...')
-    move_site_data_stream(
-        site=site, resource='raw_data', stream='profile', which_way='to_remote'
-        )
-    logger.info('Done!')
+    return transfer_stream(
+        resource='raw_data', 
+        stream_local='profile',
+        path_kwargs={'site': site},
+        )        
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 @register
 def push_RTMC_images():
 
-    rct.push_pull_RTMC_images(which='push')
+    return transfer_stream(
+        resource='network', 
+        stream_local='RTMC_images', 
+        stream_remote='RTMC_image_dest', 
+        set_modtime=False,
+        )
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 @register
 def push_slow_flux(site):
 
-    logger.info(f'Begin move of {site} slow flux data to UQRDM')
-    move_site_data_stream(site=site, resource='raw_data', stream='flux_slow')
-    logger.info('Done.')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def move_site_data_stream(
-        site: str, stream: str, resource: str='raw_data',
-        exclude_dirs: list=None, which_way: str='to_remote', timeout: int=600
-        ) -> None:
-    """
-    Moves individual site data between local and remote folders
-
-    Args:
-        site name of site : DESCRIPTION.
-        stream (TYPE): DESCRIPTION.
-        exclude_dirs (TYPE, optional): DESCRIPTION. Defaults to None.
-        which_way (TYPE, optional): DESCRIPTION. Defaults to 'to_remote'.
-        timeout (TYPE, optional): DESCRIPTION. Defaults to 600.
-
-    Returns:
-        None.
-
-    """
-    
-    rct = import_module('file_transfers.rclone_transfer')
-    local_location = paths.get_local_stream_path(
-        resource='raw_data', stream=stream, site=site, as_str=True
-        ).replace('\\', '/')
-    remote_location = paths.get_remote_stream_path(
-        resource='raw_data', stream=stream, site=site, as_str=True
-        ).replace('\\', '/')
-    rct.generic_move(
-        local_location=local_location, 
-        remote_location=remote_location,
-        exclude_dirs=exclude_dirs, 
-        which_way=which_way, 
-        timeout=timeout
-        )
+    return transfer_stream(
+        resource='raw_data',
+        stream_local='flux_slow', 
+        path_kwargs={'site': site},
+        )    
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -523,7 +534,11 @@ def move_site_data_stream(
 def push_status_geojson() -> None:
     """Use Rclone to push data to rdm"""
 
-    rct.push_status_file(which='geojson')
+    return transfer_stream(
+        resource='network', 
+        stream_local='status',
+        path_kwargs={'file_name': 'network_status.json'}
+        )
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -531,7 +546,149 @@ def push_status_geojson() -> None:
 def push_status_xlsx() -> None:
     """Use Rclone to push data to rdm"""
 
-    rct.push_status_file(which='xlsx')
+    return transfer_stream(
+        resource='network', 
+        stream_local='status',
+        path_kwargs={'file_name': 'network_status.xlsx'}
+        )
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+def transfer_stream(
+        resource: str,
+        stream_local: str,
+        stream_remote: str | None = None,
+        to_remote: bool = True,
+        path_kwargs: dict | None = None,
+        **rclone_kwargs
+        ) -> dict:
+    """
+    Generic stream transfer: local <-> remote.
+
+    Args:
+        resource: resource type (e.g., 'raw_data', 'network')
+        stream_local: local stream name
+        stream_remote: remote stream name (defaults to same as stream_local)
+        site: optional site identifier
+        to_remote: True=local->remote (push), False=remote->local (pull)
+        rclone_kwargs: passed to run_rclone_task
+    """
+
+    # Save passing the stream name twice
+    if stream_remote is None:
+        stream_remote = stream_local
+        
+    # Ensure path_kwargs is a dict and extract file_name if present
+    path_kwargs = path_kwargs or {}
+    file_name = path_kwargs.pop('file_name', None)
+
+    # Get paths
+    local_path = paths.get_local_stream_path(
+        resource=resource,
+        stream=stream_local,
+        **path_kwargs
+        )
+    remote_path = paths.get_remote_stream_path(
+        resource=resource,
+        stream=stream_remote,
+        **path_kwargs            
+        )
+    
+    if file_name:
+       local_path = local_path / file_name
+       
+    src, dst = (local_path, remote_path) if to_remote else (remote_path, local_path)
+
+    try:
+        result = run_rclone_task(src=src, dst=dst, **rclone_kwargs)
+
+        return {
+            "status": "success",
+            "src": str(src),
+            "dst": str(dst),
+            "exit_code": result.returncode,
+        }
+
+    except Exception:
+        return {
+            "status": "failure",
+            "src": str(src),
+            "dst": str(dst),
+        }
+# -----------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def run_rclone_task(
+        src, 
+        dst,
+        *,
+        exclude_dirs=None, 
+        set_modtime=True, 
+        validate=True, 
+        timeout=600
+        ):
+    """
+    Generic wrapper for any rclone transfer.
+
+    Handles:
+      - calling rclone_transfer.transfer()
+      - logging
+      - error handling
+    """
+    
+    rt = import_module('infrastructure.rclone_transfer')
+    try:
+        logger.info(
+            "rclone_transfer_start",
+            extra={
+                "src": str(src),
+                "dst": str(dst),
+                },
+            )
+        result = rt.transfer(
+            src=src,
+            dst=dst,
+            exclude_dirs=exclude_dirs,
+            set_modtime=set_modtime,
+            validate=validate
+        )
+        
+        returncode = getattr(result, "returncode", None)
+        
+        if returncode not in (0, None):
+            logger.error(
+                "rclone_transfer_nonzero_exit",
+                extra={
+                    "src": str(src),
+                    "dst": str(dst),
+                    "returncode": returncode,
+                },
+            )
+            raise RuntimeError(
+                f"rclone returned non-zero exit code: {returncode}"
+            )
+
+        logger.info(
+            "rclone_transfer_success",
+            extra={
+                "src": str(src),
+                "dst": str(dst),
+                "returncode": returncode,
+                },
+            )
+
+        return result
+
+    except Exception:
+        logger.exception(
+            "rclone_transfer_failed",
+            extra={
+                "src": str(src),
+                "dst": str(dst),
+                },
+            )
+        raise
+
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -558,306 +715,206 @@ def push_cosmoz(site) -> None:
 ###############################################################################
 
 
-
-###############################################################################
-### BEGIN FUNCTION FINDER CLASS ###
-###############################################################################
-
-
-#------------------------------------------------------------------------------
-class FunctionFinder():
-    """
-    Puts all public functions in dictionary and sorts them into site-based and
-    network-based functions.
-    """
-
-    #--------------------------------------------------------------------------
-    def __init__(self) -> None:
-        """
-        Do all the things.
-
-        Returns:
-            None.
-
-        """
-
-        task_functions = dict(
-            inspect.getmembers(
-                sys.modules[__name__], inspect.isfunction
-                )
-            )
-        task_functions = {
-            name: func for name, func in task_functions.items()
-            if not name.startswith('_')
-            }
-        network_tasks, site_tasks = [], []
-        for name, func in task_functions.items():
-            if name.startswith('_'):
-                task_functions.pop(name)
-            args = list(inspect.signature(func).parameters.keys())
-            if not args:
-                network_tasks.append(name)
-            elif args[0] == 'site':
-                site_tasks.append(name)
-        self.tasks = list(task_functions.keys())
-        self.task_functions = task_functions
-        self.network_tasks = network_tasks
-        self.site_tasks = site_tasks
-    #--------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-
-# Instantiate finder at top level, since for site-based tasks, it must be
-# repeatedly called.
-func_finder = FunctionFinder()
-
-###############################################################################
-### END FUNCTION FINDER CLASS ###
-###############################################################################
-
-
-
 ###############################################################################
 ### BEGIN TASK MANAGEMENT FUNCTIONS ###
 ###############################################################################
 
-# #------------------------------------------------------------------------------
-# def configure_logger(log_path):
-#     """Configure the logger for the task (inclduing setting output path)."""
+# --------------------------------------------------------------------------
 
-#     if logger.hasHandlers():
-#         logger.handlers.clear()
-#     new_configs = logger_configs.copy()
-#     new_configs['handlers']['file']['filename'] = str(log_path)
-#     logging.config.dictConfig(new_configs)
-# #------------------------------------------------------------------------------
-
-# #------------------------------------------------------------------------------
-# def run_site_task(task: str, site:str) -> None:
-#     """
-#     Run a task for a single site (and log to single site log file).
-
-#     Args:
-#         task: name of task.
-#         site: name of site.
-
-#     Returns:
-#         None.
-
-#     """
-
-#     # Get the log output path and configure the logger
-#     log_path = (
-#         paths.get_local_stream_path(
-#             resource='logs',
-#             stream='site_logs',
-#             site=site
-#             ) /
-#         f'{site}_{task}.log'
-#         )
-#     configure_logger(log_path=log_path)
-
-#     # Retrieve the function and run the task
-#     logger.info(f'Running task {task}...')
-#     try:
-#         function = func_finder.task_functions[task]
-#         function(site=site)
-#         logger.info('Task completed without error\n')
-#     except Exception:
-#         logger.error('Task failed with the following error:', exc_info=True)
-# #------------------------------------------------------------------------------
-
-# #------------------------------------------------------------------------------
-# def run_site_task_from_list(task: str) -> None:
-#     """
-#     Run a site task for a site (and log to single site log file) from list of sites.
-
-#     Args:
-#         task: name of task.
-
-#     Returns:
-#         None.
-
-#     """
-
-#     sites = mngr.get_site_list_for_task(task=task)
-#     for site in sites:
-#         run_site_task(task=task, site=site)
-# #------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-# def run_network_task(task: str) -> None:
-#     """
-#     Run a network-based task.
-
-#     Args:
-#         task: name of task.
-
-#     Returns:
-#         None.
-
-#     """
-
-#     # Get the log output path and configure the logger
-#     log_path = (
-#         paths.get_local_stream_path(
-#             resource='logs',
-#             stream='network_logs',
-#             ) /
-#         f'{task}.log'
-#         )
-#     configure_logger(log_path=log_path)
-
-#     # Get the requested function
-#     function = func_finder.task_functions[task]
-
-#     # Run the task
-#     logger.info(f'Running task {task}...')
-#     try:
-#         function()
-#         logger.info('Task completed without error\n')
-#     except Exception:
-#         logger.error('Task failed with the following error:', exc_info=True)
-        
-# def run_network_task_2(task: str) -> None:
-#     """
-#     Run a network-based task with structured JSON logging.
-
-#     Args:
-#         task: name of task
-#     """
-#     log_path = (
-#         paths.get_local_stream_path(resource='logs', stream='network_logs')
-#         / f'{task}.jsonl'
-#     )
-#     configure_logger_json(log_path=log_path)
-
-#     # Get the requested task function
-#     function = func_finder.task_functions[task]
-
-#     # Log task start
-#     logger.info(
-#         "task_start",
-#         extra={"task": task}
-#     )
-
-#     try:
-#         function()  # task function logs per-site results
-#         # Task completed
-#         logger.info(
-#             "task_end",
-#             extra={"task": task, "status": "success"}
-#         )
-#     except Exception:
-#         logger.error(
-#             "task_end",
-#             extra={"task": task, "status": "failure"},
-#             exc_info=True
-#         )
-        
-def run_task(task: str) -> None:
+def run_task(task: str, site: str | None = None) -> None:
     """
-    Run a network-based task and log outcomes.
+    Unified entry point to run any task.
+
+    Args:
+        task: task name
+        site: optional site (only valid for site-scoped tasks)
     """
 
-    # Resolve task function
+    # Get task function and scope
+    function, scope = _resolve_task(task=task, site=site)
+
+    # Set up logger
+    _setup_logger(task)
+
+    # Dispatch to helper based on scope
     try:
-        function = func_finder.task_functions[task]
-        task_name = function.__name__
-    except KeyError:
-        raise NotImplementedError(
-            f'Function for task "{task}" not implemented!'
-            )
-
-    # Configure logging for this task
-    log_path = (
-        paths.get_local_stream_path(
-            resource="logs",
-            stream="network_logs",
-        )
-        / f"{task}.jsonl"
-    )
-    configure_logger_json(log_path=log_path)
-
-    # Resolve task function
-    function = func_finder.task_functions[task]
-    task_name = function.__name__
-
-    # Resolve sites for this task (default to all sites for any task that 
-    # has a defined function but no task list)
-    try:
-        site_list = mngr.get_site_list_for_task(task=task_name)
-    except KeyError:
-        site_list = mngr.get_site_list()
-
-    logger.info(
-        "task_start",
-        extra={
-            "task": task_name,
-            "site_count": len(site_list),
-        },
-    )
-
-    try:
-        # Run task
-        results = function(site_list)
-
-        # Log per-site results (if any)
-        if results:
-            for site, result in results.items():
-                logger.info(
-                    "task_site_result",
-                    extra={
-                        "task": task_name,
-                        "site": site,
-                        **result,
-                    },
-                )
-
-        logger.info(
-            "task_end",
-            extra={
-                "task": task_name,
-                "status": "success",
-            },
-        )
-
+        if scope == "site":
+            _run_site_task(task, function, site)
+        else:
+            _run_global_task(task, function)
     except Exception:
         logger.error(
             "task_end",
+            extra={"task": task, "scope": scope, "status": "failure", "reason": "unhandled_exception"},
+            exc_info=True,
+            )
+        raise
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+
+def _resolve_task(task: str, site: str | None) -> tuple:
+    """
+    Resolve the task function and its scope.
+    """
+    
+    # Locate task function and scope
+    if task in SITE_TASKS:
+        func = SITE_TASKS[task]
+        scope = "site"
+    elif task in GLOBAL_TASKS:
+        func = GLOBAL_TASKS[task]
+        scope = "global"
+    else:
+        raise NotImplementedError(
+            f"Task '{task}' has unknown scope or is not implemented"
+            )
+
+    # Prevent illegal combinations
+    if scope == "global" and site is not None:
+        raise ValueError(
+            f"Task '{task}' is global and cannot be run per-site"
+            )
+
+    return func, scope
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+
+def _setup_logger(task: str) -> pathlib.Path:
+    """
+    Configure JSON logger for this task.
+    """
+    
+    log_path = (
+        paths.get_local_stream_path(resource="logs", stream="network_logs")
+        / f"{task}.jsonl"
+        )
+    configure_logger_json(log_path=log_path)
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+def _run_site_task(task: str, function: Callable, site: str | None) -> None:
+    """
+    Execute a site-scoped task (may iterate over multiple sites)
+    """
+    
+    site_list = [site] if site is not None else _get_sites_for_task(task)
+    
+    logger.info(
+        "task_start",
+        extra={
+            "task": task,
+            "scope": "site",
+            "site_count": len(site_list),
+            "single_site": site is not None,
+        },
+    )
+
+    failed_sites: list[str] = []
+
+    for site in site_list:
+        result = _run_single_site_task(task, function, site)
+        if result.get("status") == "failure":
+            failed_sites.append(site)
+
+        logger.info(
+            "task_site_result", 
             extra={
-                "task": task_name,
-                "status": "failure",
-            },
+                "task": task, 
+                "site": site, 
+                **result
+                }
+            )
+
+    overall_status = "failure" if failed_sites else "success"
+    logger.info("task_end", extra={"task": task, "scope": "site", "status": overall_status, "failed_sites": failed_sites})
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+
+def _get_sites_for_task(task: str) -> list[str]:
+    """
+    Fetch site list for a task from metadata manager.
+    """
+
+    try:
+        return mngr.get_site_list_for_task(task=task)
+    except KeyError:
+        return mngr.get_site_list()
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+
+def _run_single_site_task(task: str, func, site: str) -> dict:
+    """
+    Execute a single site task with error handling and validation.
+    """
+    try:
+        result = func(site)
+
+        if not isinstance(result, dict) or "status" not in result:
+            logger.error(
+                "task_site_invalid_result",
+                extra={
+                    "task": task, 
+                    "site": site, 
+                    "returned_type": type(result).__name__
+                    },
+                )
+            return {"status": "failure", "reason": "invalid_result_format"}
+
+        return result
+
+    except Exception:
+        
+        logger.exception(
+            "task_site_exception", 
+            extra={
+                "task": task, 
+                "site": site
+                }
+            )
+        return {
+            "status": "failure", 
+            "reason": "exception"
+            }
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+
+def _run_global_task(task: str, func: Callable, site_list: list[str] | None = None) -> None:
+    """
+    Execute a global task. If the task function accepts 'site_list', pass it;
+    otherwise call with no arguments.
+    """
+
+    logger.info("task_start", extra={"task": task, "scope": "global"})
+
+    try:
+        # Check if the function accepts a 'site_list' argument
+        sig = inspect.signature(func)
+        if 'site_list' in sig.parameters:
+            result = func(site_list)
+        else:
+            result = func()
+
+        # Standardize logging
+        if isinstance(result, dict) and "status" in result:
+            extra = {"task": task, "scope": "global", **result}
+        else:
+            extra = {"task": task, "scope": "global", "status": "success"}
+
+        logger.info("task_end", extra=extra)
+
+    except Exception as e:
+        logger.error(
+            "task_end",
+            extra={"task": task, "scope": "global", "status": "failure", "reason": str(e)},
             exc_info=True,
         )
-#------------------------------------------------------------------------------
-
-# #------------------------------------------------------------------------------
-# def run_task(task: str) -> None:
-#     """
-#     Run a task.
-
-#     Args:
-#         task: name of taks to run.
-
-#     Raises:
-#         NotImplementedError: raised if an undefined task is passed.
-
-#     Returns:
-#         None.
-
-#     """
-
-#     if task in func_finder.site_tasks:
-#         run_site_task_from_list(task=task)
-#     elif task in func_finder.network_tasks:
-#         run_network_task(task=task)
-#     else:
-#         raise NotImplementedError(
-#             f'Function for task "{task}" not implemented!'
-#             )
-# #------------------------------------------------------------------------------
+        raise
+# -----------------------------------------------------------------------------
 
 ###############################################################################
 ### END TASK MANAGEMENT FUNCTIONS ###

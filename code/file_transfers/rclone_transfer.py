@@ -242,6 +242,85 @@ def generic_move(
 
     # Check direction is valid
     if which_way not in ['to_remote', 'from_remote']:
+        raise ValueError('Arg "which_way" must be "to_remote" or "from_remote"')
+
+
+    logger.info('Checking local and remote directories...')
+
+    # Check local is valid
+    if not pathlib.Path(local_location).exists():
+        msg = f'    -> local file {str(local_location)} is not valid!'
+        logger.error(msg); raise FileNotFoundError(msg)
+    logger.info(f'    -> local directory {local_location} is valid')
+
+    # Check remote is valid
+    try:
+        check_remote_available(str(remote_location))
+    except (spc.TimeoutExpired, spc.CalledProcessError) as e:
+        logger.error(e)
+        logger.error(
+            f'    -> remote location {remote_location} is not valid!'
+            )
+        raise
+    logger.info(f'    -> remote location {remote_location} is valid')
+
+    # Set from and to locations, based on direction
+    if which_way == 'to_remote':
+        from_location = local_location
+        to_location = remote_location
+    else:
+        from_location = remote_location
+        to_location = local_location
+
+    # Add any arguments to the Rclone execution string
+    run_args = COPY_ARGS.copy()
+    if exclude_dirs:
+        run_args += _add_rclone_exclude(exclude_dirs=exclude_dirs)
+
+    # This is required to copy to the DSA web-sites directory and subs
+    if not mod_time:
+        run_args.append('--sftp-set-modtime=false')
+
+    # Do the transfer
+    logger.info('Copying now...')
+    run_list =  [APP_PATH] + run_args + [from_location, to_location]
+    try:
+        rslt = _run_subprocess(run_list=run_list, timeout=timeout)
+        logger.info(rslt.stdout.decode())
+    except (spc.TimeoutExpired, spc.CalledProcessError) as e:
+        logger.error(e)
+        logger.error('Copy failed!')
+        raise
+    logger.info('Copy succeeded')
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def generic_move(
+        local_location, remote_location, which_way='to_remote',
+        exclude_dirs=None, mod_time=True, timeout=600
+        ):
+    """
+
+
+    Args:
+        local_location (TYPE): DESCRIPTION.
+        remote_location (TYPE): DESCRIPTION.
+        which_way (TYPE, optional): DESCRIPTION. Defaults to 'to_remote'.
+        exclude_dirs (TYPE, optional): DESCRIPTION. Defaults to None.
+        mod_time (TYPE, optional): DESCRIPTION. Defaults to True.
+        timeout (TYPE, optional): DESCRIPTION. Defaults to 600.
+
+    Raises:
+        KeyError: DESCRIPTION.
+        FileNotFoundError: DESCRIPTION.
+
+    Returns:
+        None.
+
+    """
+
+    # Check direction is valid
+    if which_way not in ['to_remote', 'from_remote']:
         raise KeyError('Arg "which_way" must be "to_remote" or "from_remote"')
 
 

@@ -226,15 +226,16 @@ class FileConverter():
         # 2) Downcast float64 to float32 and round to prevent recast to 64 on
         #    csv output
         for col in data.select_dtypes('float'):
-            if _check_integer_data(series=data[col]):
-                try:
-                    data[col] = data[col].astype('Int32')
-                except TypeError:
-                    data[col] = pd.to_numeric(
-                        data.Diag_CSAT, 
-                        downcast='integer', 
-                        errors='coerce'
-                        )
+
+            s = data[col]
+            # Step 1: normalise problematic values
+            s = s.replace([np.inf, -np.inf], np.nan)
+            
+            # Step 2: check if all non-null values are integer-like
+            if ((s.dropna() % 1) == 0).all():
+                # Step 3: cast safely using pandas ops
+                data[col] = s.astype("Int32")
+                data[col] = np.round(s).astype("Int32")
             else:
                 data[col] = (
                     data[col]
@@ -354,11 +355,12 @@ class FileConverter():
         header_line = 1
         if self.input_format == 'TOB3':
             header_line += 1
-            
         file_dates = {}
         data_list = []
         for file in self.file_list:
             contents = rcf.read_cs_files(filename=file)
+            if len(contents[0]) == 0:
+                raise RuntimeError(f'No data in file {file.name}!')
             metadata = contents[1]
             data = (
                 pd.DataFrame(dict(zip(metadata[header_line], contents[0])))
@@ -614,9 +616,17 @@ class DailyTOB3FileConverter(FileConverter):
 #------------------------------------------------------------------------------
 def _check_integer_data(series: pd.Series) -> bool:
 
+    # arr = series.to_numpy(dtype=float)
+    # mask = np.isclose(arr, np.round(arr), equal_nan=True)
+    # return bool(mask.all())
+
     arr = series.to_numpy(dtype=float)
-    mask = np.isclose(arr, np.round(arr), equal_nan=True)
-    return bool(mask.all())
+    finite_mask = np.isfinite(arr)
+    
+    # Only check integer-ness on finite values
+    integer_mask = np.isclose(arr[finite_mask], np.round(arr[finite_mask]))
+    
+    return bool(integer_mask.all())
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
